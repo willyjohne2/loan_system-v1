@@ -24,8 +24,12 @@ This is a Django Rest Framework API for managing loans, users, and repayments. I
    pip install -r requirements.txt
    ```
 
-4. **Configure the database**:
-   Update the `DATABASES` setting in `loan_system_project/settings.py` with your PostgreSQL credentials.
+4. **Configure environment variables**:
+   - Copy the `.env.example` file to `.env`:
+     ```bash
+     cp .env.example .env
+     ```
+   - Open `.env` and fill in your PostgreSQL credentials and a secure `SECRET_KEY`.
 
 5. **Run the server**:
    ```bash
