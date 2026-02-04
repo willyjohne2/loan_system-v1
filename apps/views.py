@@ -45,14 +45,23 @@ class LoginView(views.APIView):
                 admin.failed_login_attempts = 0
                 admin.save()
 
-                refresh = RefreshToken()
-                refresh["admin_id"] = str(admin.id)
-                refresh["role"] = admin.role
+                try:
+                    refresh = RefreshToken()
+                    refresh["admin_id"] = str(admin.id)
+                    refresh["role"] = admin.role
+
+                    access_token = str(refresh.access_token)
+                    refresh_token = str(refresh)
+                except Exception as e:
+                    return Response(
+                        {"error": f"Token generation failed: {str(e)}"},
+                        status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    )
 
                 return Response(
                     {
-                        "access": str(refresh.access_token),
-                        "refresh": str(refresh),
+                        "access": access_token,
+                        "refresh": refresh_token,
                         "role": admin.role,
                         "admin": AdminSerializer(admin).data,
                     }
