@@ -7,42 +7,25 @@ const api = axios.create({
   },
 });
 
-// Add Interceptor to attach JWT token to every request
 api.interceptors.request.use((config) => {
-  console.log(`[API] Making request to: ${config.url}`);
   const savedUser = localStorage.getItem('loan_user');
-  console.log('[API] localStorage loan_user exists:', savedUser ? 'YES' : 'NO');
   
   if (savedUser) {
     try {
       const parsed = JSON.parse(savedUser);
-      console.log('[API] Parsed user object keys:', Object.keys(parsed));
       const { access } = parsed;
       if (access) {
         config.headers.Authorization = `Bearer ${access}`;
-        console.log(`[API] ✓ Token attached to ${config.url} - Token: ${access.substring(0, 20)}...`);
-      } else {
-        console.error('[API] ✗ No access token found in parsed user object');
-        console.error('[API] User object:', parsed);
       }
     } catch (e) {
-      console.error('[API] Error parsing savedUser:', e);
     }
-  } else {
-    console.warn('[API] ✗ No savedUser in localStorage - request will fail with 401');
   }
   return config;
 });
 
-// Add response interceptor for error handling
 api.interceptors.response.use(
   (response) => response,
   (error) => {
-    if (error.response?.status === 401) {
-      console.error('[API] Unauthorized (401) - Token invalid or expired');
-      // Don't auto-logout - let user stay logged in
-      // localStorage.removeItem('loan_user');
-    }
     return Promise.reject(error);
   }
 );
