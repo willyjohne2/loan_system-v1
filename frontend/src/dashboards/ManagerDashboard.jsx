@@ -59,6 +59,8 @@ const ManagerDashboard = () => {
   const [isBulkModalOpen, setIsBulkModalOpen] = useState(false);
   const [selectedCustomer, setSelectedCustomer] = useState(null);
   const [updating, setUpdating] = useState(false);
+  const [loadingStats, setLoadingStats] = useState(true);
+  const [loadingTables, setLoadingTables] = useState(true);
   const [chartData, setChartData] = useState([]);
   const [statusDistribution, setStatusDistribution] = useState([]);
   const [stats, setStats] = useState({
@@ -116,34 +118,84 @@ const ManagerDashboard = () => {
       return Number.isFinite(num) ? num : 0;
     };
 
-    const fetchData = async () => {
+    const fetchCoreData = async () => {
       try {
-        const [offData, custData, loanData, repaymentData] = await Promise.all([
-          loanService.getFieldOfficers(),
-          loanService.getCustomers(),
+        setLoadingStats(true);
+        const [loanData, repaymentData] = await Promise.all([
           loanService.getLoans(),
           loanService.getRepayments()
         ]);
 
-        const officersList = offData.results || offData;
-        let customersList = custData.results || custData;
         let loansList = loanData.results || loanData;
         const repaymentsList = repaymentData.results || repaymentData;
 
-        // Apply County Filter
+        // Apply County Filter (Partial - we need customers for full filtering, so we fetch them in secondary)
+        // For now, calculate global or wait for secondary for county filter
+        const issued = loansList.reduce((acc, l) => acc + parseAmount(l.principal_amount), 0);
+        const repaid = repaymentsList.reduce((acc, r) => acc + parseAmount(r.amount_paid), 0);
+        const repaymentRate = issued > 0 ? Math.round((repaid / issued) * 100) : 0;
+        const unverifiedCount = loansList.filter(l => (l.status || '').toUpperCase() === 'UNVERIFIED').length;
+
+        // Process Chart Data (Monthly Disbursement)
+        const monthlyData = loansList.reduce((acc, loan) => {
+          const month = new Date(loan.created_at).toLocaleString('default', { month: 'short' });
+          acc[month] = (acc[month] || 0) + parseAmount(loan.principal_amount);
+          return acc;
+        }, {});
+        
+        setChartData(Object.keys(monthlyData).map(month => ({
+          name: month,
+          amount: monthlyData[month]
+        })));
+
+        setStats(prev => ({
+          ...prev,
+          issued: issued,
+          repaid: repaid,
+          pending: issued - repaid,
+          repaymentRate: repaymentRate,
+          unverifiedLoans: unverifiedCount
+        }));
+
+        setLoans(loansList);
+        setLoadingStats(false);
+        
+        // Fetch secondary
+        fetchSecondaryData(loansList, repaymentsList);
+      } catch (error) {
+        console.error("Error fetching core manager data:", error);
+        setLoadingStats(false);
+      }
+    };
+
+    const fetchSecondaryData = async (loansList, repaymentsList) => {
+       try {
+        setLoadingTables(true);
+        const [offData, custData] = await Promise.all([
+          loanService.getFieldOfficers(),
+          loanService.getCustomers()
+        ]);
+
+        const officersList = offData.results || offData;
+        let customersList = custData.results || custData;
+
+        // Apply County Filter if selected
         if (selectedCounty !== 'All') {
             customersList = customersList.filter(c => c.profile?.county === selectedCounty);
             const validCustomerIds = new Set(customersList.map(c => c.id));
             loansList = loansList.filter(l => validCustomerIds.has(l.user));
+            
+            // Recalculate stats based on filtered data
+            const issued = loansList.reduce((acc, l) => acc + parseAmount(l.principal_amount), 0);
+            const repaid = repaymentsList.reduce((acc, r) => acc + parseAmount(r.amount_paid), 0);
+            setStats(prev => ({
+              ...prev,
+              issued: issued,
+              repaid: repaid,
+              pending: issued - repaid,
+            }));
         }
 
-        const issued = loansList.reduce((acc, l) => acc + parseAmount(l.principal_amount), 0);
-        const repaid = repaymentsList.reduce((acc, r) => acc + parseAmount(r.amount_paid), 0);
-        const repaymentRate = issued > 0 ? Math.round((repaid / issued) * 100) : 0;
-        const defaultCount = loansList.filter(l => (l.status || '').toUpperCase() === 'REJECTED').length;
-        const unverifiedCount = loansList.filter(l => (l.status || '').toUpperCase() === 'UNVERIFIED').length;
-
-        // Calculate performance for each officer
         const officersWithPerformance = officersList.map(officer => {
           const officerCustomers = customersList.filter(c => c.created_by === officer.id).length;
           const officerLoans = loansList.filter(l => l.created_by === officer.id);
@@ -162,58 +214,20 @@ const ManagerDashboard = () => {
         setOfficers(officersWithPerformance);
         setCustomers(customersList);
         setUnverifiedCustomers(unverifiedCust);
-        setLoans(loansList);
 
-        // Process Chart Data (Monthly Disbursement)
-        const monthlyData = loansList.reduce((acc, loan) => {
-          const month = new Date(loan.created_at).toLocaleString('default', { month: 'short' });
-          acc[month] = (acc[month] || 0) + parseAmount(loan.principal_amount);
-          return acc;
-        }, {});
-        
-        setChartData(Object.keys(monthlyData).map(month => ({
-          name: month,
-          amount: monthlyData[month]
-        })));
-
-        // Process Status Distribution
-        const dist = loansList.reduce((acc, loan) => {
-          const s = loan.status?.toUpperCase() || 'UNKNOWN';
-          acc[s] = (acc[s] || 0) + 1;
-          return acc;
-        }, {});
-        
-        setStatusDistribution(Object.keys(dist).map(status => ({
-          name: status,
-          value: dist[status]
-        })));
-
-        // Update local context if region changed in DB
-        const currentManager = officersList.find(o => o.id === (user?.admin?.id || user?.id));
-        if (currentManager && currentManager.region !== (user?.admin?.region || user?.region)) {
-            console.log('[ManagerDashboard] Region mismatch detected. Updating local user context...');
-            if (user?.admin) {
-                updateUser({ admin: { ...user.admin, region: currentManager.region } });
-            } else {
-                updateUser({ region: currentManager.region });
-            }
-        }
-
-        setStats({
+        setStats(prev => ({
+          ...prev,
           served: customersList.length,
-          issued: issued,
-          repaid: repaid,
-          pending: issued - repaid,
           activeOfficers: officersList.length,
-          repaymentRate: repaymentRate,
-          defaultCount: defaultCount,
-          unverifiedLoans: unverifiedCount
-        });
-      } catch (error) {
-        console.error("Error fetching manager dashboard data:", error);
-      }
+        }));
+       } catch (err) {
+         console.error("Error fetching secondary manager data:", err);
+       } finally {
+         setLoadingTables(false);
+       }
     };
-    fetchData();
+
+    fetchCoreData();
   }, [selectedCounty]);
 
   const getStatusColor = (status) => {
@@ -305,7 +319,7 @@ const ManagerDashboard = () => {
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         <StatCard 
           label="Customers Served" 
-          value={stats.served.toString()} 
+          value={loadingTables ? "..." : stats.served.toString()} 
           icon={Users}
           trend="up"
           trendValue="8"
@@ -313,7 +327,7 @@ const ManagerDashboard = () => {
         />
         <StatCard 
           label="Amount Disbursed" 
-          value={`KES ${stats.issued.toLocaleString()}`} 
+          value={loadingStats ? "..." : `KES ${stats.issued.toLocaleString()}`} 
           icon={TrendingUp}
           trend="up"
           trendValue="12"
@@ -321,7 +335,7 @@ const ManagerDashboard = () => {
         />
         <StatCard 
           label="Amount Repaid" 
-          value={`KES ${stats.repaid.toLocaleString()}`} 
+          value={loadingStats ? "..." : `KES ${stats.repaid.toLocaleString()}`} 
           icon={CheckCircle2}
           trend="up"
           trendValue="6"
@@ -329,7 +343,7 @@ const ManagerDashboard = () => {
         />
         <StatCard 
           label="Unverified Loans" 
-          value={stats.unverifiedLoans.toString()} 
+          value={loadingStats ? "..." : stats.unverifiedLoans.toString()} 
           icon={Clock}
           trend={stats.unverifiedLoans > 10 ? "up" : "down"}
           trendValue={stats.unverifiedLoans.toString()}

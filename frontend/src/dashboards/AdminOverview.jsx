@@ -46,6 +46,8 @@ const AdminOverview = () => {
     overdue90: 0
   });
   const [loading, setLoading] = useState(true);
+  const [loadingLogs, setLoadingLogs] = useState(true);
+  const [loadingExtra, setLoadingExtra] = useState(true);
   const [statusBreakdown, setStatusBreakdown] = useState({
     approved: 0,
     pending: 0,
@@ -57,26 +59,21 @@ const AdminOverview = () => {
   const [securityAlerts, setSecurityAlerts] = useState([]);
 
   useEffect(() => {
-    const fetchStats = async () => {
+    const fetchCoreStats = async () => {
       try {
         const parseAmount = (val) => {
           const num = Number(val);
           return Number.isFinite(num) ? num : 0;
         };
 
-        const [loansData, customersData, repaymentsData, auditData, adminsData] = await Promise.all([
+        // Fetch Loans and Repayments first (Critical for money stats)
+        const [loansData, repaymentsData] = await Promise.all([
           loanService.getLoans(),
-          loanService.getCustomers(),
           loanService.getRepayments(),
-          loanService.getAuditLogs(),
-          loanService.getAllAdmins()
         ]);
 
         const loans = loansData.results || loansData || [];
-        const customers = customersData.results || customersData || [];
         const repayments = repaymentsData.results || repaymentsData || [];
-        const logs = auditData.results || auditData || [];
-        const admins = adminsData.results || adminsData || [];
 
         const totalAmount = loans.reduce((acc, l) => acc + parseAmount(l.principal_amount), 0);
         const repaidAmount = repayments.reduce((acc, r) => acc + parseAmount(r.amount_paid), 0);
@@ -92,6 +89,51 @@ const AdminOverview = () => {
           },
           { approved: 0, pending: 0, repaid: 0, defaulted: 0 }
         );
+
+        // Process Chart Data
+        const monthlyData = loans.reduce((acc, loan) => {
+          const month = new Date(loan.created_at).toLocaleString('default', { month: 'short' });
+          acc[month] = (acc[month] || 0) + parseAmount(loan.principal_amount);
+          return acc;
+        }, {});
+        
+        setChartData(Object.keys(monthlyData).map(month => ({
+          name: month,
+          amount: monthlyData[month]
+        })));
+
+        setStats(prev => ({
+          ...prev,
+          totalLoans: totalAmount,
+          totalPaid: repaidAmount,
+          outstanding: totalAmount - repaidAmount,
+          activeLoans: statusCounts.approved,
+          defaultRate: statusCounts.defaulted,
+          repaymentRate: Math.round((repaidAmount / totalAmount) * 100) || 0,
+        }));
+
+        setStatusBreakdown(statusCounts);
+        setLoading(false); // Core UI is ready!
+
+        // Now fetch secondary data without blocking
+        fetchSecondaryData();
+      } catch (err) {
+        console.error("Fetch core stats error:", err);
+        setLoading(false);
+      }
+    };
+
+    const fetchSecondaryData = async () => {
+      try {
+        const [customersData, auditData, adminsData] = await Promise.all([
+          loanService.getCustomers(),
+          loanService.getAuditLogs(),
+          loanService.getAllAdmins()
+        ]);
+
+        const customers = customersData.results || customersData || [];
+        const logs = auditData.results || auditData || [];
+        const admins = adminsData.results || adminsData || [];
 
         // Security Alerts logic
         const alerts = [];
@@ -109,40 +151,23 @@ const AdminOverview = () => {
         thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
         const newMonth = customers.filter(c => new Date(c.created_at) >= thirtyDaysAgo).length;
 
-        // Process Chart Data
-        const monthlyData = loans.reduce((acc, loan) => {
-          const month = new Date(loan.created_at).toLocaleString('default', { month: 'short' });
-          acc[month] = (acc[month] || 0) + parseAmount(loan.principal_amount);
-          return acc;
-        }, {});
-        
-        setChartData(Object.keys(monthlyData).map(month => ({
-          name: month,
-          amount: monthlyData[month]
-        })));
-
-        setStats({
-          totalLoans: totalAmount,
-          totalPaid: repaidAmount,
-          outstanding: totalAmount - repaidAmount,
+        setStats(prev => ({
+          ...prev,
           totalCustomers: customers.length,
-          activeLoans: statusCounts.approved,
-          defaultRate: statusCounts.defaulted,
-          repaymentRate: Math.round((repaidAmount / totalAmount) * 100) || 0,
           newCustomersMonth: newMonth,
-          overdue30: 0, overdue60: 0, overdue90: 0
-        });
+        }));
 
-        setStatusBreakdown(statusCounts);
         setAuditLogs(logs.slice(0, 10));
         setSecurityAlerts(alerts);
       } catch (err) {
-        console.error("Fetch stats error:", err);
+        console.error("Fetch secondary data error:", err);
       } finally {
-        setLoading(false);
+        setLoadingLogs(false);
+        setLoadingExtra(false);
       }
     };
-    fetchStats();
+
+    fetchCoreStats();
   }, []);
 
   if (loading) return (
@@ -177,7 +202,7 @@ const AdminOverview = () => {
         />
         <StatCard 
           label="System Users" 
-          value={stats.totalCustomers.toString()} 
+          value={loadingExtra ? "..." : stats.totalCustomers.toString()} 
           icon={Users} 
           trend={{ value: 'Customers', isPositive: true }}
           onClick={() => navigate('/admin/customers')}
@@ -210,8 +235,8 @@ const AdminOverview = () => {
             ) : (
               <div className="text-center">
                 <BarChart3 className="w-12 h-12 text-slate-200 mx-auto mb-4" />
-                <p className="text-slate-400 text-sm italic">No disbursement data available.</p>
-                <p className="text-slate-300 text-[10px] mt-1 uppercase font-bold tracking-widest">Charts will appear once loans are processed</p>
+                <p className="text-slate-400 text-sm italic">{loading ? 'Loading chart data...' : 'No disbursement data available.'}</p>
+                {!loading && <p className="text-slate-300 text-[10px] mt-1 uppercase font-bold tracking-widest">Charts will appear once loans are processed</p>}
               </div>
             )}
           </div>
@@ -233,7 +258,7 @@ const AdminOverview = () => {
               ].map((item) => (
                 <div key={item.label} className={`${item.bg} p-4 rounded-xl border border-transparent text-center`}>
                    <p className="text-[10px] font-bold uppercase text-slate-500 mb-1">{item.label}</p>
-                   <p className={`text-xl font-black ${item.color}`}>{item.count}</p>
+                   <p className={`text-xl font-black ${item.color}`}>{loading ? '...' : item.count}</p>
                 </div>
               ))}
            </div>
@@ -249,7 +274,16 @@ const AdminOverview = () => {
              </h3>
           </div>
           <div className="space-y-4">
-            {securityAlerts.length > 0 ? (
+            {loadingExtra ? (
+               <div className="animate-pulse flex space-x-4">
+                  <div className="flex-1 space-y-4 py-1">
+                    <div className="h-4 bg-slate-200 rounded w-3/4"></div>
+                    <div className="space-y-2">
+                      <div className="h-4 bg-slate-200 rounded"></div>
+                    </div>
+                  </div>
+               </div>
+            ) : securityAlerts.length > 0 ? (
               securityAlerts.map((alert, idx) => (
                 <div key={idx} className="p-4 bg-red-50 dark:bg-red-900/20 rounded-xl border-l-4 border-red-500">
                    <p className="text-xs font-bold text-red-800 dark:text-red-400 uppercase">{alert.type}</p>
@@ -275,30 +309,37 @@ const AdminOverview = () => {
           <Button variant="outline" size="sm" onClick={() => navigate('/admin/audit')}>View All</Button>
         </div>
         <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead>
-              <tr className="bg-slate-50 dark:bg-slate-800/50 border-b border-slate-100 dark:border-slate-800">
-                <th className="text-left p-4 text-xs font-bold text-slate-500 dark:text-slate-400 uppercase">Action</th>
-                <th className="text-left p-4 text-xs font-bold text-slate-500 dark:text-slate-400 uppercase">Resource</th>
-                <th className="text-right p-4 text-xs font-bold text-slate-500 dark:text-slate-400 uppercase">Time</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-              {auditLogs.map((log) => (
-                <tr key={log.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/30">
-                  <td className="p-4">
-                    <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300">
-                      {log.action}
-                    </span>
-                  </td>
-                  <td className="p-4 text-sm text-slate-600 dark:text-slate-400">{log.table_name}</td>
-                  <td className="p-4 text-right text-xs text-slate-500 dark:text-slate-500">
-                    {new Date(log.created_at).toLocaleTimeString()}
-                  </td>
+          {loadingLogs ? (
+            <div className="p-8 text-center text-slate-400">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600 mx-auto mb-4"></div>
+              Calculating recent activities...
+            </div>
+          ) : (
+            <table className="w-full">
+              <thead>
+                <tr className="bg-slate-50 dark:bg-slate-800/50 border-b border-slate-100 dark:border-slate-800">
+                  <th className="text-left p-4 text-xs font-bold text-slate-500 dark:text-slate-400 uppercase">Action</th>
+                  <th className="text-left p-4 text-xs font-bold text-slate-500 dark:text-slate-400 uppercase">Resource</th>
+                  <th className="text-right p-4 text-xs font-bold text-slate-500 dark:text-slate-400 uppercase">Time</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                {auditLogs.map((log) => (
+                  <tr key={log.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/30">
+                    <td className="p-4">
+                      <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300">
+                        {log.action}
+                      </span>
+                    </td>
+                    <td className="p-4 text-sm text-slate-600 dark:text-slate-400">{log.table_name}</td>
+                    <td className="p-4 text-right text-xs text-slate-500 dark:text-slate-500">
+                      {new Date(log.created_at).toLocaleTimeString()}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
         </div>
       </Card>
     </div>

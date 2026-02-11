@@ -21,6 +21,7 @@ import BulkCustomerSMSModal from '../components/ui/BulkCustomerSMSModal';
 
 const FinanceDashboard = () => {
   const [loading, setLoading] = useState(true);
+  const [loadingExtra, setLoadingExtra] = useState(true);
   const [error, setError] = useState('');
   const [loans, setLoans] = useState([]);
   const [repayments, setRepayments] = useState([]);
@@ -37,6 +38,7 @@ const FinanceDashboard = () => {
 
   const fetchData = async () => {
     setLoading(true);
+    setLoadingExtra(true);
     setError('');
     try {
       const parseAmount = (val) => {
@@ -44,15 +46,14 @@ const FinanceDashboard = () => {
         return Number.isFinite(num) ? num : 0;
       };
 
-      const [loanData, repaymentData, customerData] = await Promise.all([
+      // Fetch core financial data first
+      const [loanData, repaymentData] = await Promise.all([
         loanService.getLoans(),
         loanService.getRepayments(),
-        loanService.getCustomers()
       ]);
 
       const loansList = loanData?.results || loanData || [];
       const repaymentsList = repaymentData?.results || repaymentData || [];
-      const customersList = customerData?.results || customerData || [];
 
       const todayStr = new Date().toISOString().split('T')[0];
 
@@ -70,15 +71,11 @@ const FinanceDashboard = () => {
       // Finance handles loans that are VERIFIED or PENDING
       const pendingList = loansList.filter(l => l.status === 'VERIFIED' || l.status === 'PENDING');
 
-      const customerMap = customersList.reduce((acc, c) => {
-        acc[c.id] = c.full_name;
-        return acc;
-      }, {});
-
-      setLoans(loansList.map(l => ({ ...l, customer_name: customerMap[l.user] || 'Unknown' })));
-      setRepayments(repaymentsList.map(r => ({ ...r, customer_name: customerMap[r.user] || 'Unknown' })));
+      setLoans(loansList);
+      setRepayments(repaymentsList);
       
-      setStats({
+      setStats(prev => ({
+        ...prev,
         borrowed: totalBorrowed,
         repaid: totalRepaid,
         outstanding: totalBorrowed - totalRepaid,
@@ -86,11 +83,26 @@ const FinanceDashboard = () => {
         todayCollected,
         pendingApprovalsCount: pendingList.length,
         netFlow: todayCollected - todayDisbursed
-      });
+      }));
+
+      setLoading(false); // Stats ready
+
+      // Now fetch customers for names
+      const customerData = await loanService.getCustomers();
+      const customersList = customerData?.results || customerData || [];
+      const customerMap = customersList.reduce((acc, c) => {
+        acc[c.id] = c.full_name;
+        return acc;
+      }, {});
+
+      setLoans(prev => prev.map(l => ({ ...l, customer_name: customerMap[l.user] || 'Unknown' })));
+      setRepayments(prev => prev.map(r => ({ ...r, customer_name: customerMap[r.user] || 'Unknown' })));
+      setLoadingExtra(false);
+
     } catch (err) {
       setError(err.message || 'Failed to sync financial data');
-    } finally {
       setLoading(false);
+      setLoadingExtra(false);
     }
   };
 
@@ -106,12 +118,6 @@ const FinanceDashboard = () => {
   useEffect(() => {
     fetchData();
   }, []);
-
-  if (loading) return (
-    <div className="flex items-center justify-center min-h-[400px]">
-      <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600"></div>
-    </div>
-  );
 
   return (
     <div className="space-y-8 animate-in fade-in duration-500">
