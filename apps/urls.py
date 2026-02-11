@@ -25,6 +25,7 @@ from .views import (
     MpesaRepaymentView,
     BulkSMSView,
     SMSLogListView,
+    AdminInviteView,
 )
 
 urlpatterns = [
@@ -57,6 +58,7 @@ urlpatterns = [
     path(
         "admins/<str:admin_id>/delete/", AdminDeleteView.as_view(), name="delete-admin"
     ),
+    path("admins/invite/", AdminInviteView.as_view(), name="invite-admin"),
     path("users/", UserListCreateView.as_view(), name="users"),
     path("users/check/", CheckUserView.as_view(), name="check-user"),
     path("users/<str:pk>/", UserDetailView.as_view(), name="user-detail"),

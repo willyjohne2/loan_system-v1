@@ -3,12 +3,15 @@ import { loanService } from '../api/api';
 import { Table, StatCard, Button } from '../components/ui/Shared';
 import { Search, Filter, UserPlus } from 'lucide-react';
 import CustomerRegistrationForm from '../components/forms/CustomerRegistrationForm';
+import CustomerHistoryModal from '../components/ui/CustomerHistoryModal';
 
 const AdminCustomers = () => {
   const [customers, setCustomers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [isRegistering, setIsRegistering] = useState(false);
+  const [selectedCustomer, setSelectedCustomer] = useState(null);
+  const [showHistory, setShowHistory] = useState(false);
 
   const fetchData = async () => {
     setLoading(true);
@@ -160,12 +163,31 @@ const AdminCustomers = () => {
                   </span>
                 </td>
                 <td className="px-6 py-4 text-right">
-                  <button className="text-primary-600 font-medium hover:underline">View History</button>
+                  <button 
+                    onClick={() => {
+                        setSelectedCustomer(customer);
+                        setShowHistory(true);
+                    }}
+                    className="text-primary-600 font-medium hover:underline"
+                  >
+                    View History
+                  </button>
                 </td>
               </tr>
             );
           }}
         />
+      )}
+
+      {selectedCustomer && (
+          <CustomerHistoryModal 
+            customer={selectedCustomer}
+            isOpen={showHistory}
+            onClose={() => {
+                setShowHistory(false);
+                setSelectedCustomer(null);
+            }}
+          />
       )}
     </div>
   );

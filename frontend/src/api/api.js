@@ -99,6 +99,10 @@ export const loanService = {
     const res = await api.get('/settings/');
     return res.data;
   },
+  inviteAdmin: async (data) => {
+    const res = await api.post('/admins/invite/', data);
+    return res.data;
+  },  },
   updateSettings: async (settings) => {
     const res = await api.post('/settings/', settings);
     return res.data;
@@ -107,13 +111,14 @@ export const loanService = {
     const res = await api.post('/auth/login/', { email, password });
     return res.data;
   },
-  register: async (full_name, email, phone, role, password) => {
+  register: async (full_name, email, phone, role, password, invitation_token = null) => {
     const res = await api.post('/auth/register/', { 
       full_name, 
       email, 
       phone, 
       role, 
-      password 
+      password,
+      invitation_token
     });
     return res.data;
   },

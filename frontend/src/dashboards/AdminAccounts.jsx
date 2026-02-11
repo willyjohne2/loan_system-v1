@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { loanService } from '../api/api';
-import { Trash2, AlertCircle, CheckCircle } from 'lucide-react';
+import { Trash2, AlertCircle, CheckCircle, UserPlus, Mail, Shield, Send } from 'lucide-react';
 
 const AdminAccounts = () => {
   const [admins, setAdmins] = useState([]);
@@ -9,11 +9,30 @@ const AdminAccounts = () => {
   const [success, setSuccess] = useState('');
   const [deletingId, setDeletingId] = useState(null);
   const [confirmDelete, setConfirmDelete] = useState(null);
+  const [showInviteModal, setShowInviteModal] = useState(false);
+  const [inviteData, setInviteData] = useState({ email: '', role: 'FINANCIAL_OFFICER' });
+  const [inviting, setInviting] = useState(false);
 
   useEffect(() => {
     fetchAdmins();
   }, []);
 
+  const handleInvite = async (e) => {
+    e.preventDefault();
+    setInviting(true);
+    setError('');
+    try {
+      await loanService.inviteAdmin(inviteData);
+      setSuccess(`Invitation sent to ${inviteData.email} successfully!`);
+      setShowInviteModal(false);
+      setInviteData({ email: '', role: 'FINANCIAL_OFFICER' });
+      setTimeout(() => setSuccess(''), 4000);
+    } catch (err) {
+      setError(err.response?.data?.error || 'Failed to send invitation');
+    } finally {
+      setInviting(false);
+    }
+  };
   const fetchAdmins = async () => {
     try {
       setLoading(true);
@@ -78,6 +97,20 @@ const AdminAccounts = () => {
 
   return (
     <div className="space-y-6">
+      <div className="flex justify-between items-center">
+        <div>
+          <h3 className="text-xl font-bold">Administrative Accounts</h3>
+          <p className="text-sm text-slate-500">System access control and user management</p>
+        </div>
+        <button 
+          onClick={() => setShowInviteModal(true)}
+          className="flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg font-medium transition-all shadow-md active:scale-95"
+        >
+          <UserPlus className="w-4 h-4" />
+          Invite Associate
+        </button>
+      </div>
+
       {error && (
         <div className="p-4 bg-red-50 border border-red-200 text-red-700 rounded-lg flex items-start gap-3 dark:bg-red-900/20 dark:border-red-800 dark:text-red-300">
           <AlertCircle className="w-5 h-5 mt-0.5 flex-shrink-0" />
@@ -198,6 +231,85 @@ const AdminAccounts = () => {
           Total: <strong>{admins.length}</strong> admin account(s)
         </div>
       )}
+    </div>
+  );
+};
+
+export default AdminAccounts;
+
+      {/* Invitation Modal */}
+      {showInviteModal && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[60] flex items-center justify-center p-4">
+          <div className="bg-white dark:bg-slate-900 rounded-2xl p-8 max-w-md w-full shadow-2xl border border-slate-100 dark:border-slate-800 animate-in fade-in zoom-in duration-200">
+            <div className="text-center mb-8">
+              <div className="w-16 h-16 bg-indigo-100 dark:bg-indigo-900/40 text-indigo-600 dark:text-indigo-400 rounded-full flex items-center justify-center mx-auto mb-4">
+                <Mail className="w-8 h-8" />
+              </div>
+              <h3 className="text-2xl font-bold text-slate-900 dark:text-white">Invite New User</h3>
+              <p className="text-slate-500 text-sm mt-1">Send a registration link to an associate's email</p>
+            </div>
+
+            <form onSubmit={handleInvite} className="space-y-6">
+              <div className="space-y-2">
+                <label className="text-xs font-bold text-slate-400 uppercase tracking-widest pl-1">Email Address</label>
+                <div className="relative">
+                  <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                  <input 
+                    type="email"
+                    required
+                    placeholder="associate@company.com"
+                    className="w-full pl-10 pr-4 py-3 rounded-xl border border-slate-200 dark:bg-slate-800 dark:border-slate-700 outline-none focus:ring-2 focus:ring-indigo-500 transition-all font-medium"
+                    value={inviteData.email}
+                    onChange={(e) => setInviteData({...inviteData, email: e.target.value})}
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-xs font-bold text-slate-400 uppercase tracking-widest pl-1">System Role</label>
+                <div className="relative">
+                  <Shield className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                  <select 
+                    className="w-full pl-10 pr-4 py-3 rounded-xl border border-slate-200 dark:bg-slate-800 dark:border-slate-700 outline-none focus:ring-2 focus:ring-indigo-500 appearance-none bg-white font-medium capitalize"
+                    value={inviteData.role}
+                    onChange={(e) => setInviteData({...inviteData, role: e.target.value})}
+                  >
+                    <option value="ADMIN">Administrator</option>
+                    <option value="MANAGER">Regional Manager</option>
+                    <option value="FINANCIAL_OFFICER">Financial Officer</option>
+                    <option value="FIELD_OFFICER">Field Officer</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="flex gap-4 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setShowInviteModal(false)}
+                  className="flex-1 px-6 py-3 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl font-bold transition-all"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={inviting}
+                  className="flex-1 px-6 py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold transition-all shadow-lg flex items-center justify-center gap-2 disabled:opacity-50"
+                >
+                  {inviting ? (
+                    <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                  ) : (
+                    <>
+                      <Send className="w-4 h-4" />
+                      Send Invite
+                    </>
+                  )}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 };

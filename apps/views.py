@@ -23,6 +23,7 @@ from .models import (
     LoanActivity,
     LoanDocuments,
     SMSLog,
+    AdminInvitation,
 )
 from .serializers import (
     AdminSerializer,
@@ -88,6 +89,46 @@ def send_verification_email_async(full_name, email, verification_code):
 
     except Exception:
         pass
+
+
+def send_invitation_email_async(email, role, invited_by_name, token):
+    try:
+        sender_name = os.getenv("SENDER_NAME", "Loan System")
+        from_email = os.getenv("FROM_EMAIL")
+        brevo_api_key = os.getenv("BREVO_API_KEY")
+        # You would typically have a frontend URL for invitations
+        invite_url = f"http://localhost:5173/signup?token={token}&email={email}"
+
+        url = "https://api.brevo.com/v3/smtp/email"
+        headers = {
+            "accept": "application/json",
+            "api-key": brevo_api_key,
+            "content-type": "application/json",
+        }
+
+        payload = {
+            "sender": {"name": sender_name, "email": from_email},
+            "to": [{"email": email}],
+            "subject": f"You've been invited as a {role} - Loan System",
+            "htmlContent": f"""
+                <html>
+                <body style="font-family: Arial, sans-serif;">
+                <h2>Administrative Invitation</h2>
+                <p>Hello,</p>
+                <p>{invited_by_name} has invited you to join the Loan Management System as a <strong>{role}</strong>.</p>
+                <p>To accept this invitation and set up your account, please click the link below:</p>
+                <a href="{invite_url}" style="background-color: #4f46e5; color: white; padding: 12px 24px; text-decoration: none; border-radius: 8px; display: inline-block;">Accept Invitation</a>
+                <p>Alternatively, copy and paste this link into your browser:</p>
+                <p>{invite_url}</p>
+                <p>This invitation will expire in 48 hours.</p>
+                <p>Best regards,<br/>{sender_name} Team</p>
+                </body>
+                </html>
+            """,
+        }
+        requests.post(url, json=payload, headers=headers)
+    except Exception as e:
+        print(f"Error sending invite: {e}")
 
 
 def send_password_reset_email_async(full_name, email, reset_code):
@@ -767,6 +808,7 @@ class RegisterAdminView(views.APIView):
         phone = request.data.get("phone")
         role = request.data.get("role")
         password = request.data.get("password")
+        invitation_token = request.data.get("invitation_token")
 
         if not all([full_name, email, role, password]):
             return Response(
@@ -781,13 +823,38 @@ class RegisterAdminView(views.APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
+        # Requirement: Non-first admins must have a valid invitation
         if role == "ADMIN" and Admins.objects.filter(role="ADMIN").exists():
-            return Response(
-                {
-                    "error": "Admin account already exists. New admins must be invited by an existing administrator."
-                },
-                status=status.HTTP_403_FORBIDDEN,
-            )
+            if not invitation_token:
+                return Response(
+                    {
+                        "error": "Administrative accounts must be created via invitation."
+                    },
+                    status=status.HTTP_403_FORBIDDEN,
+                )
+
+            try:
+                invite = AdminInvitation.objects.get(
+                    token=invitation_token,
+                    email__iexact=email,
+                    is_used=False,
+                    expires_at__gt=timezone.now(),
+                )
+                # Ensure the invite role matches requested role
+                if invite.role != "ADMIN":
+                    return Response(
+                        {"error": "This invitation is not for an Admin role."},
+                        status=400,
+                    )
+
+                # Mark invite as used after successful registration
+                invite.is_used = True
+                invite.save()
+            except AdminInvitation.DoesNotExist:
+                return Response(
+                    {"error": "Invalid or expired invitation token."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
 
         if Admins.objects.filter(email__iexact=email).exists():
             return Response(
@@ -1111,3 +1178,56 @@ class LoanAnalyticsView(views.APIView):
             ],
         }
         return Response(data)
+
+
+class AdminInviteView(views.APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request):
+        if request.auth.get("role") != "ADMIN":
+            return Response(
+                {"error": "Only administrators can invite others"}, status=403
+            )
+
+        email = request.data.get("email")
+        role = request.data.get("role")
+
+        if not email or not role:
+            return Response({"error": "Email and role are required"}, status=400)
+
+        valid_roles = ["ADMIN", "MANAGER", "FINANCIAL_OFFICER", "FIELD_OFFICER"]
+        if role not in valid_roles:
+            return Response({"error": "Invalid role"}, status=400)
+
+        # Check if already registered
+        if Admins.objects.filter(email__iexact=email).exists():
+            return Response(
+                {"error": "User with this email is already registered"}, status=400
+            )
+
+        # Update or create invitation
+        token = secrets.token_urlsafe(32)
+        expires_at = timezone.now() + timezone.timedelta(days=2)
+
+        inviter = Admins.objects.get(id=request.auth.get("admin_id"))
+
+        invitation, created = AdminInvitation.objects.update_or_create(
+            email=email.lower(),
+            defaults={
+                "role": role,
+                "token": token,
+                "invited_by": inviter,
+                "is_used": False,
+                "expires_at": expires_at,
+            },
+        )
+
+        # Send email
+        email_thread = threading.Thread(
+            target=send_invitation_email_async,
+            args=(email.lower(), role, inviter.full_name, token),
+        )
+        email_thread.daemon = True
+        email_thread.start()
+
+        return Response({"message": f"Invitation sent to {email}"}, status=201)

@@ -32,6 +32,24 @@ class Admins(models.Model):
         return False
 
 
+class AdminInvitation(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    email = models.EmailField(unique=True)
+    role = models.CharField(max_length=50)
+    token = models.CharField(max_length=100, unique=True)
+    invited_by = models.ForeignKey(Admins, on_delete=models.SET_NULL, null=True)
+    is_used = models.BooleanField(default=False)
+    expires_at = models.DateTimeField()
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        managed = True
+        db_table = "admin_invitations"
+
+    def is_anonymous(self):
+        return False
+
+
 class AuditLogs(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     admin = models.ForeignKey(Admins, models.DO_NOTHING, blank=True, null=True)

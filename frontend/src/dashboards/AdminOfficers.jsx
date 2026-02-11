@@ -1,11 +1,14 @@
 import React, { useEffect, useState } from 'react';
 import { loanService } from '../api/api';
 import { Table, Button } from '../components/ui/Shared';
-import { UserPlus, Shield } from 'lucide-react';
+import { UserPlus, Shield, Activity } from 'lucide-react';
+import AdminActivityModal from '../components/ui/AdminActivityModal';
 
 const AdminOfficers = ({ role = 'FINANCIAL_OFFICER' }) => {
   const [officers, setOfficers] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [selectedAdmin, setSelectedAdmin] = useState(null);
+  const [showActivity, setShowActivity] = useState(false);
   const [error, setError] = useState('');
 
   useEffect(() => {
@@ -73,13 +76,33 @@ const AdminOfficers = ({ role = 'FINANCIAL_OFFICER' }) => {
                   {officer.is_verified ? 'Verified' : 'Pending'}
                 </div>
               </td>
-              <td className="px-6 py-4 text-right space-x-2">
-                <button className="text-primary-600 hover:text-primary-700">View</button>
-                <button className="text-rose-600 hover:text-rose-700">Deactivate</button>
+              <td className="px-6 py-4 text-right flex items-center justify-end gap-3">
+                <button 
+                    onClick={() => {
+                        setSelectedAdmin({...officer, role});
+                        setShowActivity(true);
+                    }}
+                    className="flex items-center gap-1 text-slate-500 hover:text-primary-600 transition-colors"
+                >
+                    <Activity className="w-4 h-4" />
+                    <span className="text-sm font-medium">Activity</span>
+                </button>
+                <button className="text-rose-600 hover:text-rose-700 text-sm font-medium">Deactivate</button>
               </td>
             </tr>
           )}
         />
+      )}
+
+      {selectedAdmin && (
+          <AdminActivityModal 
+            admin={selectedAdmin}
+            isOpen={showActivity}
+            onClose={() => {
+                setShowActivity(false);
+                setSelectedAdmin(null);
+            }}
+          />
       )}
     </div>
   );

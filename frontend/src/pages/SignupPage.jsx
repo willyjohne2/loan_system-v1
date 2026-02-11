@@ -1,18 +1,30 @@
-import React, { useState } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import React, { useState, useEffect } from 'react';
+import { useNavigate, Link, useLocation } from 'react-router-dom';
 import { loanService } from '../api/api';
 import { Button, Card } from '../components/ui/Shared';
 import { Lock, Mail, User, ShieldCheck, Phone, Briefcase, Eye, EyeOff } from 'lucide-react';
 
 const SignupPage = () => {
+  const location = useLocation();
+  const searchParams = new URLSearchParams(location.search);
+  const inviteToken = searchParams.get('token');
+  const invitedEmail = searchParams.get('email');
+
   const [formData, setFormData] = useState({
     full_name: '',
-    email: '',
+    email: invitedEmail || '',
     phone: '',
-    role: 'FIELD_OFFICER',
+    role: inviteToken ? 'ADMIN' : 'FIELD_OFFICER',
     password: '',
     confirmPassword: '',
   });
+
+  useEffect(() => {
+    if (inviteToken) {
+      // If there's an invite token, default to the invited email
+      // and potentially lock the email/role fields
+    }
+  }, [inviteToken]);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [loading, setLoading] = useState(false);
@@ -88,7 +100,8 @@ const SignupPage = () => {
         formData.email,
         formData.phone,
         formData.role,
-        formData.password
+        formData.password,
+        inviteToken
       );
       setSuccess('Registration successful! Redirecting to email verification...');
       // Redirect to verification page with email

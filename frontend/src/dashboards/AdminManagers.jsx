@@ -1,13 +1,16 @@
 import React, { useEffect, useState } from 'react';
 import { loanService } from '../api/api';
 import { Table, Button, Card, Badge } from '../components/ui/Shared';
-import { UserPlus, Mail, Phone, CheckCircle, Edit, MapPin, XCircle, Save, Loader2 } from 'lucide-react';
+import { UserPlus, Mail, Phone, CheckCircle, Edit, MapPin, XCircle, Save, Loader2, Activity } from 'lucide-react';
+import AdminActivityModal from '../components/ui/AdminActivityModal';
 
 const AdminManagers = () => {
   const [managers, setManagers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [editingManager, setEditingManager] = useState(null);
+  const [showActivity, setShowActivity] = useState(false);
+  const [selectedAdmin, setSelectedAdmin] = useState(null);
   const [saving, setSaving] = useState(false);
   const [formData, setFormData] = useState({
     full_name: '',
@@ -127,6 +130,18 @@ const AdminManagers = () => {
                     variant="secondary" 
                     size="sm" 
                     className="flex items-center p-2"
+                    title="View Activity"
+                    onClick={() => {
+                        setSelectedAdmin({...manager, role: 'MANAGER'});
+                        setShowActivity(true);
+                    }}
+                  >
+                    <Activity className="w-4 h-4" />
+                  </Button>
+                  <Button 
+                    variant="secondary" 
+                    size="sm" 
+                    className="flex items-center p-2"
                     onClick={() => startEdit(manager)}
                   >
                     <Edit className="w-4 h-4" />
@@ -223,6 +238,17 @@ const AdminManagers = () => {
             </form>
           </Card>
         </div>
+      )}
+
+      {selectedAdmin && (
+          <AdminActivityModal 
+            admin={selectedAdmin}
+            isOpen={showActivity}
+            onClose={() => {
+                setShowActivity(false);
+                setSelectedAdmin(null);
+            }}
+          />
       )}
     </div>
   );
