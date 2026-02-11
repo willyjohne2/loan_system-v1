@@ -563,8 +563,8 @@ class BulkSMSView(views.APIView):
                     {"error": "Message is required for general notice"}, status=400
                 )
 
-            # Send to all verified customers
-            all_users = Users.objects.filter(is_verified=True)
+            # Broaden to all users so you can test without verifying them first
+            all_users = Users.objects.all()
             if user_role == "MANAGER":
                 manager_region = getattr(user, "region", None)
                 if manager_region:
