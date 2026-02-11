@@ -107,7 +107,7 @@ const AdminSMSLogs = () => {
                                     <td className="px-6 py-4 whitespace-nowrap">
                                         <div className="flex items-center gap-2 text-xs text-slate-500">
                                             <Calendar className="w-3 h-3" />
-                                            {new Date(log.sent_at).toLocaleString()}
+                                            {new Date(log.created_at).toLocaleString()}
                                         </div>
                                     </td>
                                 </tr>

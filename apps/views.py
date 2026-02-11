@@ -669,7 +669,7 @@ class SystemSettingsView(views.APIView):
 
 
 class SMSLogListView(generics.ListAPIView):
-    queryset = SMSLog.objects.all().order_by("-sent_at")
+    queryset = SMSLog.objects.all().order_by("-created_at")
     serializer_class = SMSLogSerializer
     permission_classes = [permissions.IsAuthenticated]
 
@@ -685,7 +685,7 @@ class SMSLogListView(generics.ListAPIView):
                     recipient_phone__in=Users.objects.filter(
                         profile__region=manager_region
                     ).values_list("phone", flat=True)
-                ).order_by("-sent_at")
+                ).order_by("-created_at")
 
         return super().get_queryset()
 
