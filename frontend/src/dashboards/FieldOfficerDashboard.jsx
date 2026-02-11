@@ -1,14 +1,16 @@
 import React, { useEffect, useState } from 'react';
 import { loanService } from '../api/api';
 import { StatCard, Table, Card, Button } from '../components/ui/Shared';
-import { Users, Wallet, UserPlus, TrendingUp, Calendar, ArrowUpRight } from 'lucide-react';
+import { Users, Wallet, UserPlus, TrendingUp, Calendar, ArrowUpRight, DollarSign } from 'lucide-react';
 import CustomerRegistrationForm from '../components/forms/CustomerRegistrationForm';
+import RepaymentModal from '../components/ui/RepaymentModal';
 
 const FieldOfficerDashboard = () => {
   const [loading, setLoading] = useState(true);
   const [customers, setCustomers] = useState([]);
   const [loans, setLoans] = useState([]);
   const [isRegistering, setIsRegistering] = useState(false);
+  const [selectedLoan, setSelectedLoan] = useState(null);
   const [stats, setStats] = useState({
     today: 0,
     thisWeek: 0,
@@ -138,31 +140,75 @@ const FieldOfficerDashboard = () => {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <Card className="lg:col-span-2">
           <div className="flex justify-between items-center mb-6">
-            <h3 className="text-lg font-semibold text-slate-900 dark:text-white">My Registered Customers</h3>
-            <span className="text-xs font-medium text-slate-400 uppercase tracking-wider">Read Only</span>
+            <h3 className="text-lg font-semibold text-slate-900 dark:text-white">Active Loan Portfolio</h3>
+            <span className="text-xs font-black text-emerald-600 bg-emerald-100 px-2 py-1 rounded">REPAYMENTS ACTIVE</span>
           </div>
-          {customers.length === 0 ? (
+          {loans.filter(l => ['ACTIVE', 'OVERDUE'].includes(l.status)).length === 0 ? (
             <div className="text-center py-12 text-slate-500 border-2 border-dashed rounded-xl">
-              No customers registered yet. Start by clicking the button above.
+              No active loans found in your portfolio.
             </div>
           ) : (
             <Table
-              headers={['Customer Name', 'Phone', 'Registration Date', 'Status']}
-              data={customers.slice(0, 10)}
-              renderRow={(customer) => (
-                <tr key={customer.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
-                  <td className="px-6 py-4 font-medium text-slate-900 dark:text-white">{customer.full_name}</td>
-                  <td className="px-6 py-4 text-slate-600 dark:text-slate-400">{customer.phone}</td>
-                  <td className="px-6 py-4 text-slate-500">{customer.created_at ? new Date(customer.created_at).toLocaleDateString() : '-'}</td>
+              headers={['Customer', 'Principal', 'Status', 'Action']}
+              data={loans.filter(l => ['ACTIVE', 'OVERDUE'].includes(l.status))}
+              renderRow={(loan) => (
+                <tr key={loan.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
                   <td className="px-6 py-4">
-                    <span className="px-2 py-1 bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400 rounded text-[10px] font-bold">
-                      ACTIVE
+                    <div className="font-medium text-slate-900 dark:text-white">{loan.customer_name}</div>
+                    <div className="text-[10px] text-slate-500 uppercase tracking-tighter">ID: {loan.id.slice(0, 8)}</div>
+                  </td>
+                  <td className="px-6 py-4 font-bold text-slate-700 dark:text-slate-300">KES {loan.amount.toLocaleString()}</td>
+                  <td className="px-6 py-4">
+                    <span className={`px-2 py-1 rounded text-[10px] font-black ${
+                      loan.status === 'OVERDUE' ? 'bg-red-100 text-red-700' : 'bg-blue-100 text-blue-700'
+                    }`}>
+                      {loan.status}
                     </span>
+                  </td>
+                  <td className="px-6 py-4">
+                    <Button 
+                      size="sm" 
+                      variant="primary" 
+                      className="bg-emerald-600 hover:bg-emerald-700 flex items-center gap-1"
+                      onClick={() => setSelectedLoan(loan)}
+                    >
+                      <DollarSign className="w-3 h-3" />
+                      Repay
+                    </Button>
                   </td>
                 </tr>
               )}
             />
           )}
+
+          <div className="mt-8 pt-8 border-t border-slate-100 dark:border-slate-800">
+            <div className="flex justify-between items-center mb-6">
+              <h3 className="text-lg font-semibold text-slate-900 dark:text-white">My Registered Customers</h3>
+              <span className="text-xs font-medium text-slate-400 uppercase tracking-wider">Read Only</span>
+            </div>
+            {customers.length === 0 ? (
+              <div className="text-center py-12 text-slate-500 border-2 border-dashed rounded-xl">
+                No customers registered yet. Start by clicking the button above.
+              </div>
+            ) : (
+              <Table
+                headers={['Customer Name', 'Phone', 'Registration Date', 'Status']}
+                data={customers.slice(0, 10)}
+                renderRow={(customer) => (
+                  <tr key={customer.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
+                    <td className="px-6 py-4 font-medium text-slate-900 dark:text-white">{customer.full_name}</td>
+                    <td className="px-6 py-4 text-slate-600 dark:text-slate-400">{customer.phone}</td>
+                    <td className="px-6 py-4 text-slate-500">{customer.created_at ? new Date(customer.created_at).toLocaleDateString() : '-'}</td>
+                    <td className="px-6 py-4">
+                      <span className="px-2 py-1 bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400 rounded text-[10px] font-bold">
+                        ACTIVE
+                      </span>
+                    </td>
+                  </tr>
+                )}
+              />
+            )}
+          </div>
         </Card>
 
         <Card>
@@ -194,6 +240,14 @@ const FieldOfficerDashboard = () => {
           </div>
         </Card>
       </div>
+
+      {selectedLoan && (
+        <RepaymentModal 
+          loan={selectedLoan}
+          onClose={() => setSelectedLoan(null)}
+          onSuccess={() => fetchData()}
+        />
+      )}
     </div>
   );
 };

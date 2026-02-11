@@ -93,6 +93,24 @@ class Loans(models.Model):
         super().save(*args, **kwargs)
 
     @property
+    def total_repayable_amount(self):
+        principal = float(self.principal_amount)
+        rate = float(self.interest_rate or 0)
+        # Assuming simple interest for now based on duration
+        return principal + (principal * (rate / 100) * (self.duration_months / 12))
+
+    @property
+    def amount_paid(self):
+        return float(
+            self.repayments_set.aggregate(models.Sum("amount_paid"))["amount_paid__sum"]
+            or 0
+        )
+
+    @property
+    def remaining_balance(self):
+        return self.total_repayable_amount - self.amount_paid
+
+    @property
     def is_overdue(self):
         today = timezone.now().date()
         return self.repaymentschedule_set.filter(

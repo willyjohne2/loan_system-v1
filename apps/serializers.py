@@ -68,6 +68,15 @@ class LoanProductSerializer(serializers.ModelSerializer):
 class LoanSerializer(serializers.ModelSerializer):
     documents = LoanDocumentSerializer(many=True, read_only=True)
     activities = LoanActivitySerializer(many=True, read_only=True)
+    remaining_balance = serializers.DecimalField(
+        max_digits=12, decimal_places=2, read_only=True
+    )
+    total_repayable_amount = serializers.DecimalField(
+        max_digits=12, decimal_places=2, read_only=True
+    )
+    amount_paid = serializers.DecimalField(
+        max_digits=12, decimal_places=2, read_only=True
+    )
 
     class Meta:
         model = Loans

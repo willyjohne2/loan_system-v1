@@ -71,6 +71,14 @@ export const loanService = {
     const res = await api.get('/repayments/');
     return res.data;
   },
+  createRepayment: async (data) => {
+    const res = await api.post('/repayments/', data);
+    return res.data;
+  },
+  initiateMpesaRepayment: async (data) => {
+    const res = await api.post('/payments/mpesa/', data);
+    return res.data;
+  },
   getAuditLogs: async () => {
     const res = await api.get('/audit-logs/');
     return res.data;

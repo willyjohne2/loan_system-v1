@@ -4,4 +4,4 @@ __pycache__/
 *.pyc
 .env
 .vscode/
-frontend/
+# frontend/ removed for v1 deployment

@@ -37,6 +37,7 @@ from .serializers import (
     LoanActivitySerializer,
     LoanDocumentSerializer,
 )
+from .utils.mpesa import MpesaHandler
 
 
 def create_loan_activity(loan, admin, action, note=""):
@@ -384,7 +385,97 @@ class RepaymentListCreateView(generics.ListCreateAPIView):
         return repayments.order_by("-payment_date")
 
     def perform_create(self, serializer):
-        serializer.save(id=uuid.uuid4())
+        repayment = serializer.save(id=uuid.uuid4())
+        loan = repayment.loan
+
+        # Log activity
+        admin = self.request.user if hasattr(self.request.user, "role") else None
+        create_loan_activity(
+            loan,
+            admin,
+            "REPAYMENT",
+            f"Repayment of KES {repayment.amount_paid} recorded.",
+        )
+
+        # Create transaction for user
+        Transactions.objects.create(
+            id=uuid.uuid4(),
+            user=loan.user,
+            type="REPAYMENT",
+            amount=repayment.amount_paid,
+        )
+
+        # Check if loan is fully paid
+        if loan.remaining_balance <= 0:
+            loan.status = "CLOSED"
+            loan.save()
+            create_notification(
+                loan.user,
+                f"Congratulations! Your loan of KES {loan.principal_amount} has been fully repaid.",
+            )
+            create_loan_activity(
+                loan, admin, "STATUS_CHANGE", "Loan closed - fully repaid."
+            )
+        else:
+            # Update overdue status if needed
+            loan.update_status_and_rates()
+
+
+class MpesaRepaymentView(views.APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request):
+        user = request.user
+        role = getattr(user, "role", None)
+
+        if role not in ["FIELD_OFFICER", "MANAGER", "ADMIN"]:
+            return Response({"error": "Unauthorized"}, status=status.HTTP_403_FORBIDDEN)
+
+        loan_id = request.data.get("loan_id")
+        amount = request.data.get("amount")
+        phone_number = request.data.get("phone_number")
+
+        if not all([loan_id, amount, phone_number]):
+            return Response(
+                {"error": "loan_id, amount, and phone_number are required"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        try:
+            loan = Loans.objects.get(id=loan_id)
+            if loan.status not in ["ACTIVE", "OVERDUE"]:
+                return Response(
+                    {
+                        "error": f"Loan is in status {loan.status}. Payments only allowed for ACTIVE or OVERDUE loans."
+                    },
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            if loan.remaining_balance <= 0:
+                return Response(
+                    {"error": "Loan is already fully paid"},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            # Trigger STK Push
+            handler = MpesaHandler()
+            # If no credentials, use mock
+            if not handler.consumer_key:
+                result = handler.mock_stk_push(phone_number, amount, str(loan.id)[:20])
+            else:
+                result = handler.stk_push(
+                    phone_number,
+                    amount,
+                    str(loan.id)[:20],
+                    f"Repayment {str(loan.id)[:10]}",
+                )
+
+            return Response(result)
+
+        except Loans.DoesNotExist:
+            return Response(
+                {"error": "Loan not found"}, status=status.HTTP_404_NOT_FOUND
+            )
 
 
 class AuditLogListView(generics.ListAPIView):

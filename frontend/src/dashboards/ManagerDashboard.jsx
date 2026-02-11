@@ -3,6 +3,7 @@ import { loanService } from '../api/api';
 import { useAuth } from '../context/AuthContext';
 import { Table, Button, Card, StatCard, Badge } from '../components/ui/Shared';
 import CustomerRegistrationForm from '../components/forms/CustomerRegistrationForm';
+import RepaymentModal from '../components/ui/RepaymentModal';
 import { 
   Users, 
   TrendingUp, 
@@ -52,6 +53,7 @@ const ManagerDashboard = () => {
   const [loans, setLoans] = useState([]);
   const [isRegistering, setIsRegistering] = useState(false);
   const [selectedLoan, setSelectedLoan] = useState(null);
+  const [showRepaymentModal, setShowRepaymentModal] = useState(false);
   const [selectedCustomer, setSelectedCustomer] = useState(null);
   const [updating, setUpdating] = useState(false);
   const [chartData, setChartData] = useState([]);
@@ -832,9 +834,34 @@ const ManagerDashboard = () => {
                   Move to Pending
                 </Button>
               )}
+              {['ACTIVE', 'OVERDUE'].includes(selectedLoan.status) && (
+                <Button 
+                  className="bg-emerald-600 hover:bg-emerald-700 text-white"
+                  onClick={() => setShowRepaymentModal(true)}
+                  disabled={updating}
+                >
+                  Record Repayment
+                </Button>
+              )}
             </div>
           </Card>
         </div>
+      )}
+
+      {showRepaymentModal && selectedLoan && (
+        <RepaymentModal
+          loan={{
+            ...selectedLoan,
+            customer_name: customers.find(c => c.id === selectedLoan.user)?.full_name || 'Customer',
+            amount: Number(selectedLoan.remaining_balance || selectedLoan.principal_amount) || 0
+          }}
+          onClose={() => setShowRepaymentModal(false)}
+          onSuccess={() => {
+            setShowRepaymentModal(false);
+            setSelectedLoan(null);
+            fetchData();
+          }}
+        />
       )}
 
       {/* Customer Details Modal Overlay */}
