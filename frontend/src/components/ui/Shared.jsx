@@ -71,6 +71,9 @@ export const StatCard = ({ label, value, icon: Icon, trend, trendValue, variant 
     info: "bg-indigo-50 text-indigo-600 dark:bg-indigo-900/20 dark:text-indigo-400"
   };
 
+  const isTrendUp = typeof trend === 'object' ? trend.isPositive : trend === 'up';
+  const trendLabel = typeof trend === 'object' ? trend.value : `${trendValue}%`;
+
   return (
     <Card 
       className={cn(
@@ -83,8 +86,8 @@ export const StatCard = ({ label, value, icon: Icon, trend, trendValue, variant 
         <p className="text-xs md:text-sm font-medium text-slate-500 dark:text-slate-400 truncate">{label}</p>
         <h3 className="text-lg md:text-2xl font-bold mt-1 text-slate-800 dark:text-white truncate">{value}</h3>
         {trend && (
-          <p className={cn("text-[10px] md:text-xs font-medium mt-2 flex items-center gap-1", trend === 'up' ? 'text-emerald-600' : 'text-rose-600')}>
-            {trend === 'up' ? '↑' : '↓'} {trendValue}% <span className="text-slate-400">vs last month</span>
+          <p className={cn("text-[10px] md:text-xs font-medium mt-2 flex items-center gap-1", isTrendUp ? 'text-emerald-600' : 'text-rose-600')}>
+            {isTrendUp ? '↑' : '↓'} {trendLabel}
           </p>
         )}
       </div>

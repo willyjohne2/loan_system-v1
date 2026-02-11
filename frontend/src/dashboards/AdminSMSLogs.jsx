@@ -17,19 +17,25 @@ const AdminSMSLogs = () => {
     const fetchLogs = async () => {
         try {
             const data = await loanService.getSMSLogs();
-            setLogs(data);
+            // Handle both DRF paginated and direct array responses
+            const logsData = data?.results ? data.results : (Array.isArray(data) ? data : []);
+            setLogs(logsData);
         } catch (err) {
             console.error('Error fetching SMS logs:', err);
+            setLogs([]);
         } finally {
             setLoading(false);
         }
     };
 
-    const filteredLogs = logs.filter(log => 
-        log.recipient_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        log.recipient_phone?.includes(searchTerm) ||
-        log.message?.toLowerCase().includes(searchTerm.toLowerCase())
-    );
+    const logsArray = Array.isArray(logs) ? logs : [];
+
+    const filteredLogs = logsArray.filter(log => {
+        const nameMatch = (log.recipient_name || 'Customer').toLowerCase().includes(searchTerm.toLowerCase());
+        const phoneMatch = (log.recipient_phone || '').includes(searchTerm);
+        const msgMatch = (log.message || '').toLowerCase().includes(searchTerm.toLowerCase());
+        return nameMatch || phoneMatch || msgMatch;
+    });
 
     const getTypeColor = (type) => {
         switch (type) {

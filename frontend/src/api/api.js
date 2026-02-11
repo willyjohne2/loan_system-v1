@@ -79,8 +79,8 @@ export const loanService = {
     const res = await api.post('/payments/mpesa/', data);
     return res.data;
   },
-  sendBulkDefaulterSMS: async () => {
-    const res = await api.post('/notifications/bulk-sms/');
+  sendBulkSMS: async (type, message) => {
+    const res = await api.post('/notifications/bulk-sms/', { type, message });
     return res.data;
   },
   getAuditLogs: async () => {

@@ -1,9 +1,10 @@
 import React from 'react';
 import { Routes, Route, useLocation } from 'react-router-dom';
 import Layout from '../components/layout/Layout';
-import ManagerHome from './ManagerDashboard'; // We'll repurpose the previous file as the home view
-import AdminOfficers from './AdminOfficers'; // We can reuse the list view
-import AdminCustomers from './AdminCustomers'; // We can reuse the list view
+import ManagerHome from './ManagerDashboard';
+import AdminOfficers from './AdminOfficers';
+import AdminCustomers from './AdminCustomers';
+import AdminSMSLogs from './AdminSMSLogs';
 import ProfileSettings from '../pages/ProfileSettings';
 
 const ManagerDashboardWrapper = () => {
@@ -12,6 +13,7 @@ const ManagerDashboardWrapper = () => {
   const getTitle = () => {
     if (location.pathname.includes('/officers')) return 'Regional Officers';
     if (location.pathname.includes('/customers')) return 'Regional Customers';
+    if (location.pathname.includes('/sms-logs')) return 'Communication Logs';
     if (location.pathname.includes('/profile')) return 'Account Profile';
     return 'Regional Manager Dashboard';
   };
@@ -23,6 +25,7 @@ const ManagerDashboardWrapper = () => {
         <Route path="dashboard" element={<ManagerHome />} />
         <Route path="officers" element={<AdminOfficers role="FIELD_OFFICER" />} />
         <Route path="customers" element={<AdminCustomers />} />
+        <Route path="sms-logs" element={<AdminSMSLogs />} />
         <Route path="profile" element={<ProfileSettings />} />
       </Routes>
     </Layout>
