@@ -349,9 +349,10 @@ class LoanListCreateView(generics.ListCreateAPIView):
                     interest_setting = SystemSettings.objects.get(
                         key="DEFAULT_INTEREST_RATE"
                     )
-                    interest_rate = interest_setting.value
-                except SystemSettings.DoesNotExist:
-                    interest_rate = 5.0
+                    # Safe cast to float
+                    interest_rate = float(interest_setting.value)
+                except (SystemSettings.DoesNotExist, ValueError, TypeError):
+                    interest_rate = 15.0
 
         loan = serializer.save(interest_rate=interest_rate, created_by=created_by)
 
@@ -366,6 +367,18 @@ class LoanListCreateView(generics.ListCreateAPIView):
             loan.user,
             f"Your loan application of KES {loan.principal_amount} has been received and is under review.",
         )
+
+        # SMS Notification
+        if loan.user.phone:
+            msg = f"Hello {loan.user.full_name}, your loan application of KES {loan.principal_amount} has been received and is under review."
+            send_sms_async([loan.user.phone], msg)
+            SMSLog.objects.create(
+                sender=created_by,
+                recipient_phone=loan.user.phone,
+                recipient_name=loan.user.full_name,
+                message=msg,
+                type="AUTO",
+            )
 
 
 class RepaymentListCreateView(generics.ListCreateAPIView):
@@ -523,26 +536,31 @@ class BulkSMSView(views.APIView):
             for loan in overdue_loans:
                 phone = loan.user.phone
                 if phone:
-                    principal = float(loan.principal_amount)
-                    interest = float(loan.total_repayable_amount) - principal
-                    balance = float(loan.remaining_balance)
+                    try:
+                        principal = float(loan.principal_amount)
+                        interest = float(loan.total_repayable_amount) - principal
+                        balance = float(loan.remaining_balance)
 
-                    msg = template.format(
-                        name=loan.user.full_name,
-                        principal=principal,
-                        interest=interest,
-                        balance=balance,
-                    )
-                    send_sms_async([phone], msg)
-                    SMSLog.objects.create(
-                        sender=user,
-                        recipient_phone=phone,
-                        recipient_name=loan.user.full_name,
-                        message=msg,
-                        type="DEFAULTER",
-                    )
-                    count += 1
-                    create_notification(loan.user, f"Defaulter SMS sent to {phone}.")
+                        msg = template.format(
+                            name=loan.user.full_name,
+                            principal=principal,
+                            interest=interest,
+                            balance=balance,
+                        )
+                        send_sms_async([phone], msg)
+                        SMSLog.objects.create(
+                            sender=user,
+                            recipient_phone=phone,
+                            recipient_name=loan.user.full_name,
+                            message=msg,
+                            type="DEFAULTER",
+                        )
+                        count += 1
+                        create_notification(
+                            loan.user, f"Defaulter SMS sent to {phone}."
+                        )
+                    except Exception as e:
+                        print(f"Error sending defaulter SMS: {e}")
 
         elif sms_type == "REPAID":
             # Encourage repeat loans for those who fully repaid
@@ -573,16 +591,19 @@ class BulkSMSView(views.APIView):
 
             for user_obj in users_to_notify.values():
                 if user_obj.phone:
-                    msg = template.format(name=user_obj.full_name)
-                    send_sms_async([user_obj.phone], msg)
-                    SMSLog.objects.create(
-                        sender=user,
-                        recipient_phone=user_obj.phone,
-                        recipient_name=user_obj.full_name,
-                        message=msg,
-                        type="REPAID",
-                    )
-                    count += 1
+                    try:
+                        msg = template.format(name=user_obj.full_name)
+                        send_sms_async([user_obj.phone], msg)
+                        SMSLog.objects.create(
+                            sender=user,
+                            recipient_phone=user_obj.phone,
+                            recipient_name=user_obj.full_name,
+                            message=msg,
+                            type="REPAID",
+                        )
+                        count += 1
+                    except Exception as e:
+                        print(f"Error sending REPAID SMS: {e}")
 
         elif sms_type == "NOTICE":
             if not custom_message:
@@ -599,15 +620,18 @@ class BulkSMSView(views.APIView):
 
             for u in all_users:
                 if u.phone:
-                    send_sms_async([u.phone], custom_message)
-                    SMSLog.objects.create(
-                        sender=user,
-                        recipient_phone=u.phone,
-                        recipient_name=u.full_name,
-                        message=custom_message,
-                        type="NOTICE",
-                    )
-                    count += 1
+                    try:
+                        send_sms_async([u.phone], custom_message)
+                        SMSLog.objects.create(
+                            sender=user,
+                            recipient_phone=u.phone,
+                            recipient_name=u.full_name,
+                            message=custom_message,
+                            type="NOTICE",
+                        )
+                        count += 1
+                    except Exception as e:
+                        print(f"Error sending NOTICE SMS: {e}")
 
         return Response(
             {
@@ -968,6 +992,13 @@ class LoanDetailView(generics.RetrieveUpdateDestroyAPIView):
                     "has been VERIFIED. It is now moving to the approval stage."
                 )
                 send_sms_async([loan.user.phone], msg)
+                SMSLog.objects.create(
+                    sender=getattr(self.request, "user", None),
+                    recipient_phone=loan.user.phone,
+                    recipient_name=loan.user.full_name,
+                    message=msg,
+                    type="AUTO",
+                )
 
             elif new_status == "AWARDED" and loan.user.phone:
                 msg = (
@@ -975,6 +1006,13 @@ class LoanDetailView(generics.RetrieveUpdateDestroyAPIView):
                     "has been AWARDED. The funds will be disbursed to your registered mobile number shortly."
                 )
                 send_sms_async([loan.user.phone], msg)
+                SMSLog.objects.create(
+                    sender=getattr(self.request, "user", None),
+                    recipient_phone=loan.user.phone,
+                    recipient_name=loan.user.full_name,
+                    message=msg,
+                    type="AUTO",
+                )
 
 
 class LoanDocumentCreateView(generics.CreateAPIView):
