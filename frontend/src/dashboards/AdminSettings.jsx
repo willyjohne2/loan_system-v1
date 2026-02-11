@@ -17,7 +17,9 @@ const AdminSettings = () => {
   const [settings, setSettings] = useState({
     DEFAULT_INTEREST_RATE: 15,
     OVERDUE_PENALTY_RATE: 5,
-    INTEREST_CALCULATION_MODEL: 'MONTHLY_SIMPLE'
+    INTEREST_CALCULATION_MODEL: 'MONTHLY_SIMPLE',
+    MSG_TEMPLATE_DEFAULTER: "Hello {name}, your loan of KES {principal:,.2f} is OVERDUE. Interest accumulated: KES {interest:,.2f}. Remaining balance: KES {balance:,.2f}. Please pay via Paybill.",
+    MSG_TEMPLATE_REPAID: "Hello {name}, thank you for your commitment to repaying your previous loan. You are now eligible to apply for a newer, larger loan. Visit our nearest office or apply online today!"
   });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -220,8 +222,46 @@ const AdminSettings = () => {
                    <p className="text-[10px] text-slate-400 mt-2 italic">{tier.desc}</p>
                 </div>
               ))}
-           </div>
-        </Card>
+           </div>          <Card className="p-6 md:col-span-2">
+            <div className="flex items-center gap-3 mb-6">
+              <div className="p-2 bg-blue-100 text-blue-600 rounded-lg dark:bg-blue-900/30 dark:text-blue-400">
+                <Info className="w-5 h-5" />
+              </div>
+              <h3 className="text-lg font-bold text-slate-900 dark:text-white">Communication Templates</h3>
+            </div>
+            
+            <div className="space-y-6">
+              <div>
+                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                  Defaulter Reminder Template
+                </label>
+                <textarea
+                  rows={3}
+                  value={settings.MSG_TEMPLATE_DEFAULTER}
+                  onChange={(e) => setSettings({ ...settings, MSG_TEMPLATE_DEFAULTER: e.target.value })}
+                  className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/20 dark:bg-slate-800 dark:border-slate-700 dark:text-white"
+                />
+                <p className="mt-2 text-[10px] text-slate-500 uppercase tracking-wider">
+                  Placeholders: <span className="text-primary-600 font-mono">{"{name}"}, {"{principal}"}, {"{interest}"}, {"{balance}"}</span>
+                </p>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                  Lead Nurturing Template (Repaid Customers)
+                </label>
+                <textarea
+                  rows={3}
+                  value={settings.MSG_TEMPLATE_REPAID}
+                  onChange={(e) => setSettings({ ...settings, MSG_TEMPLATE_REPAID: e.target.value })}
+                  className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/20 dark:bg-slate-800 dark:border-slate-700 dark:text-white"
+                />
+                <p className="mt-2 text-[10px] text-slate-500 uppercase tracking-wider">
+                  Placeholders: <span className="text-primary-600 font-mono">{"{name}"}</span>
+                </p>
+              </div>
+            </div>
+          </Card>        </Card>
       </div>
     </div>
   );
