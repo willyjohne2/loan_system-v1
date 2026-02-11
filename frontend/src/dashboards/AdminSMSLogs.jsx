@@ -1,12 +1,14 @@
 import React, { useState, useEffect } from 'react';
-import { Card } from '../components/ui/Shared';
+import { Card, Button } from '../components/ui/Shared';
 import { loanService } from '../api/api';
-import { MessageSquare, Calendar, Phone, User, Tag, Search } from 'lucide-react';
+import { MessageSquare, Calendar, Phone, User, Tag, Search, Send } from 'lucide-react';
+import BulkCustomerSMSModal from '../components/ui/BulkCustomerSMSModal';
 
 const AdminSMSLogs = () => {
     const [logs, setLogs] = useState([]);
     const [loading, setLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState('');
+    const [isBulkModalOpen, setIsBulkModalOpen] = useState(false);
 
     useEffect(() => {
         fetchLogs();
@@ -54,15 +56,24 @@ const AdminSMSLogs = () => {
                     <h2 className="text-2xl font-bold text-slate-900 dark:text-white">Communication Logs</h2>
                     <p className="text-slate-500 dark:text-slate-400">History of all SMS messages sent to customers</p>
                 </div>
-                <div className="relative">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                    <input
-                        type="text"
-                        placeholder="Search logs..."
-                        value={searchTerm}
-                        onChange={(e) => setSearchTerm(e.target.value)}
-                        className="pl-10 pr-4 py-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500/20 w-full md:w-64"
-                    />
+                <div className="flex gap-3">
+                    <div className="relative">
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                        <input
+                            type="text"
+                            placeholder="Search logs..."
+                            value={searchTerm}
+                            onChange={(e) => setSearchTerm(e.target.value)}
+                            className="pl-10 pr-4 py-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500/20 w-full md:w-64"
+                        />
+                    </div>
+                    <Button 
+                        onClick={() => setIsBulkModalOpen(true)}
+                        className="flex items-center gap-2 bg-primary-600 hover:bg-primary-700"
+                    >
+                        <Send className="w-4 h-4" />
+                        New Message
+                    </Button>
                 </div>
             </div>
 
@@ -122,6 +133,14 @@ const AdminSMSLogs = () => {
                     </table>
                 </div>
             </Card>
+
+            <BulkCustomerSMSModal 
+                isOpen={isBulkModalOpen} 
+                onClose={() => {
+                    setIsBulkModalOpen(false);
+                    fetchLogs(); // Refresh logs after potentially sending new ones
+                }} 
+            />
         </div>
     );
 };
