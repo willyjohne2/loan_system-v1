@@ -17,11 +17,10 @@ const AdminActivityModal = ({ admin, isOpen, onClose }) => {
     setLoading(true);
     try {
       const data = await loanService.getAuditLogs();
-      const allLogs = data.results || data || [];
+      const allLogs = data?.results || (Array.isArray(data) ? data : []);
       
       // Filter logs by this admin's ID
-      // Assuming audit logs have an 'admin' or 'user' field that matches admin.id
-      const adminLogs = allLogs.filter(log => log.admin === admin.id || log.user === admin.id);
+      const adminLogs = allLogs.filter(log => String(log.admin) === String(admin.id) || String(log.user) === String(admin.id));
       setLogs(adminLogs);
     } catch (err) {
       console.error('Error fetching admin activity:', err);

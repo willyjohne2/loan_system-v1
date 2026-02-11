@@ -28,15 +28,21 @@ const CustomerHistoryModal = ({ customer, isOpen, onClose }) => {
         loanService.getRepayments()
       ]);
 
-      const allLoans = loanData.results || loanData || [];
-      const allRepayments = repaymentData.results || repaymentData || [];
+      // Robust data extraction
+      const allLoans = loanData?.results || (Array.isArray(loanData) ? loanData : []);
+      const allRepayments = repaymentData?.results || (Array.isArray(repaymentData) ? repaymentData : []);
 
       // Filter for this specific user
-      const userLoans = allLoans.filter(l => l.user === customer.id);
-      const userRepayments = allRepayments.filter(r => r.user === customer.id);
+      const userLoans = allLoans.filter(l => l.user === customer.id || l.user_id === customer.id);
+      const userRepayments = allRepayments.filter(r => r.user === customer.id || r.user_id === customer.id);
 
-      const totalBorrowed = userLoans.reduce((acc, l) => acc + Number(l.principal_amount || 0), 0);
-      const totalPaid = userRepayments.reduce((acc, r) => acc + Number(r.amount_paid || 0), 0);
+      const parseVal = (v) => {
+        const n = parseFloat(v);
+        return isFinite(n) ? n : 0;
+      };
+
+      const totalBorrowed = userLoans.reduce((acc, l) => acc + parseVal(l.principal_amount), 0);
+      const totalPaid = userRepayments.reduce((acc, r) => acc + parseVal(r.amount_paid), 0);
       const activeCount = userLoans.filter(l => l.status === 'AWARDED' || l.status === 'APPROVED').length;
       
       const lastPayment = userRepayments.sort((a, b) => new Date(b.payment_date) - new Date(a.payment_date))[0];
@@ -59,7 +65,7 @@ const CustomerHistoryModal = ({ customer, isOpen, onClose }) => {
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
+    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
       <Card className="w-full max-w-4xl max-h-[90vh] overflow-y-auto animate-in fade-in zoom-in duration-200 bg-white dark:bg-slate-900 border-none shadow-2xl">
         <div className="sticky top-0 bg-white dark:bg-slate-900 z-10 p-6 border-b border-slate-100 dark:border-slate-800 flex justify-between items-center">
           <div>
