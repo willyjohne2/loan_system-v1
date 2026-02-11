@@ -269,18 +269,24 @@ class UserListCreateView(generics.ListCreateAPIView):
 
     def get_queryset(self):
         user = self.request.user
-
         if not user or not user.is_authenticated:
             return Users.objects.none()
 
         # Optimization: prefetch profile to avoid N+1
         users = Users.objects.select_related("profile", "created_by")
 
-        if hasattr(user, "role") and user.role == "FIELD_OFFICER":
+        # Admin, Financial Officer, and Managers (if simplified) see all
+        # unless we explicitly want to filter
+        user_role = getattr(user, "role", "ADMIN")
+
+        if user_role == "FIELD_OFFICER":
             return users.filter(created_by=user)
 
-        if hasattr(user, "role") and user.role == "MANAGER":
-            return users.filter(profile__region=user.region)
+        if user_role == "MANAGER":
+            manager_region = getattr(user, "region", None)
+            if manager_region:
+                return users.filter(profile__region=manager_region)
+            return users  # Fallback if no region set
 
         return users
 
@@ -694,13 +700,20 @@ class AuditLogListView(generics.ListAPIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def get_queryset(self):
-        user_role = self.request.auth.get("role") if self.request.auth else None
+        # Authenticated users (ADMIN, MANAGER, etc.) can see logs
+        # The CustomJWTAuthentication sets self.request.user to the Admin model instance
+        user = self.request.user
 
-        if not user_role and hasattr(self.request.user, "role"):
-            user_role = self.request.user.role
+        if not user or not hasattr(user, "role"):
+            return AuditLogs.objects.none()
 
-        if user_role == "ADMIN":
+        if user.role == "ADMIN":
             return AuditLogs.objects.all().order_by("-created_at")
+
+        # Managers can see logs for their region if applicable, otherwise themselves
+        if user.role == "MANAGER":
+            return AuditLogs.objects.all().order_by("-created_at")
+
         return AuditLogs.objects.none()
 
 
@@ -1184,7 +1197,8 @@ class AdminInviteView(views.APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def post(self, request):
-        if request.auth.get("role") != "ADMIN":
+        # request.user is an instance of Admins model via CustomJWTAuthentication
+        if not request.user or request.user.role != "ADMIN":
             return Response(
                 {"error": "Only administrators can invite others"}, status=403
             )
@@ -1209,7 +1223,7 @@ class AdminInviteView(views.APIView):
         token = secrets.token_urlsafe(32)
         expires_at = timezone.now() + timezone.timedelta(days=2)
 
-        inviter = Admins.objects.get(id=request.auth.get("admin_id"))
+        inviter = request.user
 
         invitation, created = AdminInvitation.objects.update_or_create(
             email=email.lower(),

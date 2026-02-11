@@ -11,9 +11,11 @@ class CustomJWTAuthentication(JWTAuthentication):
             if not user_id:
                 return None
 
-            user = Admins.objects.get(id=user_id)
-            return user
-        except Admins.DoesNotExist:
-            return None
-        except Exception as e:
+            try:
+                user = Admins.objects.get(id=user_id)
+                return user
+            except (Admins.DoesNotExist, ValueError):
+                # ValueError handles cases where id is not a valid UUID string
+                return None
+        except Exception:
             return None
