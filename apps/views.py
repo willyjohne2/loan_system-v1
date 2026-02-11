@@ -22,6 +22,7 @@ from .models import (
     SystemSettings,
     LoanActivity,
     LoanDocuments,
+    SMSLog,
 )
 from .serializers import (
     AdminSerializer,
@@ -36,6 +37,7 @@ from .serializers import (
     SystemSettingsSerializer,
     LoanActivitySerializer,
     LoanDocumentSerializer,
+    SMSLogSerializer,
 )
 from .utils.mpesa import MpesaHandler
 from .utils.sms import send_sms_async
@@ -492,6 +494,14 @@ class BulkSMSView(views.APIView):
         sms_type = request.data.get("type", "DEFAULTERS")  # DEFAULTERS, REPAID, NOTICE
         custom_message = request.data.get("message")
 
+        # Fetch templates from settings or use defaults
+        def get_template(key, default):
+            try:
+                setting = SystemSettings.objects.get(key=key)
+                return setting.value
+            except SystemSettings.DoesNotExist:
+                return default
+
         count = 0
 
         if sms_type == "DEFAULTERS":
@@ -504,25 +514,33 @@ class BulkSMSView(views.APIView):
                     overdue_loans = overdue_loans.filter(
                         user__profile__region=manager_region
                     )
-            # Finance might see all, so no extra filter for them usually
 
-            if not overdue_loans.exists():
-                return Response({"message": "No overdue loans found to notify."})
+            template = get_template(
+                "MSG_TEMPLATE_DEFAULTER",
+                "Hello {name}, your loan of KES {principal:,.2f} is OVERDUE. Interest accumulated: KES {interest:,.2f}. Remaining balance: KES {balance:,.2f}. Please pay via Paybill.",
+            )
 
             for loan in overdue_loans:
                 phone = loan.user.phone
                 if phone:
                     principal = float(loan.principal_amount)
-                    total = float(loan.total_repayable_amount)
-                    accumulated_interest = total - principal
-                    remaining = float(loan.remaining_balance)
+                    interest = float(loan.total_repayable_amount) - principal
+                    balance = float(loan.remaining_balance)
 
-                    msg = (
-                        f"Hello {loan.user.full_name}, your loan of KES {principal:,.2f} is OVERDUE. "
-                        f"Interest accumulated: KES {accumulated_interest:,.2f}. "
-                        f"Remaining balance: KES {remaining:,.2f}. Please pay via Paybill to avoid further penalties."
+                    msg = template.format(
+                        name=loan.user.full_name,
+                        principal=principal,
+                        interest=interest,
+                        balance=balance,
                     )
                     send_sms_async([phone], msg)
+                    SMSLog.objects.create(
+                        sender=user,
+                        recipient_phone=phone,
+                        recipient_name=loan.user.full_name,
+                        message=msg,
+                        type="DEFAULTER",
+                    )
                     count += 1
                     create_notification(loan.user, f"Defaulter SMS sent to {phone}.")
 
@@ -535,6 +553,11 @@ class BulkSMSView(views.APIView):
                     closed_loans = closed_loans.filter(
                         user__profile__region=manager_region
                     )
+
+            template = get_template(
+                "MSG_TEMPLATE_REPAID",
+                "Hello {name}, thank you for your commitment to repaying your previous loan. You are now eligible to apply for a newer, larger loan. Visit our nearest office or apply online today!",
+            )
 
             # Get unique users with closed loans who don't have active ones
             users_to_notify = {}
@@ -550,11 +573,15 @@ class BulkSMSView(views.APIView):
 
             for user_obj in users_to_notify.values():
                 if user_obj.phone:
-                    msg = (
-                        f"Hello {user_obj.full_name}, thank you for your commitment to repaying your previous loan. "
-                        "You are now eligible to apply for a newer, larger loan. Visit our nearest office or apply online today!"
-                    )
+                    msg = template.format(name=user_obj.full_name)
                     send_sms_async([user_obj.phone], msg)
+                    SMSLog.objects.create(
+                        sender=user,
+                        recipient_phone=user_obj.phone,
+                        recipient_name=user_obj.full_name,
+                        message=msg,
+                        type="REPAID",
+                    )
                     count += 1
 
         elif sms_type == "NOTICE":
@@ -573,6 +600,13 @@ class BulkSMSView(views.APIView):
             for u in all_users:
                 if u.phone:
                     send_sms_async([u.phone], custom_message)
+                    SMSLog.objects.create(
+                        sender=user,
+                        recipient_phone=u.phone,
+                        recipient_name=u.full_name,
+                        message=custom_message,
+                        type="NOTICE",
+                    )
                     count += 1
 
         return Response(
@@ -632,6 +666,28 @@ class SystemSettingsView(views.APIView):
         for key, value in request.data.items():
             SystemSettings.objects.update_or_create(key=key, defaults={"value": value})
         return Response({"message": "Settings updated successfully"})
+
+
+class SMSLogListView(generics.ListAPIView):
+    queryset = SMSLog.objects.all().order_by("-sent_at")
+    serializer_class = SMSLogSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_queryset(self):
+        user = self.request.user
+        user_role = getattr(user, "role", None)
+
+        if user_role == "MANAGER":
+            manager_region = getattr(user, "region", None)
+            if manager_region:
+                # Filter by logs where the recipient is in the manager's region
+                return SMSLog.objects.filter(
+                    recipient_phone__in=Users.objects.filter(
+                        profile__region=manager_region
+                    ).values_list("phone", flat=True)
+                ).order_by("-sent_at")
+
+        return super().get_queryset()
 
 
 class AdminDeleteView(views.APIView):

@@ -129,6 +129,10 @@ export const loanService = {
     const res = await api.post('/loans/bulk-sms-defaulters/', { type, message });
     return res.data;
   },
+  getSMSLogs: async () => {
+    const res = await api.get('/sms-logs/');
+    return res.data;
+  },
   api // Export raw axios instance for custom calls
 };
 

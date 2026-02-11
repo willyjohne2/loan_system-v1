@@ -41,31 +41,31 @@ const BulkCustomerSMSModal = ({ isOpen, onClose }) => {
       id: 'DEFAULTERS', 
       label: 'Defaulters', 
       icon: AlertTriangle, 
-      color: 'text-orange-600', 
-      bg: 'bg-orange-50',
+      color: 'text-orange-600 dark:text-orange-400', 
+      bg: 'bg-orange-100 dark:bg-orange-900/30',
       description: 'Notify customers with overdue loans. Includes balance and accumulated interest.' 
     },
     { 
       id: 'REPAID', 
       label: 'Lead Nurturing', 
       icon: CheckCircle, 
-      color: 'text-emerald-600', 
-      bg: 'bg-emerald-50',
+      color: 'text-emerald-600 dark:text-emerald-400', 
+      bg: 'bg-emerald-100 dark:bg-emerald-900/30',
       description: 'Encourage customers who have fully repaid to apply for new loans.' 
     },
     { 
       id: 'NOTICE', 
       label: 'General Notice', 
       icon: Info, 
-      color: 'text-blue-600', 
-      bg: 'bg-blue-50',
+      color: 'text-blue-600 dark:text-blue-400', 
+      bg: 'bg-blue-100 dark:bg-blue-900/30',
       description: 'Send a custom broadcast message to all verified customers.' 
     },
   ];
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
-      <Card className="w-full max-w-lg animate-in fade-in zoom-in duration-200">
+      <Card className="w-full max-w-lg animate-in fade-in zoom-in duration-200 bg-white dark:bg-slate-900">
         <div className="flex justify-between items-center mb-6">
           <h3 className="text-xl font-bold text-slate-900 dark:text-white">Customer Communications</h3>
           <button onClick={onClose} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg">
@@ -81,8 +81,8 @@ const BulkCustomerSMSModal = ({ isOpen, onClose }) => {
                 onClick={() => setSmsType(t.id)}
                 className={`flex items-start gap-4 p-4 rounded-xl border transition-all text-left ${
                   smsType === t.id 
-                    ? 'border-primary-600 ring-2 ring-primary-500/10 bg-primary-50/30' 
-                    : 'border-slate-100 hover:bg-slate-50 dark:border-slate-800'
+                    ? 'border-primary-600 ring-2 ring-primary-500/10 bg-primary-50 dark:bg-primary-900/20' 
+                    : 'border-slate-100 hover:bg-slate-50 dark:border-slate-800 dark:hover:bg-slate-800/50'
                 }`}
               >
                 <div className={`p-2 rounded-lg ${t.bg} ${t.color}`}>
@@ -90,7 +90,7 @@ const BulkCustomerSMSModal = ({ isOpen, onClose }) => {
                 </div>
                 <div>
                   <p className="font-bold text-slate-900 dark:text-white">{t.label}</p>
-                  <p className="text-xs text-slate-500 mt-1">{t.description}</p>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">{t.description}</p>
                 </div>
               </button>
             ))}

@@ -24,9 +24,11 @@ from .views import (
     LoanAnalyticsView,
     MpesaRepaymentView,
     BulkSMSView,
+    SMSLogListView,
 )
 
 urlpatterns = [
+    path("sms-logs/", SMSLogListView.as_view(), name="sms-logs"),
     path("payments/mpesa/", MpesaRepaymentView.as_view(), name="mpesa-payment"),
     path("loans/bulk-sms-defaulters/", BulkSMSView.as_view(), name="bulk-sms"),
     path("notifications/", NotificationListView.as_view(), name="notifications"),

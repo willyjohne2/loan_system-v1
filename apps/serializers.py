@@ -12,7 +12,16 @@ from .models import (
     SystemSettings,
     LoanDocuments,
     LoanActivity,
+    SMSLog,
 )
+
+
+class SMSLogSerializer(serializers.ModelSerializer):
+    sender_name = serializers.ReadOnlyField(source="sender.full_name")
+
+    class Meta:
+        model = SMSLog
+        fields = "__all__"
 
 
 class AdminSerializer(serializers.ModelSerializer):

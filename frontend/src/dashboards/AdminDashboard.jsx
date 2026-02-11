@@ -9,6 +9,7 @@ import AdminAccounts from './AdminAccounts';
 import AdminAuditLogs from './AdminAuditLogs';
 import AdminLoans from './AdminLoans';
 import AdminSettings from './AdminSettings';
+import AdminSMSLogs from './AdminSMSLogs';
 import ProfileSettings from '../pages/ProfileSettings';
 import { clsx } from 'clsx';
 
@@ -22,6 +23,7 @@ const AdminDashboard = () => {
     if (location.pathname.includes('/loans')) return 'Loan Portfolio';
     if (location.pathname.includes('/accounts')) return 'Admin Accounts Management';
     if (location.pathname.includes('/audit')) return 'System Audit Trail';
+    if (location.pathname.includes('/sms-logs')) return 'Communication Logs';
     if (location.pathname.includes('/settings')) return 'System Financial Settings';
     if (location.pathname.includes('/profile')) return 'Account Profile';
     return 'Admin Dashboard';
@@ -39,6 +41,7 @@ const AdminDashboard = () => {
             { to: '/admin/loans', label: 'Loans' },
             { to: '/admin/accounts', label: 'Admin Accounts' },
             { to: '/admin/audit', label: 'Audit Logs' },
+            { to: '/admin/sms-logs', label: 'Communicator' },
             { to: '/admin/settings', label: 'Interest Settings' }
           ].map(tab => (
             <Link
@@ -65,6 +68,7 @@ const AdminDashboard = () => {
           <Route path="loans" element={<AdminLoans />} />
           <Route path="accounts" element={<AdminAccounts />} />
           <Route path="audit" element={<AdminAuditLogs />} />
+          <Route path="sms-logs" element={<AdminSMSLogs />} />
           <Route path="settings" element={<AdminSettings />} />
           <Route path="profile" element={<ProfileSettings />} />
         </Routes>

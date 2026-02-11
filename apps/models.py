@@ -193,6 +193,21 @@ class Transactions(models.Model):
         db_table = "transactions"
 
 
+class SMSLog(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    sender = models.ForeignKey(Admins, models.DO_NOTHING, null=True, blank=True)
+    recipient_phone = models.CharField(max_length=20)
+    recipient_name = models.TextField(blank=True, null=True)
+    message = models.TextField()
+    type = models.CharField(max_length=50)  # DEFAULTER, REPAID, NOTICE, etc.
+    status = models.CharField(max_length=20, default="SENT")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        managed = True
+        db_table = "sms_logs"
+
+
 class UserProfiles(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     user = models.OneToOneField("Users", models.DO_NOTHING, related_name="profile")
