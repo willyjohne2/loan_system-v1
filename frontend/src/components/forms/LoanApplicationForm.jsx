@@ -238,14 +238,6 @@ const LoanApplicationForm = ({ customer, onSuccess, onCancel }) => {
       </form>
     </Card>
   );
-          >
-            {loading ? 'Submitting...' : 'Submit Application'}
-            {!loading && <ChevronRight className="w-4 h-4" />}
-          </Button>
-        </div>
-      </form>
-    </Card>
-  );
 };
 
 export default LoanApplicationForm;
