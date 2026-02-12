@@ -118,120 +118,119 @@ const ManagerDashboard = () => {
     }
   };
 
-  useEffect(() => {
-    const parseAmount = (val) => {
-      const num = Number(val);
-      return Number.isFinite(num) ? num : 0;
-    };
+  const parseAmount = (val) => {
+    const num = Number(val);
+    return Number.isFinite(num) ? num : 0;
+  };
 
-    const fetchCoreData = async () => {
-      try {
-        setLoadingStats(true);
-        const [loanData, repaymentData] = await Promise.all([
-          loanService.getLoans(),
-          loanService.getRepayments()
-        ]);
+  const fetchSecondaryData = async (loansList, repaymentsList) => {
+     try {
+      setLoadingTables(true);
+      const [offData, custData] = await Promise.all([
+        loanService.getFieldOfficers(),
+        loanService.getCustomers()
+      ]);
 
-        let loansList = loanData.results || loanData;
-        const repaymentsList = repaymentData.results || repaymentData;
+      const officersList = offData.results || offData;
+      let customersList = custData.results || custData;
 
-        // Apply County Filter (Partial - we need customers for full filtering, so we fetch them in secondary)
-        // For now, calculate global or wait for secondary for county filter
-        const issued = loansList.reduce((acc, l) => acc + parseAmount(l.principal_amount), 0);
-        const repaid = repaymentsList.reduce((acc, r) => acc + parseAmount(r.amount_paid), 0);
-        const repaymentRate = issued > 0 ? Math.round((repaid / issued) * 100) : 0;
-        const unverifiedCount = loansList.filter(l => (l.status || '').toUpperCase() === 'UNVERIFIED').length;
-
-        // Process Chart Data (Monthly Disbursement)
-        const monthlyData = loansList.reduce((acc, loan) => {
-          const month = new Date(loan.created_at).toLocaleString('default', { month: 'short' });
-          acc[month] = (acc[month] || 0) + parseAmount(loan.principal_amount);
-          return acc;
-        }, {});
-        
-        setChartData(Object.keys(monthlyData).map(month => ({
-          name: month,
-          amount: monthlyData[month]
-        })));
-
-        setStats(prev => ({
-          ...prev,
-          issued: issued,
-          repaid: repaid,
-          pending: issued - repaid,
-          repaymentRate: repaymentRate,
-          unverifiedLoans: unverifiedCount
-        }));
-
-        setLoans(loansList);
-        setLoadingStats(false);
-        
-        // Fetch secondary
-        fetchSecondaryData(loansList, repaymentsList);
-      } catch (error) {
-        console.error("Error fetching core manager data:", error);
-        setLoadingStats(false);
-      }
-    };
-
-    const fetchSecondaryData = async (loansList, repaymentsList) => {
-       try {
-        setLoadingTables(true);
-        const [offData, custData] = await Promise.all([
-          loanService.getFieldOfficers(),
-          loanService.getCustomers()
-        ]);
-
-        const officersList = offData.results || offData;
-        let customersList = custData.results || custData;
-
-        // Apply County Filter if selected
-        if (selectedCounty !== 'All') {
-            customersList = customersList.filter(c => c.profile?.county === selectedCounty);
-            const validCustomerIds = new Set(customersList.map(c => c.id));
-            loansList = loansList.filter(l => validCustomerIds.has(l.user));
-            
-            // Recalculate stats based on filtered data
-            const issued = loansList.reduce((acc, l) => acc + parseAmount(l.principal_amount), 0);
-            const repaid = repaymentsList.reduce((acc, r) => acc + parseAmount(r.amount_paid), 0);
-            setStats(prev => ({
-              ...prev,
-              issued: issued,
-              repaid: repaid,
-              pending: issued - repaid,
-            }));
-        }
-
-        const officersWithPerformance = officersList.map(officer => {
-          const officerCustomers = customersList.filter(c => c.created_by === officer.id).length;
-          const officerLoans = loansList.filter(l => l.created_by === officer.id);
-          const officerVolume = officerLoans.reduce((sum, l) => sum + parseAmount(l.principal_amount), 0);
+      // Apply County Filter if selected
+      if (selectedCounty !== 'All') {
+          customersList = customersList.filter(c => c.profile?.county === selectedCounty);
+          const validCustomerIds = new Set(customersList.map(c => c.id));
+          loansList = loansList.filter(l => validCustomerIds.has(l.user));
           
-          return {
-            ...officer,
-            customersCount: officerCustomers,
-            loansCount: officerLoans.length,
-            volume: officerVolume
-          };
-        });
+          // Recalculate stats based on filtered data
+          const issued = loansList.reduce((acc, l) => acc + parseAmount(l.principal_amount), 0);
+          const repaid = repaymentsList.reduce((acc, r) => acc + parseAmount(r.amount_paid), 0);
+          setStats(prev => ({
+            ...prev,
+            issued: issued,
+            repaid: repaid,
+            pending: issued - repaid,
+          }));
+      }
 
-        const unverifiedCust = customersList.filter(c => !c.is_verified);
+      const officersWithPerformance = officersList.map(officer => {
+        const officerCustomers = customersList.filter(c => c.created_by === officer.id).length;
+        const officerLoans = loansList.filter(l => l.created_by === officer.id);
+        const officerVolume = officerLoans.reduce((sum, l) => sum + parseAmount(l.principal_amount), 0);
+        
+        return {
+          ...officer,
+          customersCount: officerCustomers,
+          loansCount: officerLoans.length,
+          volume: officerVolume
+        };
+      });
 
-        setOfficers(officersWithPerformance);
-        setCustomers(customersList);
-        setUnverifiedCustomers(unverifiedCust);
+      const unverifiedCust = customersList.filter(c => !c.is_verified);
 
-        setStats(prev => ({
-          ...prev,
-          served: customersList.length,
-          activeOfficers: officersList.length,
-        }));
-       } catch (err) {
-         console.error("Error fetching secondary manager data:", err);
-       } finally {
-         setLoadingTables(false);
-       }
-    };
+      setOfficers(officersWithPerformance);
+      setCustomers(customersList);
+      setUnverifiedCustomers(unverifiedCust);
+
+      setStats(prev => ({
+        ...prev,
+        served: customersList.length,
+        activeOfficers: officersList.length,
+      }));
+     } catch (err) {
+       console.error("Error fetching secondary manager data:", err);
+     } finally {
+       setLoadingTables(false);
+     }
+  };
+
+  const fetchCoreData = async () => {
+    try {
+      setLoadingStats(true);
+      const [loanData, repaymentData] = await Promise.all([
+        loanService.getLoans(),
+        loanService.getRepayments()
+      ]);
+
+      let loansList = loanData.results || loanData;
+      const repaymentsList = repaymentData.results || repaymentData;
+
+      // Apply County Filter (Partial - we need customers for full filtering, so we fetch them in secondary)
+      // For now, calculate global or wait for secondary for county filter
+      const issued = loansList.reduce((acc, l) => acc + parseAmount(l.principal_amount), 0);
+      const repaid = repaymentsList.reduce((acc, r) => acc + parseAmount(r.amount_paid), 0);
+      const repaymentRate = issued > 0 ? Math.round((repaid / issued) * 100) : 0;
+      const unverifiedCount = loansList.filter(l => (l.status || '').toUpperCase() === 'UNVERIFIED').length;
+
+      // Process Chart Data (Monthly Disbursement)
+      const monthlyData = loansList.reduce((acc, loan) => {
+        const month = new Date(loan.created_at).toLocaleString('default', { month: 'short' });
+        acc[month] = (acc[month] || 0) + parseAmount(loan.principal_amount);
+        return acc;
+      }, {});
+      
+      setChartData(Object.keys(monthlyData).map(month => ({
+        name: month,
+        amount: monthlyData[month]
+      })));
+
+      setStats(prev => ({
+        ...prev,
+        issued: issued,
+        repaid: repaid,
+        pending: issued - repaid,
+        repaymentRate: repaymentRate,
+        unverifiedLoans: unverifiedCount
+      }));
+
+      setLoans(loansList);
+      setLoadingStats(false);
+      
+      // Fetch secondary
+      fetchSecondaryData(loansList, repaymentsList);
+    } catch (error) {
+      console.error("Error fetching core manager data:", error);
+      setLoadingStats(false);
+    }
+  };
 
   useEffect(() => {
     fetchCoreData();
