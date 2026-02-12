@@ -34,17 +34,11 @@ const CustomerRegistrationForm = ({ onSuccess, onApplyLoan }) => {
   const [registeredUser, setRegisteredUser] = useState(null);
 
   const regions = [
-    'Nairobi', 'Central', 'Coast', 'Eastern', 'North Eastern', 'Nyanza', 'Rift Valley', 'Western'
+    'Mwea East', 'Mwea West', 'Kirinyaga Central', 'Kirinyaga East (Gichugu)', 
+    'Kirinyaga West (Ndiao)', 'Kerugoya Town', 'Sagana', 'Kutus', 'Kagio', 'Wang\'uru'
   ];
 
-  const counties = [
-    'Baringo', 'Bomet', 'Bungoma', 'Busia', 'Elgeyo-Marakwet', 'Embu', 'Garissa', 'Homa Bay', 
-    'Isiolo', 'Kajiado', 'Kakamega', 'Kericho', 'Kiambu', 'Kilifi', 'Kirinyaga', 'Kisii', 
-    'Kisumu', 'Kitui', 'Kwale', 'Laikipia', 'Lamu', 'Machakos', 'Makueni', 'Mandera', 
-    'Marsabit', 'Meru', 'Migori', 'Mombasa', 'Murang\'a', 'Nairobi City', 'Nakuru', 'Nandi', 
-    'Narok', 'Nyamira', 'Nyandarua', 'Nyeri', 'Samburu', 'Siaya', 'Taita-Taveta', 'Tana River', 
-    'Tharaka-Nithi', 'Trans Nzoia', 'Turkana', 'Uasin Gishu', 'Vihiga', 'Wajir', 'West Pokot'
-  ].sort();
+  const counties = ['Kirinyaga'];
   
   const [formData, setFormData] = useState({
     // Step 1: Basic Info
@@ -56,7 +50,7 @@ const CustomerRegistrationForm = ({ onSuccess, onApplyLoan }) => {
     national_id: '',
     date_of_birth: '',
     region: '',
-    county: '',
+    county: 'Kirinyaga',
     town: '',
     village: '',
     address: '',
@@ -354,12 +348,12 @@ const CustomerRegistrationForm = ({ onSuccess, onApplyLoan }) => {
                 />
               </div>
               <div className="space-y-1">
-                <label className="text-sm font-medium">Region</label>
+                <label className="text-sm font-medium">Region/Constituency</label>
                 <select 
                   name="region"
                   value={formData.region}
                   onChange={handleChange}
-                  className="w-full px-3 py-2 border rounded-lg dark:bg-slate-800 dark:border-slate-700"
+                  className="w-full px-3 py-2 border rounded-lg dark:bg-slate-800 dark:border-slate-700 bg-white"
                 >
                   <option value="">Select Region...</option>
                   {regions.map(r => <option key={r} value={r}>{r}</option>)}
@@ -371,9 +365,8 @@ const CustomerRegistrationForm = ({ onSuccess, onApplyLoan }) => {
                   name="county"
                   value={formData.county}
                   onChange={handleChange}
-                  className="w-full px-3 py-2 border rounded-lg dark:bg-slate-800 dark:border-slate-700"
+                  className="w-full px-3 py-2 border rounded-lg dark:bg-slate-800 dark:border-slate-700 bg-slate-50 cursor-not-allowed"
                 >
-                  <option value="">Select County...</option>
                   {counties.map(c => <option key={c} value={c}>{c}</option>)}
                 </select>
               </div>

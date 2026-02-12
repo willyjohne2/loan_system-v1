@@ -20,9 +20,11 @@ const Navbar = ({ title, onMenuClick }) => {
   const fetchNotifications = async () => {
     try {
       const response = await loanService.api.get('/notifications/');
-      setNotifications(response.data);
+      const data = response.data.results || response.data;
+      setNotifications(Array.isArray(data) ? data : []);
     } catch (err) {
       console.error('Error fetching notifications:', err);
+      setNotifications([]);
     }
   };
 

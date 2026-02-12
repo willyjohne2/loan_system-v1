@@ -79,6 +79,7 @@ const ManagerDashboard = () => {
   });
 
   const regionMapping = {
+    'Kirinyaga': ['Mwea East', 'Mwea West', 'Kirinyaga Central', 'Kirinyaga East (Gichugu)', 'Kirinyaga West (Ndiao)', 'Kerugoya Town', 'Sagana', 'Kutus', 'Kagio', 'Wang\'uru'],
     'Central': ['Nairobi', 'Kiambu', 'Murang\'a', 'Nyeri', 'Kirinyaga', 'Nyandarua'],
     'Coast': ['Mombasa', 'Kwale', 'Kilifi', 'Tana River', 'Lamu', 'Taita-Taveta'],
     'Nairobi': ['Nairobi CBD', 'Westlands', 'Dagoretti', 'Embakasi', 'Kasarani'],
@@ -232,6 +233,7 @@ const ManagerDashboard = () => {
        }
     };
 
+  useEffect(() => {
     fetchCoreData();
   }, [selectedCounty]);
 
@@ -251,8 +253,9 @@ const ManagerDashboard = () => {
     setUpdating(true);
     try {
       await loanService.updateLoan(loanId, { status: newStatus });
-      // Refresh data
-      window.location.reload();
+      // Refresh data without full page reload
+      fetchCoreData();
+      fetchAnalytics();
     } catch (err) {
       console.error("Failed to update loan status:", err);
       alert("Error updating status");
@@ -265,7 +268,8 @@ const ManagerDashboard = () => {
     setUpdating(true);
     try {
       await loanService.updateCustomer(userId, { is_verified: true });
-      window.location.reload();
+      fetchCoreData();
+      fetchAnalytics();
     } catch (err) {
       console.error("Failed to verify user:", err);
       alert("Error verifying user");
