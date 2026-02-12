@@ -94,10 +94,8 @@ const CustomerRegistrationForm = ({ onSuccess, onApplyLoan }) => {
     setLoading(true);
     setError('');
     try {
-      const resp = await fetch(`http://localhost:8000/api/users/check/?q=${searchQuery}`, {
-        headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
-      });
-      const data = await resp.json();
+      const resp = await loanService.api.get(`/users/check/?q=${searchQuery}`);
+      const data = resp.data;
       
       if (data.found) {
         setIsExistingUser(true);

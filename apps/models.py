@@ -95,11 +95,11 @@ class Loans(models.Model):
     duration_months = models.IntegerField()
     loan_reason = models.TextField(blank=True, null=True)
     loan_reason_other = models.TextField(blank=True, null=True)
-    status = models.TextField(default="UNVERIFIED")
+    status = models.TextField(default="UNVERIFIED", db_index=True)
     created_by = models.ForeignKey(
         Admins, models.SET_NULL, null=True, blank=True, related_name="processed_loans"
     )
-    created_at = models.DateTimeField(auto_now_add=True, null=True)
+    created_at = models.DateTimeField(auto_now_add=True, null=True, db_index=True)
 
     class Meta:
         managed = True
@@ -229,7 +229,9 @@ class SMSLog(models.Model):
 class UserProfiles(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     user = models.OneToOneField("Users", models.DO_NOTHING, related_name="profile")
-    national_id = models.CharField(unique=True, max_length=50, blank=True, null=True)
+    national_id = models.CharField(
+        unique=True, max_length=50, blank=True, null=True, db_index=True
+    )
     date_of_birth = models.DateField(blank=True, null=True)
     region = models.TextField(blank=True, null=True)
     county = models.TextField(blank=True, null=True)
@@ -266,8 +268,8 @@ class UserProfiles(models.Model):
 
 class Users(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    full_name = models.TextField()
-    phone = models.CharField(unique=True, max_length=20)
+    full_name = models.TextField(db_index=True)
+    phone = models.CharField(unique=True, max_length=20, db_index=True)
     email = models.TextField(blank=True, null=True)
     created_by = models.ForeignKey(
         Admins, models.SET_NULL, null=True, blank=True, related_name="registered_users"

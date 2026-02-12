@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Bell, Search, User, LogOut, Settings, ChevronDown, CheckCheck, Menu } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
+import { loanService } from '../../api/api';
 
 const Navbar = ({ title, onMenuClick }) => {
   const { user, logout } = useAuth();
@@ -18,15 +19,8 @@ const Navbar = ({ title, onMenuClick }) => {
 
   const fetchNotifications = async () => {
     try {
-      const response = await fetch('http://localhost:8000/api/notifications/', {
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
-        }
-      });
-      if (response.ok) {
-        const data = await response.ok ? await response.json() : [];
-        setNotifications(data);
-      }
+      const response = await loanService.api.get('/notifications/');
+      setNotifications(response.data);
     } catch (err) {
       console.error('Error fetching notifications:', err);
     }
@@ -34,14 +28,7 @@ const Navbar = ({ title, onMenuClick }) => {
 
   const markAsRead = async (id) => {
     try {
-      await fetch(`http://localhost:8000/api/notifications/${id}/`, {
-        method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
-        },
-        body: JSON.stringify({ is_read: true })
-      });
+      await loanService.api.patch(`/notifications/${id}/`, { is_read: true });
       setNotifications(notifications.map(n => n.id === id ? { ...n, is_read: true } : n));
     } catch (err) {
       console.error('Error marking notification as read:', err);
