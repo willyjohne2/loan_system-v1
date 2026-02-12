@@ -280,15 +280,17 @@ class UserListCreateView(generics.ListCreateAPIView):
         user_role = getattr(user, "role", "ADMIN")
 
         if user_role == "FIELD_OFFICER":
-            return users.filter(created_by=user)
+            return users.filter(created_by=user).order_by("-created_at")
 
         if user_role == "MANAGER":
             manager_region = getattr(user, "region", None)
             if manager_region:
-                return users.filter(profile__region=manager_region)
-            return users  # Fallback if no region set
+                return users.filter(profile__region=manager_region).order_by(
+                    "-created_at"
+                )
+            return users.order_by("-created_at")
 
-        return users
+        return users.order_by("-created_at")
 
     def perform_create(self, serializer):
         user = self.request.user
@@ -381,7 +383,7 @@ class LoanListCreateView(generics.ListCreateAPIView):
         # in a faster check or do it during specific triggers.
         # For now, let's just make it faster by removing the inner loop
         # from the critical path of a GET list.
-        return loans
+        return loans.order_by("-created_at")
 
     def perform_create(self, serializer):
         user = self.request.user
@@ -722,7 +724,7 @@ class AdminListCreateView(generics.ListCreateAPIView):
     permission_classes = [permissions.AllowAny]
 
     def get_queryset(self):
-        queryset = Admins.objects.all()
+        queryset = Admins.objects.all().order_by("-created_at")
         role = self.request.query_params.get("role")
         if role:
             queryset = queryset.filter(role=role)
@@ -1025,7 +1027,7 @@ class ConfirmPasswordResetView(views.APIView):
 
 
 class LoanProductListCreateView(generics.ListCreateAPIView):
-    queryset = LoanProducts.objects.all()
+    queryset = LoanProducts.objects.all().order_by("-created_at")
     serializer_class = LoanProductSerializer
     permission_classes = [permissions.AllowAny]
 
@@ -1150,9 +1152,12 @@ class NotificationListView(generics.ListAPIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def get_queryset(self):
-        return Notifications.objects.filter(user=self.request.user).order_by(
-            "-created_at"
-        )
+        user = self.request.user
+        # If the logged-in user is an Admin, they don't have notifications in this table
+        # Notifications table is specifically for the 'Users' model (customers)
+        if hasattr(user, "role"):  # Admins have a 'role' field
+            return Notifications.objects.none()
+        return Notifications.objects.filter(user=user).order_by("-created_at")
 
 
 class NotificationUpdateView(generics.UpdateAPIView):

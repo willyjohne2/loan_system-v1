@@ -71,21 +71,23 @@ class UserSerializer(serializers.ModelSerializer):
         profile_data = self.context.get("request").data
         user = Users.objects.create(**validated_data)
 
-        # Extract profile fields from request.data (since they aren't in validated_data if not in Meta)
-        # However, it's better to explicitly handle them
-        UserProfiles.objects.create(
+        # The signal in signals.py likely already created a profile
+        # Use update_or_create to populate the fields correctly
+        UserProfiles.objects.update_or_create(
             user=user,
-            national_id=profile_data.get("national_id"),
-            date_of_birth=profile_data.get("date_of_birth") or None,
-            region=profile_data.get("region"),
-            county=profile_data.get("county"),
-            town=profile_data.get("town"),
-            village=profile_data.get("village"),
-            address=profile_data.get("address"),
-            employment_status=profile_data.get("employment_status"),
-            monthly_income=profile_data.get("monthly_income") or None,
-            profile_image=profile_data.get("profile_image"),
-            national_id_image=profile_data.get("national_id_image"),
+            defaults={
+                "national_id": profile_data.get("national_id"),
+                "date_of_birth": profile_data.get("date_of_birth") or None,
+                "region": profile_data.get("region"),
+                "county": profile_data.get("county"),
+                "town": profile_data.get("town"),
+                "village": profile_data.get("village"),
+                "address": profile_data.get("address"),
+                "employment_status": profile_data.get("employment_status"),
+                "monthly_income": profile_data.get("monthly_income") or None,
+                "profile_image": profile_data.get("profile_image"),
+                "national_id_image": profile_data.get("national_id_image"),
+            },
         )
         return user
 
