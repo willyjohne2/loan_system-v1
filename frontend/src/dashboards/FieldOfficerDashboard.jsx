@@ -1,8 +1,9 @@
 import React, { useEffect, useState } from 'react';
 import { loanService } from '../api/api';
 import { StatCard, Table, Card, Button } from '../components/ui/Shared';
-import { Users, Wallet, UserPlus, TrendingUp, Calendar, ArrowUpRight, DollarSign } from 'lucide-react';
+import { Users, Wallet, UserPlus, TrendingUp, Calendar, ArrowUpRight, DollarSign, CreditCard } from 'lucide-react';
 import CustomerRegistrationForm from '../components/forms/CustomerRegistrationForm';
+import LoanApplicationForm from '../components/forms/LoanApplicationForm';
 import RepaymentModal from '../components/ui/RepaymentModal';
 
 const FieldOfficerDashboard = () => {
@@ -10,6 +11,7 @@ const FieldOfficerDashboard = () => {
   const [customers, setCustomers] = useState([]);
   const [loans, setLoans] = useState([]);
   const [isRegistering, setIsRegistering] = useState(false);
+  const [applyingForLoan, setApplyingForLoan] = useState(null);
   const [selectedLoan, setSelectedLoan] = useState(null);
   const [stats, setStats] = useState({
     today: 0,
@@ -84,7 +86,7 @@ const FieldOfficerDashboard = () => {
         <div className="flex justify-between items-center">
           <div>
             <h2 className="text-2xl font-bold text-slate-900 dark:text-white">Customer Intake</h2>
-            <p className="text-slate-500 text-sm">Register a new customer and initiate loan application</p>
+            <p className="text-slate-500 text-sm">Register a new customer or update existing profile</p>
           </div>
           <Button variant="secondary" onClick={() => setIsRegistering(false)}>Back to Dashboard</Button>
         </div>
@@ -93,7 +95,33 @@ const FieldOfficerDashboard = () => {
             setIsRegistering(false);
             fetchData();
           }}
+          onApplyLoan={(customer) => {
+            setIsRegistering(false);
+            setApplyingForLoan(customer);
+          }}
           onCancel={() => setIsRegistering(false)}
+        />
+      </div>
+    );
+  }
+
+  if (applyingForLoan) {
+    return (
+      <div className="space-y-6 animate-in fade-in duration-500">
+        <div className="flex justify-between items-center">
+          <div>
+            <h2 className="text-2xl font-bold text-slate-900 dark:text-white">Loan Application</h2>
+            <p className="text-slate-500 text-sm">Initiate a new loan request for {applyingForLoan.full_name}</p>
+          </div>
+          <Button variant="secondary" onClick={() => setApplyingForLoan(null)}>Cancel Application</Button>
+        </div>
+        <LoanApplicationForm 
+          customer={applyingForLoan}
+          onSuccess={() => {
+            setApplyingForLoan(null);
+            fetchData();
+          }}
+          onCancel={() => setApplyingForLoan(null)}
         />
       </div>
     );
@@ -201,9 +229,20 @@ const FieldOfficerDashboard = () => {
                     <td className="px-6 py-4 text-slate-600 dark:text-slate-400">{customer.phone}</td>
                     <td className="px-6 py-4 text-slate-500">{customer.created_at ? new Date(customer.created_at).toLocaleDateString() : '-'}</td>
                     <td className="px-6 py-4">
-                      <span className="px-2 py-1 bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400 rounded text-[10px] font-bold">
-                        ACTIVE
-                      </span>
+                      <div className="flex items-center gap-2">
+                        <span className="px-2 py-1 bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400 rounded text-[10px] font-bold">
+                          ACTIVE
+                        </span>
+                        <Button 
+                          size="sm" 
+                          variant="secondary" 
+                          className="h-7 text-[10px] px-2"
+                          onClick={() => setApplyingForLoan(customer)}
+                        >
+                          <CreditCard className="w-3 h-3 mr-1" />
+                          Apply Loan
+                        </Button>
+                      </div>
                     </td>
                   </tr>
                 )}

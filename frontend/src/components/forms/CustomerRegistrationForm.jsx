@@ -16,10 +16,13 @@ import {
   CreditCard,
   AlertCircle,
   Search,
-  AlertTriangle
+  AlertTriangle,
+  Camera,
+  Upload,
+  X
 } from 'lucide-react';
 
-const CustomerRegistrationForm = ({ onSuccess }) => {
+const CustomerRegistrationForm = ({ onSuccess, onApplyLoan }) => {
   const [step, setStep] = useState(0); // Start at 0 for search
   const [loading, setLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -27,8 +30,9 @@ const CustomerRegistrationForm = ({ onSuccess }) => {
   const [hasOutstanding, setHasOutstanding] = useState(false);
   const [existingUserId, setExistingUserId] = useState(null);
   const [error, setError] = useState('');
-  const [loanProducts, setLoanProducts] = useState([]);
-  
+  const [isFinished, setIsFinished] = useState(false);
+  const [registeredUser, setRegisteredUser] = useState(null);
+
   const regions = [
     'Nairobi', 'Central', 'Coast', 'Eastern', 'North Eastern', 'Nyanza', 'Rift Valley', 'Western'
   ];
@@ -41,12 +45,7 @@ const CustomerRegistrationForm = ({ onSuccess }) => {
     'Narok', 'Nyamira', 'Nyandarua', 'Nyeri', 'Samburu', 'Siaya', 'Taita-Taveta', 'Tana River', 
     'Tharaka-Nithi', 'Trans Nzoia', 'Turkana', 'Uasin Gishu', 'Vihiga', 'Wajir', 'West Pokot'
   ].sort();
-
-  const loanReasons = [
-    'Business Expansion', 'Medical Bills', 'School Fees', 'Emergency Expense', 
-    'Home Improvement', 'Agriculture/Farming', 'Personal Asset Purchase', 'Other'
-  ];
-
+  
   const [formData, setFormData] = useState({
     // Step 1: Basic Info
     full_name: '',
@@ -65,14 +64,30 @@ const CustomerRegistrationForm = ({ onSuccess }) => {
     // Step 3: Salary & Income
     employment_status: 'EMPLOYED',
     monthly_income: '',
-    
-    // Step 4: Loan Details
-    loan_product_id: '',
-    principal_amount: '',
-    duration_months: '',
-    loan_reason: 'Business Expansion',
-    loan_reason_other: '',
+
+    // Step 4: Verification Images
+    profile_image: null,
+    national_id_image: null,
   });
+
+  const [profilePreview, setProfilePreview] = useState(null);
+  const [idPreview, setIdPreview] = useState(null);
+
+  const handleFileChange = (e) => {
+    const { name, files } = e.target;
+    if (files && files[0]) {
+      const file = files[0];
+      setFormData(prev => ({ ...prev, [name]: file }));
+      
+      // Create preview
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        if (name === 'profile_image') setProfilePreview(reader.result);
+        if (name === 'national_id_image') setIdPreview(reader.result);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
 
   const handleSearch = async () => {
     if (!searchQuery) return;
@@ -162,57 +177,72 @@ const CustomerRegistrationForm = ({ onSuccess }) => {
     setLoading(true);
     setError('');
     try {
-      let userId = existingUserId;
+      const data = new FormData();
+      data.append('full_name', formData.full_name);
+      data.append('phone', formData.phone);
+      if (formData.email) data.append('email', formData.email);
+      
+      // Step 2-4: Profile Details
+      data.append('national_id', formData.national_id);
+      data.append('date_of_birth', formData.date_of_birth);
+      data.append('region', formData.region);
+      data.append('county', formData.county);
+      data.append('town', formData.town);
+      data.append('village', formData.village);
+      data.append('address', formData.address);
+      data.append('employment_status', formData.employment_status);
+      data.append('monthly_income', formData.monthly_income);
+
+      if (formData.profile_image) data.append('profile_image', formData.profile_image);
+      if (formData.national_id_image) data.append('national_id_image', formData.national_id_image);
 
       if (!isExistingUser) {
-        // 1. Create User
         const userRes = await loanService.api.post('/users/', {
           full_name: formData.full_name,
           phone: formData.phone,
           email: formData.email
         });
-        userId = userRes.data.id;
+        const userId = userRes.data.id;
+        setRegisteredUser(userRes.data);
 
-        // 2. Create Profile
-        await loanService.api.post('/user-profiles/', {
-          user: userId,
-          national_id: formData.national_id,
-          date_of_birth: formData.date_of_birth,
-          region: formData.region,
-          county: formData.county,
-          town: formData.town,
-          village: formData.village,
-          address: formData.address,
-          employment_status: formData.employment_status,
-          monthly_income: formData.monthly_income
-        });
+        const profileData = new FormData();
+        profileData.append('user', userId);
+        profileData.append('national_id', formData.national_id);
+        profileData.append('date_of_birth', formData.date_of_birth);
+        profileData.append('region', formData.region);
+        profileData.append('county', formData.county);
+        profileData.append('town', formData.town);
+        profileData.append('village', formData.village);
+        profileData.append('address', formData.address);
+        profileData.append('employment_status', formData.employment_status);
+        profileData.append('monthly_income', formData.monthly_income);
+        if (formData.profile_image) profileData.append('profile_image', formData.profile_image);
+        if (formData.national_id_image) profileData.append('national_id_image', formData.national_id_image);
+
+        await loanService.api.post('/user-profiles/', profileData);
       } else {
-        // Optional: Update profile if needed
-        // For now, we assume profile is okay or we can add a PATCH call here
-        await loanService.api.patch(`/users/${userId}/`, {
+        const userRes = await loanService.api.patch(`/users/${existingUserId}/`, {
           full_name: formData.full_name,
           email: formData.email
         });
-
-        // Try to update profile - we need the profile ID or user ID filtering
-        // Since user is 1-to-1 with profile, most APIs allow filtering by user
-        // But for simplicity, let's just create the loan if profile exists
+        setRegisteredUser(userRes.data);
+        
+        // Update profile
+        const profileData = new FormData();
+        profileData.append('national_id', formData.national_id);
+        profileData.append('date_of_birth', formData.date_of_birth);
+        profileData.append('monthly_income', formData.monthly_income);
+        if (formData.profile_image) profileData.append('profile_image', formData.profile_image);
+        if (formData.national_id_image) profileData.append('national_id_image', formData.national_id_image);
+        
+        // Need to find profile ID
+        const profileId = (await loanService.api.get(`/user-profiles/?user=${existingUserId}`)).data.results?.[0]?.id;
+        if (profileId) {
+          await loanService.api.patch(`/user-profiles/${profileId}/`, profileData);
+        }
       }
 
-      // 3. Create Loan
-      if (formData.loan_product_id && formData.principal_amount) {
-        await loanService.api.post('/loans/', {
-          user: userId,
-          loan_product: formData.loan_product_id,
-          principal_amount: formData.principal_amount,
-          duration_months: formData.duration_months || 12,
-          loan_reason: formData.loan_reason,
-          loan_reason_other: formData.loan_reason === 'Other' ? formData.loan_reason_other : '',
-          status: 'PENDING'
-        });
-      }
-
-      onSuccess?.();
+      setIsFinished(true);
     } catch (err) {
       setError(err?.response?.data?.error || err.message || 'Failed to register customer');
       console.error(err);
@@ -272,6 +302,22 @@ const CustomerRegistrationForm = ({ onSuccess }) => {
       case 1:
         return (
           <div className="space-y-4">
+            {isExistingUser && (
+              <div className="p-4 bg-blue-50 border border-blue-100 rounded-lg flex flex-col sm:flex-row justify-between items-center gap-3 mb-4 animate-in fade-in slide-in-from-top-2">
+                <div className="text-xs text-blue-800">
+                  <span className="font-bold block text-sm">Customer Record Found!</span>
+                  You can update their profile below or jump straight to loan application.
+                </div>
+                <Button 
+                  size="sm" 
+                  onClick={() => onApplyLoan?.({ id: existingUserId, full_name: formData.full_name })}
+                  className="bg-blue-600 hover:bg-blue-700 text-white flex items-center gap-1 whitespace-nowrap shadow-sm"
+                >
+                  <CreditCard className="w-3 h-3" />
+                  Apply Loan Directly
+                </Button>
+              </div>
+            )}
             <h4 className="text-lg font-medium text-slate-900 dark:text-white flex items-center gap-2">
               <User className="w-5 h-5 text-primary-600" />
               Basic Information
@@ -437,73 +483,77 @@ const CustomerRegistrationForm = ({ onSuccess }) => {
         return (
           <div className="space-y-4 animate-in fade-in slide-in-from-right-4">
             <h4 className="text-lg font-medium text-slate-900 dark:text-white flex items-center gap-2 border-b pb-2">
-              <CreditCard className="w-5 h-5 text-primary-600" />
-              Initial Loan Application
+              <Camera className="w-5 h-5 text-primary-600" />
+              Documents & Verification
             </h4>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="space-y-1">
-                <label className="text-sm font-medium">Loan Product</label>
-                <select 
-                  name="loan_product_id"
-                  value={formData.loan_product_id}
-                  onChange={handleChange}
-                  className="w-full px-3 py-2 border rounded-lg dark:bg-slate-800 dark:border-slate-700"
-                >
-                  <option value="">Select a product...</option>
-                  {loanProducts.map(p => (
-                    <option key={p.id} value={p.id}>{p.name} ({p.interest_rate}%)</option>
-                  ))}
-                </select>
-              </div>
-              <div className="space-y-1">
-                <label className="text-sm font-medium">Loan Amount (KES)</label>
-                <input 
-                  name="principal_amount"
-                  type="number"
-                  value={formData.principal_amount}
-                  onChange={handleChange}
-                  className="w-full px-3 py-2 border rounded-lg dark:bg-slate-800 dark:border-slate-700" 
-                  placeholder="10000"
-                />
-              </div>
-              <div className="space-y-1">
-                <label className="text-sm font-medium">Duration (Months)</label>
-                <input 
-                  name="duration_months"
-                  type="number"
-                  value={formData.duration_months}
-                  onChange={handleChange}
-                  className="w-full px-3 py-2 border rounded-lg dark:bg-slate-800 dark:border-slate-700" 
-                  placeholder="12"
-                />
-              </div>
-              <div className="space-y-1">
-                <label className="text-sm font-medium">Reason for Loan</label>
-                <select 
-                  name="loan_reason"
-                  value={formData.loan_reason}
-                  onChange={handleChange}
-                  className="w-full px-3 py-2 border rounded-lg dark:bg-slate-800 dark:border-slate-700"
-                >
-                  <option value="">Select Reason...</option>
-                  {loanReasons.map(r => <option key={r} value={r}>{r}</option>)}
-                </select>
-              </div>
-              {formData.loan_reason === 'Other' && (
-                <div className="space-y-1 md:col-span-2">
-                  <label className="text-sm font-medium">Please specify reason (max 25 words)</label>
-                  <textarea 
-                    name="loan_reason_other"
-                    value={formData.loan_reason_other}
-                    onChange={handleChange}
-                    className="w-full px-3 py-2 border rounded-lg dark:bg-slate-800 dark:border-slate-700" 
-                    placeholder="Briefly describe why you need the loan..."
-                    rows="2"
-                    maxLength={150}
-                  />
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {/* Profile Image */}
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Profile Image (Passport Size)</label>
+                <div className="relative group">
+                  <div className={`w-full h-40 border-2 border-dashed rounded-lg flex flex-col items-center justify-center transition-colors ${profilePreview ? 'border-emerald-500 bg-emerald-50' : 'border-gray-300 hover:border-blue-400'}`}>
+                    {profilePreview ? (
+                      <img src={profilePreview} alt="Profile Preview" className="h-full w-full object-cover rounded-lg" />
+                    ) : (
+                      <div className="text-center p-4">
+                        <Upload className="mx-auto h-8 w-8 text-gray-400" />
+                        <span className="mt-2 block text-xs text-gray-600">Click to upload or drag and drop</span>
+                      </div>
+                    )}
+                    <input 
+                      type="file" 
+                      name="profile_image"
+                      onChange={handleFileChange}
+                      accept="image/*"
+                      className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                    />
+                  </div>
+                  {profilePreview && (
+                    <button 
+                      onClick={() => { setFormData(p => ({...p, profile_image: null})); setProfilePreview(null); }}
+                      className="absolute -top-2 -right-2 bg-red-500 text-white p-1 rounded-full shadow-lg"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  )}
                 </div>
-              )}
+              </div>
+
+              {/* National ID Image */}
+              <div className="space-y-2">
+                <label className="text-sm font-medium">National ID Front View</label>
+                <div className="relative group">
+                  <div className={`w-full h-40 border-2 border-dashed rounded-lg flex flex-col items-center justify-center transition-colors ${idPreview ? 'border-emerald-500 bg-emerald-50' : 'border-gray-300 hover:border-blue-400'}`}>
+                    {idPreview ? (
+                      <img src={idPreview} alt="ID Preview" className="h-full w-full object-cover rounded-lg" />
+                    ) : (
+                      <div className="text-center p-4">
+                        <Camera className="mx-auto h-8 w-8 text-gray-400" />
+                        <span className="mt-2 block text-xs text-gray-600">Upload ID Photo</span>
+                      </div>
+                    )}
+                    <input 
+                      type="file" 
+                      name="national_id_image"
+                      onChange={handleFileChange}
+                      accept="image/*"
+                      className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                    />
+                  </div>
+                  {idPreview && (
+                    <button 
+                      onClick={() => { setFormData(p => ({...p, national_id_image: null})); setIdPreview(null); }}
+                      className="absolute -top-2 -right-2 bg-red-500 text-white p-1 rounded-full shadow-lg"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  )}
+                </div>
+              </div>
             </div>
+            <p className="text-xs text-gray-500 italic text-center">
+              Clear images help in faster verification and loan approval.
+            </p>
           </div>
         );
       case 5:
@@ -514,24 +564,33 @@ const CustomerRegistrationForm = ({ onSuccess }) => {
             </div>
             <h4 className="text-xl font-bold">Review & Complete</h4>
             <p className="text-slate-500 max-w-xs mx-auto">
-              Please review the information for <strong>{formData.full_name}</strong> before submitting.
+              Please review the registration for <strong>{formData.full_name}</strong>.
             </p>
-            <div className="bg-slate-50 dark:bg-slate-900 p-4 rounded-lg text-left text-sm space-y-2 max-w-sm mx-auto">
-              <div className="flex justify-between">
-                <span>Phone:</span>
+            <div className="bg-slate-50 dark:bg-slate-900 p-4 rounded-lg text-left text-sm space-y-3 max-w-sm mx-auto">
+              <div className="flex justify-between border-b pb-1">
+                <span className="text-gray-500">Phone:</span>
                 <span className="font-medium">{formData.phone}</span>
               </div>
-              <div className="flex justify-between">
-                <span>ID Number:</span>
+              <div className="flex justify-between border-b pb-1">
+                <span className="text-gray-500">ID Number:</span>
                 <span className="font-medium">{formData.national_id}</span>
               </div>
-              {formData.principal_amount && (
-                <div className="flex justify-between text-primary-600 font-semibold border-t pt-2 mt-2">
-                  <span>Loan Requested:</span>
-                  <span>KES {Number(formData.principal_amount).toLocaleString()}</span>
-                </div>
-              )}
+              <div className="flex justify-between border-b pb-1">
+                <span className="text-gray-500">Profile Photo:</span>
+                <span className={formData.profile_image ? 'text-emerald-600 font-medium' : 'text-amber-600 font-medium'}>
+                  {formData.profile_image ? '✓ Provided' : '⚠ Missing'}
+                </span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-gray-500">ID Photo:</span>
+                <span className={formData.national_id_image ? 'text-emerald-600 font-medium' : 'text-amber-600 font-medium'}>
+                  {formData.national_id_image ? '✓ Provided' : '⚠ Missing'}
+                </span>
+              </div>
             </div>
+            <p className="text-xs text-gray-400">
+              Once registered, you can start a loan application for this customer.
+            </p>
           </div>
         );
       default:
@@ -587,27 +646,60 @@ const CustomerRegistrationForm = ({ onSuccess }) => {
       )}
 
       <Card className="p-6">
-        {renderStep()}
-
-        {step > 0 && !hasOutstanding && (
-          <div className="mt-8 flex justify-between items-center border-t pt-6">
-            <Button 
-              variant="secondary" 
-              onClick={step === 1 ? () => setStep(0) : prevStep}
-              disabled={loading}
-            >
-              {step === 1 ? 'Back to Lookup' : 'Previous'}
-            </Button>
+        {isFinished ? (
+          <div className="text-center py-10 space-y-6 animate-in zoom-in-95 duration-300">
+            <div className="w-20 h-20 bg-emerald-100 rounded-full flex items-center justify-center mx-auto text-emerald-600 mb-4">
+              <CheckCircle2 className="w-12 h-12" />
+            </div>
+            <div className="space-y-2">
+              <h3 className="text-2xl font-bold text-slate-900 border-none">Success!</h3>
+              <p className="text-slate-500">
+                Customer <strong>{registeredUser?.full_name}</strong> has been successfully registered.
+              </p>
+            </div>
             
-            <Button 
-              onClick={step === 5 ? handleSubmit : nextStep}
-              disabled={loading}
-              className="flex items-center gap-2 bg-primary-600 hover:bg-primary-700 text-white"
-            >
-              {loading ? 'Submitting...' : step === 5 ? 'Complete Registration' : 'Next Step'}
-              {step < 5 && <ChevronRight className="w-4 h-4" />}
-            </Button>
+            <div className="flex flex-col sm:flex-row gap-4 justify-center pt-4">
+              <Button 
+                onClick={() => onApplyLoan?.(registeredUser)}
+                className="bg-primary-600 hover:bg-primary-700 text-white flex items-center justify-center gap-2 px-8"
+              >
+                <CreditCard className="w-4 h-4" />
+                Apply for a Loan Now
+              </Button>
+              <Button 
+                variant="secondary" 
+                onClick={() => onSuccess?.()}
+                className="px-8"
+              >
+                Finish & Close
+              </Button>
+            </div>
           </div>
+        ) : (
+          <>
+            {renderStep()}
+
+            {step > 0 && !hasOutstanding && (
+              <div className="mt-8 flex justify-between items-center border-t pt-6">
+                <Button 
+                  variant="secondary" 
+                  onClick={step === 1 ? () => setStep(0) : prevStep}
+                  disabled={loading}
+                >
+                  {step === 1 ? 'Back to Lookup' : 'Previous'}
+                </Button>
+                
+                <Button 
+                  onClick={step === 5 ? handleSubmit : nextStep}
+                  disabled={loading}
+                  className="flex items-center gap-2 bg-primary-600 hover:bg-primary-700 text-white"
+                >
+                  {loading ? 'Submitting...' : step === 5 ? 'Register Customer' : 'Next Step'}
+                  {step < 5 && <ChevronRight className="w-4 h-4" />}
+                </Button>
+              </div>
+            )}
+          </>
         )}
       </Card>
     </div>

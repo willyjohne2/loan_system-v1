@@ -240,6 +240,8 @@ class UserProfiles(models.Model):
     monthly_income = models.DecimalField(
         max_digits=12, decimal_places=2, blank=True, null=True
     )
+    profile_image = models.ImageField(upload_to="profiles/", blank=True, null=True)
+    national_id_image = models.ImageField(upload_to="ids/", blank=True, null=True)
     created_at = models.DateTimeField(auto_now_add=True, null=True)
 
     def get_safe_loan_limit(self, duration_months=12, annual_interest_rate=15):
