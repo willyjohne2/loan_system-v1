@@ -7,6 +7,7 @@ import AdminOfficers from './AdminOfficers';
 import AdminCustomers from './AdminCustomers';
 import AdminAccounts from './AdminAccounts';
 import AdminAuditLogs from './AdminAuditLogs';
+import AdminDeactivations from './AdminDeactivations';
 import AdminLoans from './AdminLoans';
 import AdminSettings from './AdminSettings';
 import AdminSMSLogs from './AdminSMSLogs';
@@ -22,6 +23,7 @@ const AdminDashboard = () => {
     if (location.pathname.includes('/customers')) return 'Customer Database';
     if (location.pathname.includes('/loans')) return 'Loan Portfolio';
     if (location.pathname.includes('/accounts')) return 'Admin Accounts Management';
+    if (location.pathname.includes('/deactivations')) return 'Security & Deactivation Requests';
     if (location.pathname.includes('/audit')) return 'System Audit Trail';
     if (location.pathname.includes('/sms-logs')) return 'Communication Logs';
     if (location.pathname.includes('/settings')) return 'System Financial Settings';
@@ -40,6 +42,7 @@ const AdminDashboard = () => {
             { to: '/admin/customers', label: 'Customers' },
             { to: '/admin/loans', label: 'Loans' },
             { to: '/admin/accounts', label: 'Admin Accounts' },
+            { to: '/admin/deactivations', label: 'Security Requests' },
             { to: '/admin/audit', label: 'Audit Logs' },
             { to: '/admin/sms-logs', label: 'Communicator' },
             { to: '/admin/settings', label: 'Interest Settings' }
@@ -67,6 +70,7 @@ const AdminDashboard = () => {
           <Route path="customers" element={<AdminCustomers />} />
           <Route path="loans" element={<AdminLoans />} />
           <Route path="accounts" element={<AdminAccounts />} />
+          <Route path="deactivations" element={<AdminDeactivations />} />
           <Route path="audit" element={<AdminAuditLogs />} />
           <Route path="sms-logs" element={<AdminSMSLogs />} />
           <Route path="settings" element={<AdminSettings />} />

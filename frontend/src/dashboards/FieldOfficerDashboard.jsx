@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { loanService } from '../api/api';
 import { StatCard, Table, Card, Button } from '../components/ui/Shared';
-import { Users, Wallet, UserPlus, TrendingUp, Calendar, ArrowUpRight, DollarSign, CreditCard, AlertCircle } from 'lucide-react';
+import { Users, Wallet, UserPlus, TrendingUp, Calendar, ArrowUpRight, DollarSign, CreditCard, AlertCircle, CheckCircle } from 'lucide-react';
 import CustomerRegistrationForm from '../components/forms/CustomerRegistrationForm';
 import LoanApplicationForm from '../components/forms/LoanApplicationForm';
 import RepaymentModal from '../components/ui/RepaymentModal';
@@ -20,7 +20,8 @@ const FieldOfficerDashboard = () => {
   const [stats, setStats] = useState({
     today: 0,
     thisWeek: 0,
-    total: 0
+    total: 0,
+    verifiedCount: 0
   });
 
   const fetchData = async () => {
@@ -56,11 +57,13 @@ const FieldOfficerDashboard = () => {
 
       const registeredToday = customersList.filter(c => new Date(c.created_at) >= today).length;
       const registeredThisWeek = customersList.filter(c => new Date(c.created_at) >= oneWeekAgo).length;
+      const verifiedLoans = loansList.filter(l => !['UNVERIFIED', 'PENDING', 'REJECTED'].includes(l.status)).length;
 
       setStats({
         today: registeredToday,
         thisWeek: registeredThisWeek,
-        total: customersList.length
+        total: customersList.length,
+        verifiedCount: verifiedLoans
       });
 
     } catch (err) {
@@ -153,12 +156,19 @@ const FieldOfficerDashboard = () => {
         </Button>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
         <StatCard 
           label="My Customers" 
           value={stats.total.toString()} 
           icon={Users}
           trend={{ value: `${stats.thisWeek} this week`, isPositive: true }}
+        />
+        <StatCard 
+          label="Verified Cases" 
+          value={stats.verifiedCount.toString()} 
+          icon={CheckCircle}
+          variant="success"
+          trend={{ value: "Documents reviewed", isPositive: true }}
         />
         <StatCard 
           label="Today's Work" 
@@ -168,9 +178,9 @@ const FieldOfficerDashboard = () => {
         />
         <StatCard 
           label="Actions Needed" 
-          value={loans.filter(l => l.status === 'UNVERIFIED').length.toString()} 
+          value={loans.filter(l => l.status === 'UNVERIFIED' || l.status === 'PENDING').length.toString()} 
           icon={AlertCircle} 
-          trend={{ value: "Pending verifications", isPositive: false }}
+          trend={{ value: "Needs review", isPositive: false }}
         />
       </div>
 

@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { loanService } from '../../api/api';
 import { Card, Button, Table } from '../ui/Shared';
-import { X, TrendingUp, TrendingDown, Clock, CheckCircle, FileText, Wallet } from 'lucide-react';
+import { X, TrendingUp, TrendingDown, Clock, CheckCircle, FileText, Wallet, User, AlertCircle, Calendar } from 'lucide-react';
 
 const CustomerHistoryModal = ({ customer, isOpen, onClose, loanToVerify, onVerified }) => {
   const [loading, setLoading] = useState(true);
@@ -9,6 +9,7 @@ const CustomerHistoryModal = ({ customer, isOpen, onClose, loanToVerify, onVerif
   const [loans, setLoans] = useState([]);
   const [repayments, setRepayments] = useState([]);
   const [updating, setUpdating] = useState(false);
+  const [selectedImage, setSelectedImage] = useState(null);
   const [stats, setStats] = useState({
     totalBorrowed: 0,
     totalPaid: 0,
@@ -141,14 +142,20 @@ const CustomerHistoryModal = ({ customer, isOpen, onClose, loanToVerify, onVerif
                 </div>
                 
                 {/* Visual Identity */}
-                <div className="lg:col-span-2 flex gap-2">
+                <div className="lg:col-span-2 flex gap-3">
                    {customer.profile?.profile_image ? (
-                     <div className="h-full aspect-square rounded-xl overflow-hidden border-2 border-slate-100 dark:border-slate-800">
+                     <div 
+                       className="h-full aspect-square rounded-xl overflow-hidden border-2 border-slate-100 dark:border-slate-800 cursor-pointer hover:ring-2 hover:ring-primary-500 transition-all group relative"
+                       onClick={() => setSelectedImage(customer.profile.profile_image.startsWith('http') ? customer.profile.profile_image : `${loanService.api.defaults.baseURL.replace('/api', '')}${customer.profile.profile_image}`)}
+                     >
                         <img 
                           src={customer.profile.profile_image.startsWith('http') ? customer.profile.profile_image : `${loanService.api.defaults.baseURL.replace('/api', '')}${customer.profile.profile_image}`} 
                           alt="Profile" 
                           className="w-full h-full object-cover"
                         />
+                        <div className="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
+                           <TrendingUp className="w-4 h-4 text-white rotate-45" />
+                        </div>
                      </div>
                    ) : (
                      <div className="h-full aspect-square rounded-xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-400">
@@ -156,14 +163,17 @@ const CustomerHistoryModal = ({ customer, isOpen, onClose, loanToVerify, onVerif
                      </div>
                    )}
                    {customer.profile?.national_id_image ? (
-                     <div className="flex-1 rounded-xl overflow-hidden border-2 border-slate-100 dark:border-slate-800 relative group">
+                     <div 
+                       className="flex-1 rounded-xl overflow-hidden border-2 border-slate-100 dark:border-slate-800 relative group cursor-pointer hover:ring-2 hover:ring-primary-500 transition-all"
+                       onClick={() => setSelectedImage(customer.profile.national_id_image.startsWith('http') ? customer.profile.national_id_image : `${loanService.api.defaults.baseURL.replace('/api', '')}${customer.profile.national_id_image}`)}
+                     >
                         <img 
                           src={customer.profile.national_id_image.startsWith('http') ? customer.profile.national_id_image : `${loanService.api.defaults.baseURL.replace('/api', '')}${customer.profile.national_id_image}`} 
                           alt="ID" 
                           className="w-full h-full object-cover"
                         />
                         <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
-                           <span className="text-[10px] text-white font-bold uppercase">National ID</span>
+                           <span className="text-[10px] text-white font-bold uppercase tracking-wider bg-black/50 px-2 py-1 rounded">Click to Enlarge ID</span>
                         </div>
                      </div>
                    ) : (
@@ -174,25 +184,66 @@ const CustomerHistoryModal = ({ customer, isOpen, onClose, loanToVerify, onVerif
                 </div>
               </div>
 
-              {/* Profile Deep Dive */}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6 p-5 bg-slate-50 dark:bg-slate-800/30 rounded-2xl border border-slate-100 dark:border-slate-800">
-                <div className="space-y-1">
-                  <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">National ID No</span>
-                  <p className="font-bold text-slate-800 dark:text-slate-200">{customer.profile?.national_id || 'N/A'}</p>
+              {/* Image Lightbox */}
+              {selectedImage && (
+                <div 
+                  className="fixed inset-0 z-[1001] bg-black/90 flex items-center justify-center p-4 cursor-zoom-out"
+                  onClick={() => setSelectedImage(null)}
+                >
+                  <Button variant="ghost" className="absolute top-4 right-4 text-white hover:bg-white/10" onClick={() => setSelectedImage(null)}>
+                    <X className="w-8 h-8" />
+                  </Button>
+                  <img src={selectedImage} alt="Fullscreen" className="max-w-full max-h-full object-contain rounded-lg shadow-2xl animate-in zoom-in-95" />
                 </div>
-                <div className="space-y-1">
-                  <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Location</span>
-                  <p className="font-bold text-slate-800 dark:text-slate-200">
-                    {customer.profile?.town}, {customer.profile?.county}
-                    <span className="block text-[10px] font-medium text-slate-500">{customer.profile?.village || 'No Village'} - {customer.profile?.region}</span>
-                  </p>
-                </div>
-                <div className="space-y-1">
-                  <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Employment</span>
-                  <p className="font-bold text-slate-800 dark:text-slate-200">
-                    {customer.profile?.employment_status || 'N/A'}
-                    <span className="block text-[10px] font-medium text-emerald-600">KES {Number(customer.profile?.monthly_income || 0).toLocaleString()}/mo</span>
-                  </p>
+              )}
+
+              {/* Profile Deep Dive - Expanded with more details */}
+              <div className="space-y-4">
+                <h4 className="flex items-center gap-2 font-bold text-slate-800 dark:text-white px-1">
+                  <User className="w-4 h-4 text-primary-600" />
+                  Customer Verification Details
+                </h4>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 p-6 bg-slate-50 dark:bg-slate-800/30 rounded-2xl border border-slate-100 dark:border-slate-800">
+                  <div className="space-y-1">
+                    <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Full Name</span>
+                    <p className="font-bold text-slate-800 dark:text-slate-200 text-base">{customer.full_name}</p>
+                  </div>
+                  <div className="space-y-1">
+                    <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">National ID No</span>
+                    <p className="font-bold text-slate-800 dark:text-slate-200 text-base">{customer.profile?.national_id || 'N/A'}</p>
+                  </div>
+                  <div className="space-y-1">
+                    <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Phone & Email</span>
+                    <p className="font-bold text-slate-800 dark:text-slate-200 leading-tight">
+                      {customer.phone}
+                      {customer.email && <span className="block text-[11px] font-medium text-slate-500">{customer.email}</span>}
+                    </p>
+                  </div>
+                  <div className="space-y-1">
+                    <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Location Info</span>
+                    <p className="font-bold text-slate-800 dark:text-slate-200">
+                      {customer.profile?.region || 'No Region'} - {customer.profile?.town || 'No Town'}
+                      <span className="block text-[10px] font-medium text-slate-500 italic">Village: {customer.profile?.village || 'N/A'} • {customer.profile?.county || 'Kirinyaga'}</span>
+                    </p>
+                  </div>
+                  <div className="space-y-1">
+                    <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Employment</span>
+                    <p className="font-bold text-slate-800 dark:text-slate-200">
+                      {customer.profile?.employment_status || 'N/A'}
+                    </p>
+                  </div>
+                  <div className="space-y-1">
+                    <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Monthly Income</span>
+                    <p className="font-bold text-emerald-600 dark:text-emerald-400 text-base">
+                      KES {Number(customer.profile?.monthly_income || 0).toLocaleString()}
+                    </p>
+                  </div>
+                  <div className="md:col-span-2 lg:col-span-3 space-y-1 pt-2 border-t border-slate-200/50 dark:border-slate-700/50">
+                    <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Address/Landmarks</span>
+                    <p className="text-sm text-slate-600 dark:text-slate-400 italic">
+                      {customer.profile?.address || 'No detailed address provided.'}
+                    </p>
+                  </div>
                 </div>
               </div>
 

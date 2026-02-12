@@ -25,6 +25,7 @@ from .models import (
     LoanDocuments,
     SMSLog,
     AdminInvitation,
+    DeactivationRequest,
 )
 from .serializers import (
     AdminSerializer,
@@ -40,6 +41,7 @@ from .serializers import (
     LoanActivitySerializer,
     LoanDocumentSerializer,
     SMSLogSerializer,
+    DeactivationRequestSerializer,
 )
 from .utils.mpesa import MpesaHandler
 from .utils.sms import send_sms_async
@@ -329,10 +331,33 @@ class CheckUserView(views.APIView):
                 status=400,
             )
 
-        user = (
-            Users.objects.filter(phone=query).first()
-            or Users.objects.filter(profile__national_id=query).first()
-        )
+        # Smart Phone Lookup: Try to match variants if it looks like a phone number
+        import re
+
+        user = None
+        # Clean the query (remove spaces, +, etc)
+        clean_q = re.sub(r"\D", "", query)
+
+        if clean_q:
+            # Try exact match, variants of the cleaned number, or national ID
+            variants = [clean_q]
+            if clean_q.startswith("254") and len(clean_q) > 10:
+                variants.append("0" + clean_q[3:])  # convert 254... to 0...
+            elif clean_q.startswith("0") and len(clean_q) == 10:
+                variants.append("254" + clean_q[1:])  # convert 0... to 254...
+            elif (clean_q.startswith("7") or clean_q.startswith("1")) and len(
+                clean_q
+            ) == 9:
+                variants.append("0" + clean_q)
+                variants.append("254" + clean_q)
+
+            user = (
+                Users.objects.filter(phone__in=variants).first()
+                or Users.objects.filter(profile__national_id=query).first()
+            )
+        else:
+            # Fallback for non-numeric queries if any (e.g. ID with letters)
+            user = Users.objects.filter(profile__national_id=query).first()
 
         if not user:
             return Response({"found": False})
@@ -481,6 +506,7 @@ class RepaymentListCreateView(generics.ListCreateAPIView):
 
         # Check if loan is fully paid
         if loan.remaining_balance <= 0:
+            old_status = loan.status
             loan.status = "CLOSED"
             loan.save()
             create_notification(
@@ -489,6 +515,16 @@ class RepaymentListCreateView(generics.ListCreateAPIView):
             )
             create_loan_activity(
                 loan, admin, "STATUS_CHANGE", "Loan closed - fully repaid."
+            )
+            # Audit Log
+            AuditLogs.objects.create(
+                admin=admin,
+                action=f"Loan {loan.id} fully repaid and closed.",
+                log_type="STATUS",
+                table_name="loans",
+                record_id=loan.id,
+                old_data={"status": old_status},
+                new_data={"status": "CLOSED"},
             )
         else:
             # Update overdue status if needed
@@ -691,6 +727,13 @@ class BulkSMSView(views.APIView):
                     except Exception as e:
                         print(f"Error sending NOTICE SMS: {e}")
 
+        # Log this communication event
+        AuditLogs.objects.create(
+            admin=user,
+            action=f"Sent {count} bulk SMS notifications of type {sms_type}.",
+            log_type="COMMUNICATION",
+        )
+
         return Response(
             {
                 "status": "success",
@@ -704,21 +747,97 @@ class AuditLogListView(generics.ListAPIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def get_queryset(self):
-        # Authenticated users (ADMIN, MANAGER, etc.) can see logs
-        # The CustomJWTAuthentication sets self.request.user to the Admin model instance
         user = self.request.user
 
         if not user or not hasattr(user, "role"):
             return AuditLogs.objects.none()
 
+        queryset = AuditLogs.objects.all().order_by("-created_at")
+
+        # Filters
+        log_type = self.request.query_params.get("type")
+        if log_type:
+            queryset = queryset.filter(log_type=log_type)
+
+        # Limit to 10 if on dashboard overview, otherwise maybe allow more
+        limit = self.request.query_params.get("limit")
+        if limit:
+            try:
+                queryset = queryset[: int(limit)]
+            except ValueError:
+                pass
+
+        return queryset
+
+
+class DeactivationRequestListCreateView(generics.ListCreateAPIView):
+    serializer_class = DeactivationRequestSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_queryset(self):
+        user = self.request.user
+        if not user or not hasattr(user, "role"):
+            return DeactivationRequest.objects.none()
+
         if user.role == "ADMIN":
-            return AuditLogs.objects.all().order_by("-created_at")
+            return DeactivationRequest.objects.all().order_by("-created_at")
 
-        # Managers can see logs for their region if applicable, otherwise themselves
         if user.role == "MANAGER":
-            return AuditLogs.objects.all().order_by("-created_at")
+            return DeactivationRequest.objects.filter(requested_by=user).order_by(
+                "-created_at"
+            )
 
-        return AuditLogs.objects.none()
+        return DeactivationRequest.objects.none()
+
+    def perform_create(self, serializer):
+        user = self.request.user
+        serializer.save(requested_by=user, status="PENDING")
+
+        # Log deactivation request
+        AuditLogs.objects.create(
+            admin=user,
+            action=f"Requested deactivation for officer {serializer.validated_data['officer'].full_name}",
+            log_type="MANAGEMENT",
+            table_name="deactivation_requests",
+            record_id=None,  # Will be set after save if needed
+        )
+
+
+class DeactivationRequestDetailView(generics.RetrieveUpdateAPIView):
+    queryset = DeactivationRequest.objects.all()
+    serializer_class = DeactivationRequestSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def perform_update(self, serializer):
+        user = self.request.user
+        if user.role != "ADMIN":
+            raise permissions.exceptions.PermissionDenied(
+                "Only admins can process deactivation requests"
+            )
+
+        instance = serializer.save(processed_by=user, processed_at=timezone.now())
+
+        if instance.status == "APPROVED":
+            # Actually deactivate the officer
+            officer = instance.officer
+            officer.is_blocked = True
+            officer.save()
+
+            AuditLogs.objects.create(
+                admin=user,
+                action=f"Approved deactivation for officer {officer.full_name}",
+                log_type="MANAGEMENT",
+                table_name="admins",
+                record_id=officer.id,
+            )
+        elif instance.status == "REJECTED":
+            AuditLogs.objects.create(
+                admin=user,
+                action=f"Rejected deactivation for officer {instance.officer.full_name}",
+                log_type="MANAGEMENT",
+                table_name="admins",
+                record_id=instance.officer.id,
+            )
 
 
 class AdminListCreateView(generics.ListCreateAPIView):
@@ -784,13 +903,22 @@ class AdminDeleteView(views.APIView):
 
     def delete(self, request, admin_id):
         try:
-            if request.auth.get("role") != "ADMIN":
+            # Check if requester is super admin
+            requester_id = request.auth.get("admin_id")
+            try:
+                requester = Admins.objects.get(id=requester_id)
+            except (Admins.DoesNotExist, ValueError):
+                return Response({"error": "Unauthorized"}, status=403)
+
+            if not requester.is_super_admin:
                 return Response(
-                    {"error": "Only admins can delete accounts"},
+                    {
+                        "error": "Only the Super Administrator can dismiss other administrative accounts"
+                    },
                     status=status.HTTP_403_FORBIDDEN,
                 )
 
-            if str(request.auth.get("admin_id")) == str(admin_id):
+            if str(requester.id) == str(admin_id):
                 return Response(
                     {"error": "Cannot delete your own account"},
                     status=status.HTTP_400_BAD_REQUEST,
@@ -885,6 +1013,12 @@ class RegisterAdminView(views.APIView):
             password.encode("utf-8"), bcrypt.gensalt()
         ).decode("utf-8")
 
+        # First ADMIN to register becomes super admin
+        # Non-ADMIN roles should NEVER be super admins
+        is_first_admin = (
+            role == "ADMIN" and not Admins.objects.filter(role="ADMIN").exists()
+        )
+
         admin = Admins.objects.create(
             id=uuid.uuid4(),
             full_name=full_name,
@@ -894,6 +1028,7 @@ class RegisterAdminView(views.APIView):
             password_hash=password_hash,
             verification_token=verification_code,
             is_verified=False,
+            is_super_admin=is_first_admin,
         )
 
         email_thread = threading.Thread(
@@ -1076,6 +1211,17 @@ class LoanDetailView(generics.RetrieveUpdateDestroyAPIView):
                 f"Your loan status has been updated to {new_status}.",
             )
 
+            # Audit Log for Status Change
+            AuditLogs.objects.create(
+                admin=admin,
+                action=f"Changed loan {loan.id} status from {old_loan.status} to {new_status}",
+                log_type="STATUS",
+                table_name="loans",
+                record_id=loan.id,
+                old_data={"status": old_loan.status},
+                new_data={"status": new_status},
+            )
+
             # SMS Notifications for specific status changes
             if new_status == "VERIFIED" and loan.user.phone:
                 msg = (
@@ -1228,16 +1374,27 @@ class AdminInviteView(views.APIView):
         role = request.data.get("role")
 
         if not email or not role:
-            return Response({"error": "Email and role are required"}, status=400)
+            return Response(
+                {
+                    "error": f"Email and role are required. Got Email: {email}, Role: {role}"
+                },
+                status=400,
+            )
 
         valid_roles = ["ADMIN", "MANAGER", "FINANCIAL_OFFICER", "FIELD_OFFICER"]
         if role not in valid_roles:
-            return Response({"error": "Invalid role"}, status=400)
+            return Response(
+                {"error": f"Invalid role: {role}. Must be one of {valid_roles}"},
+                status=400,
+            )
 
         # Check if already registered
         if Admins.objects.filter(email__iexact=email).exists():
             return Response(
-                {"error": "User with this email is already registered"}, status=400
+                {
+                    "error": f"The person with email {email} is already registered in the Admins table."
+                },
+                status=400,
             )
 
         # Update or create invitation

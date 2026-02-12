@@ -13,6 +13,7 @@ class Admins(models.Model):
     is_verified = models.BooleanField(default=False)
     verification_token = models.CharField(max_length=100, blank=True, null=True)
     is_blocked = models.BooleanField(default=False)
+    is_super_admin = models.BooleanField(default=False)
     failed_login_attempts = models.IntegerField(default=0)
     region = models.TextField(blank=True, null=True)
     password_reset_code = models.CharField(max_length=6, blank=True, null=True)
@@ -58,6 +59,9 @@ class AuditLogs(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     admin = models.ForeignKey(Admins, models.DO_NOTHING, blank=True, null=True)
     action = models.TextField()
+    log_type = models.CharField(
+        max_length=50, default="GENERAL"
+    )  # STATUS, COMMUNICATION, MANAGEMENT, GENERAL
     table_name = models.TextField()
     record_id = models.UUIDField(blank=True, null=True)
     old_data = models.JSONField(blank=True, null=True)
@@ -349,6 +353,33 @@ class StaffAssignments(models.Model):
         managed = True
         db_table = "staff_assignments"
         unique_together = (("staff", "user"),)
+
+
+class DeactivationRequest(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    officer = models.ForeignKey(
+        Admins, models.CASCADE, related_name="deactivation_requests"
+    )
+    requested_by = models.ForeignKey(
+        Admins, models.CASCADE, related_name="requested_deactivations"
+    )
+    reason = models.TextField()
+    status = models.CharField(
+        max_length=20, default="PENDING"
+    )  # PENDING, APPROVED, REJECTED
+    processed_by = models.ForeignKey(
+        Admins,
+        models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="processed_requests",
+    )
+    processed_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        managed = True
+        db_table = "deactivation_requests"
 
 
 class LoanDocuments(models.Model):

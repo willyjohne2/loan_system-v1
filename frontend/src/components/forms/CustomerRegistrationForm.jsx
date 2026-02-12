@@ -32,6 +32,8 @@ const CustomerRegistrationForm = ({ onSuccess, onApplyLoan }) => {
   const [error, setError] = useState('');
   const [isFinished, setIsFinished] = useState(false);
   const [registeredUser, setRegisteredUser] = useState(null);
+  const [loanProducts, setLoanProducts] = useState([]);
+  const [outstandingLoanDetails, setOutstandingLoanDetails] = useState(null);
 
   const regions = [
     'Mwea East', 'Mwea West', 'Kirinyaga Central', 'Kirinyaga East (Gichugu)', 
@@ -96,6 +98,7 @@ const CustomerRegistrationForm = ({ onSuccess, onApplyLoan }) => {
         setIsExistingUser(true);
         setExistingUserId(data.user.id);
         setHasOutstanding(data.has_outstanding_loan);
+        setOutstandingLoanDetails(data.outstanding_loan);
         
         // Pre-fill form
         setFormData({
@@ -207,7 +210,25 @@ const CustomerRegistrationForm = ({ onSuccess, onApplyLoan }) => {
       setRegisteredUser(userRes.data);
       setIsFinished(true);
     } catch (err) {
-      setError(err?.response?.data?.error || err.message || 'Failed to process registration');
+      let errorMessage = 'Failed to process registration';
+      
+      if (err?.response?.data) {
+        if (typeof err.response.data === 'string') {
+          errorMessage = err.response.data;
+        } else if (err.response.data.error) {
+          errorMessage = err.response.data.error;
+        } else {
+          // Handle DRF field errors
+          const fieldErrors = Object.entries(err.response.data)
+            .map(([field, msgs]) => `${field}: ${Array.isArray(msgs) ? msgs.join(' ') : msgs}`)
+            .join(' | ');
+          if (fieldErrors) errorMessage = fieldErrors;
+        }
+      } else if (err.message) {
+        errorMessage = err.message;
+      }
+      
+      setError(errorMessage);
       console.error('Registration/Update failed:', err);
     } finally {
       setLoading(false);
@@ -292,7 +313,8 @@ const CustomerRegistrationForm = ({ onSuccess, onApplyLoan }) => {
                   name="full_name"
                   value={formData.full_name}
                   onChange={handleChange}
-                  className="w-full px-3 py-2 border rounded-lg dark:bg-slate-800 dark:border-slate-700" 
+                  readOnly={isExistingUser}
+                  className={`w-full px-3 py-2 border rounded-lg dark:bg-slate-800 dark:border-slate-700 ${isExistingUser ? 'bg-slate-50 cursor-not-allowed opacity-75' : ''}`}
                   placeholder="John Doe"
                 />
               </div>
@@ -334,7 +356,8 @@ const CustomerRegistrationForm = ({ onSuccess, onApplyLoan }) => {
                   name="national_id"
                   value={formData.national_id}
                   onChange={handleChange}
-                  className="w-full px-3 py-2 border rounded-lg dark:bg-slate-800 dark:border-slate-700" 
+                  readOnly={isExistingUser}
+                  className={`w-full px-3 py-2 border rounded-lg dark:bg-slate-800 dark:border-slate-700 ${isExistingUser ? 'bg-slate-50 cursor-not-allowed opacity-75' : ''}`}
                   placeholder="12345678"
                 />
               </div>
@@ -453,7 +476,7 @@ const CustomerRegistrationForm = ({ onSuccess, onApplyLoan }) => {
               <div className="space-y-2">
                 <label className="text-sm font-medium">Profile Image (Passport Size)</label>
                 <div className="relative group">
-                  <div className={`w-full h-40 border-2 border-dashed rounded-lg flex flex-col items-center justify-center transition-colors ${profilePreview ? 'border-emerald-500 bg-emerald-50' : 'border-gray-300 hover:border-blue-400'}`}>
+                  <div className={`w-full h-40 border-2 border-dashed rounded-lg flex flex-col items-center justify-center transition-colors ${profilePreview ? 'border-emerald-500 bg-emerald-50' : 'border-gray-300 hover:border-blue-400'} ${isExistingUser ? 'cursor-not-allowed opacity-80' : ''}`}>
                     {profilePreview ? (
                       <img src={profilePreview} alt="Profile Preview" className="h-full w-full object-cover rounded-lg" />
                     ) : (
@@ -462,15 +485,17 @@ const CustomerRegistrationForm = ({ onSuccess, onApplyLoan }) => {
                         <span className="mt-2 block text-xs text-gray-600">Click to upload or drag and drop</span>
                       </div>
                     )}
-                    <input 
-                      type="file" 
-                      name="profile_image"
-                      onChange={handleFileChange}
-                      accept="image/*"
-                      className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-                    />
+                    {!isExistingUser && (
+                      <input 
+                        type="file" 
+                        name="profile_image"
+                        onChange={handleFileChange}
+                        accept="image/*"
+                        className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                      />
+                    )}
                   </div>
-                  {profilePreview && (
+                  {profilePreview && !isExistingUser && (
                     <button 
                       onClick={() => { setFormData(p => ({...p, profile_image: null})); setProfilePreview(null); }}
                       className="absolute -top-2 -right-2 bg-red-500 text-white p-1 rounded-full shadow-lg"
@@ -485,7 +510,7 @@ const CustomerRegistrationForm = ({ onSuccess, onApplyLoan }) => {
               <div className="space-y-2">
                 <label className="text-sm font-medium">National ID Front View</label>
                 <div className="relative group">
-                  <div className={`w-full h-40 border-2 border-dashed rounded-lg flex flex-col items-center justify-center transition-colors ${idPreview ? 'border-emerald-500 bg-emerald-50' : 'border-gray-300 hover:border-blue-400'}`}>
+                  <div className={`w-full h-40 border-2 border-dashed rounded-lg flex flex-col items-center justify-center transition-colors ${idPreview ? 'border-emerald-500 bg-emerald-50' : 'border-gray-300 hover:border-blue-400'} ${isExistingUser ? 'cursor-not-allowed opacity-80' : ''}`}>
                     {idPreview ? (
                       <img src={idPreview} alt="ID Preview" className="h-full w-full object-cover rounded-lg" />
                     ) : (
@@ -494,15 +519,17 @@ const CustomerRegistrationForm = ({ onSuccess, onApplyLoan }) => {
                         <span className="mt-2 block text-xs text-gray-600">Upload ID Photo</span>
                       </div>
                     )}
-                    <input 
-                      type="file" 
-                      name="national_id_image"
-                      onChange={handleFileChange}
-                      accept="image/*"
-                      className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-                    />
+                    {!isExistingUser && (
+                      <input 
+                        type="file" 
+                        name="national_id_image"
+                        onChange={handleFileChange}
+                        accept="image/*"
+                        className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                      />
+                    )}
                   </div>
-                  {idPreview && (
+                  {idPreview && !isExistingUser && (
                     <button 
                       onClick={() => { setFormData(p => ({...p, national_id_image: null})); setIdPreview(null); }}
                       className="absolute -top-2 -right-2 bg-red-500 text-white p-1 rounded-full shadow-lg"
@@ -514,7 +541,10 @@ const CustomerRegistrationForm = ({ onSuccess, onApplyLoan }) => {
               </div>
             </div>
             <p className="text-xs text-gray-500 italic text-center">
-              Clear images help in faster verification and loan approval.
+              {isExistingUser 
+                ? "Identity documents and profile images are locked for verification security."
+                : "Clear images help in faster verification and loan approval."
+              }
             </p>
           </div>
         );
@@ -580,20 +610,36 @@ const CustomerRegistrationForm = ({ onSuccess, onApplyLoan }) => {
     <div className="w-full max-w-2xl mx-auto">
       {/* Search Result Warning */}
       {step > 0 && hasOutstanding && (
-        <div className="mb-6 p-4 bg-red-50 border border-red-200 text-red-700 rounded-lg flex items-start gap-3 animate-in fade-in slide-in-from-top-2">
+        <div className="mb-6 p-4 bg-amber-50 border border-amber-200 text-amber-800 rounded-lg flex items-start gap-3 animate-in fade-in slide-in-from-top-2">
           <AlertTriangle className="w-5 h-5 mt-0.5 flex-shrink-0" />
           <div className="text-sm">
-            <p className="font-bold">Active Loan Detected</p>
-            <p>Customer has an outstanding balance ({hasOutstanding}). New loan applications are currently restricted.</p>
-            <button onClick={() => { setStep(0); setHasOutstanding(null); }} className="mt-2 font-semibold underline hover:text-red-900">
-              Return to Search
-            </button>
+            <p className="font-bold">Active Application / Loan Found</p>
+            <div className="space-y-1">
+              {['UNVERIFIED', 'VERIFIED', 'PENDING', 'AWARDED'].includes(outstandingLoanDetails?.status) ? (
+                <p>
+                  You have a pending loan application for <span className="font-semibold text-primary-700">KES {Number(outstandingLoanDetails?.principal_amount).toLocaleString()}</span> currently in <span className="font-semibold uppercase px-1.5 py-0.5 bg-amber-100 rounded text-amber-700 text-xs">{outstandingLoanDetails?.status}</span> state.
+                </p>
+              ) : (
+                <p>
+                  You have a loan of <span className="font-semibold text-primary-700">KES {Number(outstandingLoanDetails?.principal_amount).toLocaleString()}</span>. 
+                  {Number(outstandingLoanDetails?.remaining_balance) < Number(outstandingLoanDetails?.total_repayable_amount) && (
+                    <span> Current loan balance: <span className="font-semibold text-emerald-700">KES {Number(outstandingLoanDetails?.remaining_balance).toLocaleString()}</span>.</span>
+                  )}
+                  {outstandingLoanDetails?.status === 'OVERDUE' && (
+                    <span className="text-red-600 font-bold ml-1">STATUS: OVERDUE</span>
+                  )}
+                </p>
+              )}
+            </div>
+            <p className="mt-2 text-xs opacity-75 italic text-slate-600">
+              Personal details can be updated below, but new applications are restricted until the current one is closed or rejected.
+            </p>
           </div>
         </div>
       )}
 
       {/* Progress Bar - Hidden on step 0 */}
-      {step > 0 && !hasOutstanding && (
+      {step > 0 && (
         <div className="mb-8">
           <div className="flex justify-between mb-2">
             {[1, 2, 3, 4, 5].map((s) => (
@@ -632,24 +678,26 @@ const CustomerRegistrationForm = ({ onSuccess, onApplyLoan }) => {
             <div className="space-y-2">
               <h3 className="text-2xl font-bold text-slate-900 border-none">Success!</h3>
               <p className="text-slate-500">
-                Customer <strong>{registeredUser?.full_name}</strong> has been successfully registered.
+                Customer <strong>{registeredUser?.full_name}</strong> has been successfully {isExistingUser ? 'updated' : 'registered'}.
               </p>
             </div>
             
             <div className="flex flex-col sm:flex-row gap-4 justify-center pt-4">
-              <Button 
-                onClick={() => onApplyLoan?.(registeredUser)}
-                className="bg-primary-600 hover:bg-primary-700 text-white flex items-center justify-center gap-2 px-8"
-              >
-                <CreditCard className="w-4 h-4" />
-                Apply for a Loan Now
-              </Button>
+              {(!hasOutstanding || outstandingLoanDetails?.status === 'REJECTED') && (
+                <Button 
+                  onClick={() => onApplyLoan?.(registeredUser)}
+                  className="bg-primary-600 hover:bg-primary-700 text-white flex items-center justify-center gap-2 px-8"
+                >
+                  <CreditCard className="w-4 h-4" />
+                  Apply for a Loan Now
+                </Button>
+              )}
               <Button 
                 variant="secondary" 
                 onClick={() => onSuccess?.()}
                 className="px-8"
               >
-                Finish & Close
+                {hasOutstanding ? 'Close' : 'Finish & Close'}
               </Button>
             </div>
           </div>
@@ -657,7 +705,7 @@ const CustomerRegistrationForm = ({ onSuccess, onApplyLoan }) => {
           <>
             {renderStep()}
 
-            {step > 0 && !hasOutstanding && (
+            {step > 0 && (
               <div className="mt-8 flex justify-between items-center border-t pt-6">
                 <Button 
                   variant="secondary" 
@@ -672,7 +720,7 @@ const CustomerRegistrationForm = ({ onSuccess, onApplyLoan }) => {
                   disabled={loading || (step === 5 && !formData.agreed_to_terms)}
                   className="flex items-center gap-2 bg-primary-600 hover:bg-primary-700 text-white"
                 >
-                  {loading ? 'Submitting...' : step === 5 ? 'Register Customer' : 'Next Step'}
+                  {loading ? 'Submitting...' : step === 5 ? (isExistingUser ? 'Update Information' : 'Register Customer') : 'Next Step'}
                   {step < 5 && <ChevronRight className="w-4 h-4" />}
                 </Button>
               </div>

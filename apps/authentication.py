@@ -13,9 +13,14 @@ class CustomJWTAuthentication(JWTAuthentication):
 
             try:
                 user = Admins.objects.get(id=user_id)
+                # Check if account is blocked/deactivated
+                if getattr(user, "is_blocked", False):
+                    raise AuthenticationFailed("This account has been deactivated.")
                 return user
             except (Admins.DoesNotExist, ValueError):
                 # ValueError handles cases where id is not a valid UUID string
                 return None
+        except AuthenticationFailed as e:
+            raise e
         except Exception:
             return None

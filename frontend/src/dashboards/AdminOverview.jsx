@@ -56,6 +56,7 @@ const AdminOverview = () => {
     defaulted: 0
   });
   const [chartData, setChartData] = useState([]);
+  const [isChartPlaceholder, setIsChartPlaceholder] = useState(false);
   const [auditLogs, setAuditLogs] = useState([]);
   const [securityAlerts, setSecurityAlerts] = useState([]);
 
@@ -91,17 +92,44 @@ const AdminOverview = () => {
           { approved: 0, pending: 0, repaid: 0, defaulted: 0 }
         );
 
-        // Process Chart Data
+        // Process Chart Data: Show last 6 months
+        const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+        const last6Months = [];
+        for (let i = 5; i >= 0; i--) {
+          const d = new Date();
+          d.setMonth(d.getMonth() - i);
+          last6Months.push(monthNames[d.getMonth()]);
+        }
+
         const monthlyData = loans.reduce((acc, loan) => {
           const month = new Date(loan.created_at).toLocaleString('default', { month: 'short' });
           acc[month] = (acc[month] || 0) + parseAmount(loan.principal_amount);
           return acc;
         }, {});
-        
-        setChartData(Object.keys(monthlyData).map(month => ({
+
+        const formattedData = last6Months.map(month => ({
           name: month,
-          amount: monthlyData[month]
-        })));
+          amount: monthlyData[month] || 0
+        }));
+
+        const totalVolume = formattedData.reduce((sum, item) => sum + item.amount, 0);
+        
+        if (totalVolume === 0) {
+          // Add dummy but labeled data for the client meeting
+          setIsChartPlaceholder(true);
+          const previewData = [
+            { name: 'Jan', amount: 150000 },
+            { name: 'Feb', amount: 280000 },
+            { name: 'Mar', amount: 145000 },
+            { name: 'Apr', amount: 320000 },
+            { name: 'May', amount: 410000 },
+            { name: 'Jun', amount: 380000 }
+          ];
+          setChartData(previewData);
+        } else {
+          setIsChartPlaceholder(false);
+          setChartData(formattedData);
+        }
 
         const actionsNeeded = loans.filter(l => ['UNVERIFIED', 'VERIFIED', 'PENDING'].includes((l.status || '').toUpperCase())).length;
 
@@ -131,7 +159,7 @@ const AdminOverview = () => {
       try {
         const [customersData, auditData, adminsData] = await Promise.all([
           loanService.getCustomers(),
-          loanService.getAuditLogs(),
+          loanService.getAuditLogs({ limit: 10 }),
           loanService.getAllAdmins()
         ]);
 
@@ -220,20 +248,43 @@ const AdminOverview = () => {
                  <BarChart3 className="w-5 h-5 text-primary-600" />
                  Monthly Disbursement Volume
               </h3>
+              {isChartPlaceholder && (
+                <span className="text-[10px] font-bold bg-amber-100 text-amber-600 px-2 py-1 rounded uppercase tracking-tighter animate-pulse">
+                  System Preview Mode
+                </span>
+              )}
            </div>
-           <div className="h-72 w-full flex items-center justify-center">
+           <div className="h-72 w-full min-w-0" style={{ minHeight: '300px' }}>
             {chartData.length > 0 ? (
               <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={chartData}>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
-                  <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fill: '#64748b', fontSize: 12}} />
-                  <YAxis axisLine={false} tickLine={false} tick={{fill: '#64748b', fontSize: 12}} tickFormatter={(val) => `K${val/1000}k`} />
-                  <ChartTooltip 
-                    contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
-                    formatter={(value) => [`KES ${value.toLocaleString()}`, 'Amount']}
-                    cursor={{fill: 'transparent'}}
+                <BarChart data={chartData} margin={{ top: 20, right: 30, left: 20, bottom: 20 }}>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#334155" />
+                  <XAxis 
+                    dataKey="name" 
+                    axisLine={false} 
+                    tickLine={false} 
+                    tick={{fill: '#94a3b8', fontSize: 12}} 
                   />
-                  <Bar dataKey="amount" fill="#0f172a" radius={[4, 4, 0, 0]} barSize={40} />
+                  <YAxis 
+                    axisLine={false} 
+                    tickLine={false} 
+                    tick={{fill: '#94a3b8', fontSize: 12}} 
+                    tickFormatter={(val) => `K${val/1000}k`}
+                    width={50}
+                  />
+                  <ChartTooltip 
+                    contentStyle={{ backgroundColor: '#1e293b', borderRadius: '12px', border: '1px solid #334155', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }}
+                    itemStyle={{ color: '#ffffff' }}
+                    labelStyle={{ color: '#94a3b8' }}
+                    formatter={(value) => [`KES ${value.toLocaleString()}`, isChartPlaceholder ? 'Projected' : 'Amount']}
+                    cursor={{fill: '#ffffff10'}}
+                  />
+                  <Bar 
+                    dataKey="amount" 
+                    fill="#ffffff" 
+                    radius={[6, 6, 0, 0]} 
+                    barSize={40}
+                  />
                 </BarChart>
               </ResponsiveContainer>
             ) : (
@@ -312,7 +363,7 @@ const AdminOverview = () => {
           </h3>
           <Button variant="outline" size="sm" onClick={() => navigate('/admin/audit')}>View All</Button>
         </div>
-        <div className="overflow-x-auto">
+        <div className="overflow-x-auto max-h-[400px] overflow-y-auto">
           {loadingLogs ? (
             <div className="p-8 text-center text-slate-400">
               <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600 mx-auto mb-4"></div>

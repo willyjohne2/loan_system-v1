@@ -87,12 +87,28 @@ export const loanService = {
     const res = await api.post('/payments/mpesa/', data);
     return res.data;
   },
-  getAuditLogs: async () => {
-    const res = await api.get('/audit-logs/');
+  getAuditLogs: async (params = {}) => {
+    const res = await api.get('/audit-logs/', { params });
+    return res.data;
+  },
+  getDeactivationRequests: async () => {
+    const res = await api.get('/deactivation-requests/');
+    return res.data;
+  },
+  createDeactivationRequest: async (data) => {
+    const res = await api.post('/deactivation-requests/', data);
+    return res.data;
+  },
+  updateDeactivationRequest: async (id, data) => {
+    const res = await api.patch(`/deactivation-requests/${id}/`, data);
     return res.data;
   },
   getLoanProducts: async () => {
     const res = await api.get('/loan-products/');
+    return res.data;
+  },
+  getAdminProfile: async (id) => {
+    const res = await api.get(`/admins/${id}/`);
     return res.data;
   },
   getAllAdmins: async () => {

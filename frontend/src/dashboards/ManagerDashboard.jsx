@@ -30,7 +30,8 @@ import {
   Upload,
   BarChart3,
   ExternalLink,
-  MessageSquareShare
+  MessageSquareShare,
+  ShieldOff
 } from 'lucide-react';
 import { 
   BarChart, 
@@ -46,10 +47,54 @@ import {
   PieChart as RePieChart,
   Pie
 } from 'recharts';
+import DeactivationRequestModal from '../components/ui/DeactivationRequestModal';
 
 const ManagerDashboard = () => {
   const { user, updateUser } = useAuth();
-  const [selectedCounty, setSelectedCounty] = useState('All');
+  const [selectedRegion, setSelectedRegion] = useState('Kirinyaga');
+  
+  const kirinyagaRegions = [
+    'Mwea East', 'Mwea West', 'Kirinyaga Central', 'Kirinyaga East (Gichugu)', 
+    'Kirinyaga West (Ndiao)', 'Kerugoya Town', 'Sagana', 'Kutus', 'Kagio', 'Wang\'uru'
+  ];
+
+  // Derive initial values
+  const rawRegion = user?.admin?.region || user?.region || 'Kirinyaga';
+  const currentRegion = kirinyagaRegions.includes(rawRegion) ? rawRegion : 'Kirinyaga';
+
+  useEffect(() => {
+    const refreshProfile = async () => {
+      const adminId = user?.admin?.id || user?.id; // Standardize ID access
+      if (adminId) {
+        try {
+          const latestProfile = await loanService.getAdminProfile(adminId);
+          if (latestProfile && latestProfile.region) {
+            // Update auth context so other components see it
+            updateUser({ admin: latestProfile });
+            
+            // Update local state if it matches our list
+            if (kirinyagaRegions.includes(latestProfile.region)) {
+              setSelectedRegion(latestProfile.region);
+            }
+          }
+        } catch (err) {
+          console.error("Failed to refresh manager profile:", err);
+        }
+      }
+    };
+    
+    refreshProfile();
+    // One-time refresh on mount
+  }, []);
+
+  // Update selectedRegion when user object changes (from AuthContext)
+  useEffect(() => {
+    const updatedRaw = user?.admin?.region || user?.region;
+    if (updatedRaw && kirinyagaRegions.includes(updatedRaw)) {
+      setSelectedRegion(updatedRaw);
+    }
+  }, [user]);
+
   const [officers, setOfficers] = useState([]);
   const [customers, setCustomers] = useState([]);
   const [unverifiedCustomers, setUnverifiedCustomers] = useState([]);
@@ -60,12 +105,16 @@ const ManagerDashboard = () => {
   const [isBulkModalOpen, setIsBulkModalOpen] = useState(false);
   const [selectedCustomer, setSelectedCustomer] = useState(null);
   const [isReviewOpen, setIsReviewOpen] = useState(false);
+  const [isDeactivateModalOpen, setIsDeactivateModalOpen] = useState(false);
+  const [officerToDeactivate, setOfficerToDeactivate] = useState(null);
+  const [submittingDeactivation, setSubmittingDeactivation] = useState(false);
   const [reviewingCustomer, setReviewingCustomer] = useState(null);
   const [reviewingLoan, setReviewingLoan] = useState(null);
   const [updating, setUpdating] = useState(false);
   const [loadingStats, setLoadingStats] = useState(true);
   const [loadingTables, setLoadingTables] = useState(true);
   const [chartData, setChartData] = useState([]);
+  const [isChartPlaceholder, setIsChartPlaceholder] = useState(false);
   const [statusDistribution, setStatusDistribution] = useState([]);
   const [stats, setStats] = useState({
     served: 0,
@@ -78,26 +127,11 @@ const ManagerDashboard = () => {
     unverifiedLoans: 0
   });
 
-  const regionMapping = {
-    'Kirinyaga': ['Mwea East', 'Mwea West', 'Kirinyaga Central', 'Kirinyaga East (Gichugu)', 'Kirinyaga West (Ndiao)', 'Kerugoya Town', 'Sagana', 'Kutus', 'Kagio', 'Wang\'uru'],
-    'Central': ['Nairobi', 'Kiambu', 'Murang\'a', 'Nyeri', 'Kirinyaga', 'Nyandarua'],
-    'Coast': ['Mombasa', 'Kwale', 'Kilifi', 'Tana River', 'Lamu', 'Taita-Taveta'],
-    'Nairobi': ['Nairobi CBD', 'Westlands', 'Dagoretti', 'Embakasi', 'Kasarani'],
-    'Rift Valley': ['Nakuru', 'Uasin Gishu', 'Kajiado', 'Narok', 'Bomet', 'Kericho', 'Trans Nzoia'],
-    'Western': ['Kakamega', 'Vihiga', 'Bungoma', 'Busia'],
-    'Nyanza': ['Kisumu', 'Siaya', 'Homa Bay', 'Migori', 'Kisii', 'Nyamira'],
-    'Eastern': ['Machakos', 'Kitui', 'Makueni', 'Meru', 'Embu', 'Isiolo'],
-    'North Eastern': ['Garissa', 'Wajir', 'Mandera']
-  };
-
-  const currentRegion = user?.admin?.region || user?.region || 'Central';
-  const counties = ['All', ...(regionMapping[currentRegion] || regionMapping['Central'])];
-
   const [analytics, setAnalytics] = useState({ monthly_disbursements: [], status_breakdown: [] });
 
   const fetchAnalytics = async () => {
     try {
-      const data = await loanService.getAnalytics(currentRegion);
+      const data = await loanService.getAnalytics(selectedRegion);
       if (data && data.monthly_disbursements) {
         setAnalytics(data);
       }
@@ -122,15 +156,18 @@ const ManagerDashboard = () => {
       const officersList = offData.results || offData;
       let customersList = custData.results || custData;
 
-      // Apply County Filter if selected
-      if (selectedCounty !== 'All') {
-          customersList = customersList.filter(c => c.profile?.county === selectedCounty);
+      // Apply Regional Filter if selected
+      if (selectedRegion !== 'All' && selectedRegion !== 'Kirinyaga') {
+          customersList = customersList.filter(c => c.profile?.region === selectedRegion);
           const validCustomerIds = new Set(customersList.map(c => c.id));
           loansList = loansList.filter(l => validCustomerIds.has(l.user));
+          const validLoanIds = new Set(loansList.map(l => l.id));
           
           // Recalculate stats based on filtered data
           const issued = loansList.reduce((acc, l) => acc + parseAmount(l.principal_amount), 0);
-          const repaid = repaymentsList.reduce((acc, r) => acc + parseAmount(r.amount_paid), 0);
+          const filteredRepayments = repaymentsList.filter(r => validLoanIds.has(r.loan));
+          const repaid = filteredRepayments.reduce((acc, r) => acc + parseAmount(r.amount_paid), 0);
+          
           setStats(prev => ({
             ...prev,
             issued: issued,
@@ -189,16 +226,43 @@ const ManagerDashboard = () => {
       const unverifiedCount = loansList.filter(l => (l.status || '').toUpperCase() === 'UNVERIFIED').length;
 
       // Process Chart Data (Monthly Disbursement)
+      // Process Chart Data: Show last 6 months
+      const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+      const last6Months = [];
+      for (let i = 5; i >= 0; i--) {
+        const d = new Date();
+        d.setMonth(d.getMonth() - i);
+        last6Months.push(monthNames[d.getMonth()]);
+      }
+
       const monthlyData = loansList.reduce((acc, loan) => {
         const month = new Date(loan.created_at).toLocaleString('default', { month: 'short' });
         acc[month] = (acc[month] || 0) + parseAmount(loan.principal_amount);
         return acc;
       }, {});
-      
-      setChartData(Object.keys(monthlyData).map(month => ({
+
+      const formattedData = last6Months.map(month => ({
         name: month,
-        amount: monthlyData[month]
-      })));
+        amount: monthlyData[month] || 0
+      }));
+
+      const totalVolume = formattedData.reduce((sum, item) => sum + item.amount, 0);
+
+      if (totalVolume === 0) {
+        setIsChartPlaceholder(true);
+        const previewData = [
+          { name: 'Jan', amount: 80000 },
+          { name: 'Feb', amount: 165000 },
+          { name: 'Mar', amount: 148000 },
+          { name: 'Apr', amount: 210000 },
+          { name: 'May', amount: 290000 },
+          { name: 'Jun', amount: 250000 }
+        ];
+        setChartData(previewData);
+      } else {
+        setIsChartPlaceholder(false);
+        setChartData(formattedData);
+      }
 
       setStats(prev => ({
         ...prev,
@@ -220,6 +284,24 @@ const ManagerDashboard = () => {
     }
   };
 
+  const handleDeactivationSubmit = async (officerId, reason) => {
+    setSubmittingDeactivation(true);
+    try {
+      await loanService.createDeactivationRequest({
+        officer: officerId,
+        reason: reason
+      });
+      setIsDeactivateModalOpen(false);
+      setOfficerToDeactivate(null);
+      alert("Deactivation request submitted successfully. Admin will review it.");
+    } catch (err) {
+      console.error("Error submitting deactivation request:", err);
+      alert(err.response?.data?.error || "Failed to submit request.");
+    } finally {
+      setSubmittingDeactivation(false);
+    }
+  };
+
   useEffect(() => {
     fetchCoreData();
     fetchAnalytics();
@@ -231,7 +313,7 @@ const ManagerDashboard = () => {
     }, 60000);
     
     return () => clearInterval(interval);
-  }, [selectedCounty]);
+  }, [selectedRegion]);
 
   const getStatusColor = (status) => {
     switch (status?.toUpperCase()) {
@@ -296,23 +378,14 @@ const ManagerDashboard = () => {
         <div>
           <h3 className="text-xl font-bold text-slate-900 dark:text-white flex items-center gap-2">
             <MapPin className="w-5 h-5 text-emerald-600" />
-            {user?.admin?.region || user?.region || 'Central'} Kenya Region
+            {selectedRegion} Overview
           </h3>
-          <p className="text-sm text-slate-600 dark:text-slate-300 mt-1">Managing {counties.length - 1} counties • {stats.activeOfficers} field officers</p>
+          <p className="text-sm text-slate-600 dark:text-slate-300 mt-1 italic font-medium">
+             Managing {selectedRegion} region • {stats.activeOfficers} field officers
+          </p>
         </div>
         
         <div className="flex items-center gap-3 flex-wrap">
-          <span className="text-sm font-medium text-slate-600 dark:text-slate-400">Filter by County:</span>
-          <div className="relative">
-            <select 
-              value={selectedCounty}
-              onChange={(e) => setSelectedCounty(e.target.value)}
-              className="appearance-none pl-4 pr-10 py-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-sm font-medium focus:outline-none focus:ring-2 focus:ring-emerald-500/20 dark:focus:ring-emerald-400/20 cursor-pointer"
-            >
-              {counties.map(c => <option key={c} value={c}>{c}</option>)}
-            </select>
-            <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
-          </div>
           <Button onClick={() => setIsRegistering(true)} className="flex items-center gap-2">
             <UserPlus className="w-4 h-4" />
             Register Customer
@@ -364,20 +437,43 @@ const ManagerDashboard = () => {
               <BarChart3 className="w-5 h-5 text-primary-600" />
               Monthly Disbursement Volume
             </h3>
+            {isChartPlaceholder && (
+              <span className="text-[10px] font-bold bg-amber-100 text-amber-600 px-2 py-1 rounded uppercase tracking-tighter">
+                Preview Data
+              </span>
+            )}
           </div>
-          <div className="h-72 w-full flex items-center justify-center">
+          <div className="h-72 w-full min-w-0" style={{ minHeight: '300px' }}>
             {chartData.length > 0 ? (
               <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={chartData}>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
-                  <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fill: '#64748b', fontSize: 12}} />
-                  <YAxis axisLine={false} tickLine={false} tick={{fill: '#64748b', fontSize: 12}} tickFormatter={(val) => `K${val/1000}k`} />
-                  <ChartTooltip 
-                    contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
-                    formatter={(value) => [`KES ${value.toLocaleString()}`, 'Amount']}
-                    cursor={{fill: 'transparent'}}
+                <BarChart data={chartData} margin={{ top: 20, right: 30, left: 20, bottom: 20 }}>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#334155" />
+                  <XAxis 
+                    dataKey="name" 
+                    axisLine={false} 
+                    tickLine={false} 
+                    tick={{fill: '#94a3b8', fontSize: 12}} 
                   />
-                  <Bar dataKey="amount" fill="#0f172a" radius={[4, 4, 0, 0]} barSize={40} />
+                  <YAxis 
+                    axisLine={false} 
+                    tickLine={false} 
+                    tick={{fill: '#94a3b8', fontSize: 12}} 
+                    tickFormatter={(val) => `K${val/1000}k`} 
+                    width={50}
+                  />
+                  <ChartTooltip 
+                    contentStyle={{ backgroundColor: '#1e293b', borderRadius: '12px', border: '1px solid #334155', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }}
+                    itemStyle={{ color: '#ffffff' }}
+                    labelStyle={{ color: '#94a3b8' }}
+                    formatter={(value) => [`KES ${value.toLocaleString()}`, isChartPlaceholder ? 'Projected' : 'Amount']}
+                    cursor={{fill: '#ffffff10'}}
+                  />
+                  <Bar 
+                    dataKey="amount" 
+                    fill="#ffffff" 
+                    radius={[6, 6, 0, 0]} 
+                    barSize={40}
+                  />
                 </BarChart>
               </ResponsiveContainer>
             ) : (
@@ -466,6 +562,7 @@ const ManagerDashboard = () => {
                   <th className="px-6 py-3 text-xs font-bold text-slate-500 uppercase text-center">Customers</th>
                   <th className="px-6 py-3 text-xs font-bold text-slate-500 uppercase text-center">Loans</th>
                   <th className="px-6 py-3 text-xs font-bold text-slate-500 uppercase text-right">Volume (KES)</th>
+                  <th className="px-6 py-3 text-xs font-bold text-slate-500 uppercase text-center">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
@@ -484,11 +581,26 @@ const ManagerDashboard = () => {
                     <td className="px-6 py-4 text-right text-sm font-bold text-primary-600 dark:text-primary-400">
                        {(off.volume || 0).toLocaleString()}
                     </td>
+                    <td className="px-6 py-4 text-center">
+                       <button 
+                         type="button"
+                         onClick={(e) => {
+                           e.preventDefault();
+                           e.stopPropagation();
+                           setOfficerToDeactivate(off);
+                           setIsDeactivateModalOpen(true);
+                         }}
+                         className="p-1.5 hover:bg-red-50 dark:hover:bg-red-900/20 text-red-600 rounded-lg transition-colors relative z-10"
+                         title="Request Deactivation"
+                       >
+                         <ShieldOff className="w-5 h-5" />
+                       </button>
+                    </td>
                   </tr>
                 ))}
                 {officers.length === 0 && (
                   <tr>
-                    <td colSpan="4" className="px-6 py-12 text-center text-slate-400 italic">No field officers assigned to this region yet</td>
+                    <td colSpan="5" className="px-6 py-12 text-center text-slate-400 italic">No field officers assigned to this region yet</td>
                   </tr>
                 )}
               </tbody>
@@ -565,7 +677,7 @@ const ManagerDashboard = () => {
            </div>
         </div>
         
-        <div className="overflow-x-auto">
+        <div className="overflow-x-auto max-h-[400px] overflow-y-auto">
           <table className="w-full text-left">
             <thead>
               <tr className="text-xs font-bold text-slate-500 uppercase border-b border-slate-100 dark:border-slate-800">
@@ -1074,6 +1186,13 @@ const ManagerDashboard = () => {
           onClose={() => setIsReviewOpen(false)}
         />
       )}
+      <DeactivationRequestModal
+        isOpen={isDeactivateModalOpen}
+        onClose={() => setIsDeactivateModalOpen(false)}
+        officer={officerToDeactivate}
+        onSubmit={handleDeactivationSubmit}
+        loading={submittingDeactivation}
+      />
     </div>
   );
 };

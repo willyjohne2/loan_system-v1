@@ -12,7 +12,7 @@ export function cn(...inputs) {
 /**
  * Button Component
  */
-export const Button = ({ className, variant = 'primary', ...props }) => {
+export const Button = ({ className, variant = 'primary', loading = false, children, ...props }) => {
   const variants = {
     primary: "bg-primary-600 text-white hover:bg-primary-700 shadow-sm",
     secondary: "bg-white text-slate-700 border border-slate-200 hover:bg-slate-50 dark:bg-slate-800 dark:text-slate-200 dark:border-slate-700 dark:hover:bg-slate-700",
@@ -22,13 +22,19 @@ export const Button = ({ className, variant = 'primary', ...props }) => {
 
   return (
     <button
+      disabled={loading || props.disabled}
       className={cn(
-        "px-4 py-2 rounded-lg text-sm font-medium transition-all focus:outline-none focus:ring-2 focus:ring-primary-500/20 disabled:opacity-50",
+        "px-4 py-2 rounded-lg text-sm font-medium transition-all focus:outline-none focus:ring-2 focus:ring-primary-500/20 disabled:opacity-50 flex items-center justify-center gap-2",
         variants[variant],
         className
       )}
       {...props}
-    />
+    >
+      {loading && (
+        <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
+      )}
+      {children}
+    </button>
   );
 };
 

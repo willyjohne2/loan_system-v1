@@ -13,6 +13,7 @@ from .models import (
     LoanDocuments,
     LoanActivity,
     SMSLog,
+    DeactivationRequest,
 )
 
 
@@ -36,6 +37,7 @@ class AdminSerializer(serializers.ModelSerializer):
             "region",
             "is_verified",
             "is_blocked",
+            "is_super_admin",
             "created_at",
         ]
 
@@ -62,21 +64,55 @@ class UserProfileSerializer(serializers.ModelSerializer):
 
 class UserSerializer(serializers.ModelSerializer):
     profile = UserProfileSerializer(required=False)
+    national_id = serializers.CharField(write_only=True, required=False)
 
     class Meta:
         model = Users
         fields = "__all__"
 
+    def validate_phone(self, value):
+        # Normalize phone: remove spaces, dashes, etc.
+        import re
+
+        normalized = re.sub(r"\D", "", value)
+        # If starts with 07 or 01 (Kenyan mobile), convert to 254
+        if normalized.startswith("0") and len(normalized) == 10:
+            normalized = "254" + normalized[1:]
+        # If starts with 7 or 1...
+        elif (normalized.startswith("7") or normalized.startswith("1")) and len(
+            normalized
+        ) == 9:
+            normalized = "254" + normalized
+        return normalized
+
+    def validate_national_id(self, value):
+        if not value:
+            return value
+        # Check if another user has this national ID
+        existing = UserProfiles.objects.filter(national_id=value)
+        if self.instance:
+            existing = existing.exclude(user=self.instance)
+        if existing.exists():
+            raise serializers.ValidationError(
+                "A user with this National ID already exists."
+            )
+        return value
+
     def create(self, validated_data):
+        national_id = validated_data.pop("national_id", None)
         profile_data = self.context.get("request").data
+
+        # Ensure email is None if empty string
+        if "email" in validated_data and not validated_data["email"]:
+            validated_data["email"] = None
+
         user = Users.objects.create(**validated_data)
 
-        # The signal in signals.py likely already created a profile
         # Use update_or_create to populate the fields correctly
         UserProfiles.objects.update_or_create(
             user=user,
             defaults={
-                "national_id": profile_data.get("national_id"),
+                "national_id": national_id or profile_data.get("national_id"),
                 "date_of_birth": profile_data.get("date_of_birth") or None,
                 "region": profile_data.get("region"),
                 "county": profile_data.get("county"),
@@ -92,10 +128,13 @@ class UserSerializer(serializers.ModelSerializer):
         return user
 
     def update(self, instance, validated_data):
+        national_id = validated_data.pop("national_id", None)
         profile_data = self.context.get("request").data
 
         # Update user fields
         for attr, value in validated_data.items():
+            if attr == "email" and not value:
+                value = None
             setattr(instance, attr, value)
         instance.save()
 
@@ -103,8 +142,7 @@ class UserSerializer(serializers.ModelSerializer):
         profile, created = UserProfiles.objects.get_or_create(user=instance)
 
         # Update profile fields if provided
-        for field in [
-            "national_id",
+        profile_fields = [
             "date_of_birth",
             "region",
             "county",
@@ -113,7 +151,15 @@ class UserSerializer(serializers.ModelSerializer):
             "address",
             "employment_status",
             "monthly_income",
-        ]:
+        ]
+
+        # Priority to validation-passed national_id
+        if national_id:
+            profile.national_id = national_id
+        elif "national_id" in profile_data:
+            profile.national_id = profile_data.get("national_id")
+
+        for field in profile_fields:
             if field in profile_data:
                 val = profile_data.get(field)
                 if field in ["date_of_birth", "monthly_income"] and not val:
@@ -172,9 +218,36 @@ class NotificationSerializer(serializers.ModelSerializer):
 
 
 class AuditLogSerializer(serializers.ModelSerializer):
+    admin_name = serializers.ReadOnlyField(source="admin.full_name")
+    admin_role = serializers.ReadOnlyField(source="admin.role")
+
     class Meta:
         model = AuditLogs
+        fields = [
+            "id",
+            "admin",
+            "admin_name",
+            "admin_role",
+            "action",
+            "log_type",
+            "table_name",
+            "record_id",
+            "old_data",
+            "new_data",
+            "created_at",
+        ]
+
+
+class DeactivationRequestSerializer(serializers.ModelSerializer):
+    officer_name = serializers.ReadOnlyField(source="officer.full_name")
+    officer_email = serializers.ReadOnlyField(source="officer.email")
+    requested_by_name = serializers.ReadOnlyField(source="requested_by.full_name")
+    processed_by_name = serializers.ReadOnlyField(source="processed_by.full_name")
+
+    class Meta:
+        model = DeactivationRequest
         fields = "__all__"
+        read_only_fields = ["requested_by", "processed_by", "processed_at"]
 
 
 class SystemSettingsSerializer(serializers.ModelSerializer):

@@ -12,6 +12,7 @@ const AdminManagers = () => {
   const [showActivity, setShowActivity] = useState(false);
   const [selectedAdmin, setSelectedAdmin] = useState(null);
   const [saving, setSaving] = useState(false);
+  const [filterRegion, setFilterRegion] = useState('All');
   const [formData, setFormData] = useState({
     full_name: '',
     email: '',
@@ -19,7 +20,10 @@ const AdminManagers = () => {
     region: ''
   });
 
-  const regions = ['Nairobi', 'Central', 'Coast', 'Eastern', 'North Eastern', 'Nyanza', 'Rift Valley', 'Western'];
+  const regions = [
+    'Mwea East', 'Mwea West', 'Kirinyaga Central', 'Kirinyaga East (Gichugu)', 
+    'Kirinyaga West (Ndiao)', 'Kerugoya Town', 'Sagana', 'Kutus', 'Kagio', 'Wang\'uru'
+  ];
 
   useEffect(() => {
     fetchManagers();
@@ -80,10 +84,25 @@ const AdminManagers = () => {
           <h3 className="text-lg font-semibold">Regional Managers</h3>
           <p className="text-sm text-slate-500">Manage and oversee all regional administrators.</p>
         </div>
-        <Button className="flex items-center">
-          <UserPlus className="w-4 h-4 mr-2" />
-          Register Manager
-        </Button>
+        <div className="flex items-center gap-4">
+          <div className="flex items-center gap-2">
+            <MapPin className="w-4 h-4 text-slate-400" />
+            <select 
+              value={filterRegion}
+              onChange={(e) => setFilterRegion(e.target.value)}
+              className="text-sm border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800 py-2 pl-3 pr-8 focus:ring-primary-500 outline-none"
+            >
+              <option value="All">All Regions</option>
+              {regions.map(r => (
+                <option key={r} value={r}>{r}</option>
+              ))}
+            </select>
+          </div>.filter(m => filterRegion === 'All' || m.region === filterRegion)
+          <Button className="flex items-center">
+            <UserPlus className="w-4 h-4 mr-2" />
+            Register Manager
+          </Button>
+        </div>
       </div>
 
       {managers.length === 0 ? (

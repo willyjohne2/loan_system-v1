@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { loanService } from '../api/api';
 import { Trash2, AlertCircle, CheckCircle, UserPlus, Mail, Shield, Send } from 'lucide-react';
+import { useAuth } from '../context/AuthContext';
 
 const AdminAccounts = () => {
+  const { user } = useAuth();
   const [admins, setAdmins] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -194,7 +196,14 @@ const AdminAccounts = () => {
                   admins.map((admin) => (
                     <tr key={admin.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
                       <td className="px-6 py-4">
-                        <div className="font-medium text-slate-900 dark:text-white">{admin.full_name}</div>
+                        <div className="flex items-center gap-2">
+                          <div className="font-medium text-slate-900 dark:text-white">{admin.full_name}</div>
+                          {admin.is_super_admin && (
+                            <span className="flex items-center gap-1 text-[10px] bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded font-bold uppercase tracking-tight">
+                              <Shield className="w-2.5 h-2.5" /> Super
+                            </span>
+                          )}
+                        </div>
                       </td>
                       <td className="px-6 py-4 text-slate-600 dark:text-slate-300">{admin.email}</td>
                       <td className="px-6 py-4">
@@ -207,15 +216,19 @@ const AdminAccounts = () => {
                       </td>
                       <td className="px-6 py-4 text-slate-600 dark:text-slate-300">{admin.phone || '-'}</td>
                       <td className="px-6 py-4 text-right">
-                        <button
-                          onClick={() => handleDeleteClick(admin)}
-                          disabled={deletingId === admin.id}
-                          className="inline-flex items-center gap-2 px-3 py-2 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors disabled:opacity-50"
-                          title="Delete admin"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                          Delete
-                        </button>
+                        {user?.admin?.is_super_admin && admin.id !== user?.admin?.id && (
+                          <button
+                            onClick={() => handleDeleteClick(admin)}
+                            disabled={deletingId === admin.id}
+                            className="inline-flex items-center gap-2 px-3 py-2 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors disabled:opacity-50"
+                            title="Delete admin"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                            Dismiss
+                          </button>
+                        )}
+                        {!user?.admin?.is_super_admin && <span className="text-xs text-slate-400 italic">Restricted</span>}
+                        {user?.admin?.is_super_admin && admin.id === user?.admin?.id && <span className="text-xs text-primary-500 font-medium">You</span>}
                       </td>
                     </tr>
                   ))

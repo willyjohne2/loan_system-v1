@@ -1,15 +1,25 @@
 import React, { useEffect, useState } from 'react';
 import { loanService } from '../api/api';
 import { Table, Button } from '../components/ui/Shared';
-import { UserPlus, Shield, Activity } from 'lucide-react';
+import { UserPlus, Shield, Activity, ShieldOff } from 'lucide-react';
 import AdminActivityModal from '../components/ui/AdminActivityModal';
+import DeactivationRequestModal from '../components/ui/DeactivationRequestModal';
+import { useAuth } from '../context/AuthContext';
 
 const AdminOfficers = ({ role = 'FINANCIAL_OFFICER' }) => {
+  const { user } = useAuth();
   const [officers, setOfficers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selectedAdmin, setSelectedAdmin] = useState(null);
   const [showActivity, setShowActivity] = useState(false);
   const [error, setError] = useState('');
+
+  // Deactivation Request State
+  const [isDeactivateModalOpen, setIsDeactivateModalOpen] = useState(false);
+  const [officerToDeactivate, setOfficerToDeactivate] = useState(null);
+  const [submittingDeactivation, setSubmittingDeactivation] = useState(false);
+
+  const userRole = user?.role || user?.admin?.role;
 
   useEffect(() => {
     const fetchOfficers = async () => {
@@ -33,6 +43,24 @@ const AdminOfficers = ({ role = 'FINANCIAL_OFFICER' }) => {
     };
     fetchOfficers();
   }, [role]);
+
+  const handleDeactivationSubmit = async (officerId, reason) => {
+    setSubmittingDeactivation(true);
+    try {
+      await loanService.createDeactivationRequest({
+        officer: officerId,
+        reason: reason
+      });
+      setIsDeactivateModalOpen(false);
+      setOfficerToDeactivate(null);
+      alert("Deactivation request submitted successfully. Admin will review it.");
+    } catch (err) {
+      console.error("Error submitting deactivation request:", err);
+      alert(err.response?.data?.error || "Failed to submit request.");
+    } finally {
+      setSubmittingDeactivation(false);
+    }
+  };
 
   if (loading) return <div className="flex items-center justify-center h-64 text-slate-500">Loading officers...</div>
 
@@ -87,7 +115,24 @@ const AdminOfficers = ({ role = 'FINANCIAL_OFFICER' }) => {
                     <Activity className="w-4 h-4" />
                     <span className="text-sm font-medium">Activity</span>
                 </button>
-                <button className="text-rose-600 hover:text-rose-700 text-sm font-medium">Deactivate</button>
+                <button 
+                  onClick={() => {
+                    if (userRole === 'MANAGER') {
+                      setOfficerToDeactivate(officer);
+                      setIsDeactivateModalOpen(true);
+                    } else if (window.confirm(`Are you sure you want to deactivate ${officer.full_name}? They will be immediately logged out.`)) {
+                      loanService.updateAdmin(officer.id, { is_blocked: true })
+                        .then(() => {
+                          alert("Officer deactivated successfully.");
+                          window.location.reload();
+                        })
+                        .catch(err => alert("Error: " + (err.response?.data?.error || err.message)));
+                    }
+                  }}
+                  className="text-rose-600 hover:text-rose-700 text-sm font-medium"
+                >
+                  {userRole === 'MANAGER' ? 'Request Suspension' : 'Deactivate'}
+                </button>
               </td>
             </tr>
           )}
@@ -104,6 +149,14 @@ const AdminOfficers = ({ role = 'FINANCIAL_OFFICER' }) => {
             }}
           />
       )}
+
+      <DeactivationRequestModal
+        isOpen={isDeactivateModalOpen}
+        onClose={() => setIsDeactivateModalOpen(false)}
+        officer={officerToDeactivate}
+        onSubmit={handleDeactivationSubmit}
+        loading={submittingDeactivation}
+      />
     </div>
   );
 };

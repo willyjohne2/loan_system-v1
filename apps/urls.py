@@ -26,15 +26,27 @@ from .views import (
     BulkSMSView,
     SMSLogListView,
     AdminInviteView,
+    DeactivationRequestListCreateView,
+    DeactivationRequestDetailView,
 )
 
 urlpatterns = [
+    path(
+        "deactivation-requests/",
+        DeactivationRequestListCreateView.as_view(),
+        name="deactivation-requests",
+    ),
+    path(
+        "deactivation-requests/<str:pk>/",
+        DeactivationRequestDetailView.as_view(),
+        name="deactivation-request-detail",
+    ),
     path("sms-logs/", SMSLogListView.as_view(), name="sms-logs"),
     path("payments/mpesa/", MpesaRepaymentView.as_view(), name="mpesa-payment"),
     path("loans/bulk-sms-defaulters/", BulkSMSView.as_view(), name="bulk-sms"),
     path("notifications/", NotificationListView.as_view(), name="notifications"),
     path(
-        "notifications/<int:pk>/",
+        "notifications/<str:pk>/",
         NotificationUpdateView.as_view(),
         name="notification-detail",
     ),
@@ -53,12 +65,12 @@ urlpatterns = [
         name="password-reset-confirm",
     ),
     path("settings/", SystemSettingsView.as_view(), name="system-settings"),
+    path("admins/invite/", AdminInviteView.as_view(), name="invite-admin"),
     path("admins/", AdminListCreateView.as_view(), name="admins"),
     path("admins/<str:pk>/", AdminDetailView.as_view(), name="admin-detail"),
     path(
         "admins/<str:admin_id>/delete/", AdminDeleteView.as_view(), name="delete-admin"
     ),
-    path("admins/invite/", AdminInviteView.as_view(), name="invite-admin"),
     path("users/", UserListCreateView.as_view(), name="users"),
     path("users/check/", CheckUserView.as_view(), name="check-user"),
     path("users/<str:pk>/", UserDetailView.as_view(), name="user-detail"),

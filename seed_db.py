@@ -48,11 +48,17 @@ def seed_data():
             },
         )
 
-    # 2. Add Loan Products
+    # 2. Add Loan Products (Updating for Kirinyaga 5-8 weeks cycle)
     products_data = [
-        {"name": "Personal Loan", "min": 1000, "max": 50000, "rate": 10, "months": 12},
-        {"name": "Business Loan", "min": 50000, "max": 500000, "rate": 8, "months": 24},
-        {"name": "Emergency Loan", "min": 500, "max": 5000, "rate": 15, "months": 3},
+        {"name": "M-Pawa Kirinyaga", "min": 2000, "max": 10000, "rate": 5, "weeks": 5},
+        {
+            "name": "Standard Business",
+            "min": 10000,
+            "max": 50000,
+            "rate": 7,
+            "weeks": 8,
+        },
+        {"name": "Emergency Relief", "min": 500, "max": 2000, "rate": 10, "weeks": 4},
     ]
 
     products = []
@@ -64,7 +70,7 @@ def seed_data():
                 "min_amount": data["min"],
                 "max_amount": data["max"],
                 "interest_rate": data["rate"],
-                "duration_months": data["months"],
+                "duration_weeks": data["weeks"],
                 "created_at": datetime.now(),
             },
         )
