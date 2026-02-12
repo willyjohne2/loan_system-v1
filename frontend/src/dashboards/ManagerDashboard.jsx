@@ -5,6 +5,7 @@ import { Table, Button, Card, StatCard, Badge } from '../components/ui/Shared';
 import CustomerRegistrationForm from '../components/forms/CustomerRegistrationForm';
 import RepaymentModal from '../components/ui/RepaymentModal';
 import BulkCustomerSMSModal from '../components/ui/BulkCustomerSMSModal';
+import CustomerHistoryModal from '../components/ui/CustomerHistoryModal';
 import { 
   Users, 
   TrendingUp, 
@@ -58,6 +59,9 @@ const ManagerDashboard = () => {
   const [showRepaymentModal, setShowRepaymentModal] = useState(false);
   const [isBulkModalOpen, setIsBulkModalOpen] = useState(false);
   const [selectedCustomer, setSelectedCustomer] = useState(null);
+  const [isReviewOpen, setIsReviewOpen] = useState(false);
+  const [reviewingCustomer, setReviewingCustomer] = useState(null);
+  const [reviewingLoan, setReviewingLoan] = useState(null);
   const [updating, setUpdating] = useState(false);
   const [loadingStats, setLoadingStats] = useState(true);
   const [loadingTables, setLoadingTables] = useState(true);
@@ -96,7 +100,8 @@ const ManagerDashboard = () => {
 
   const fetchAnalytics = async () => {
     try {
-      const response = await fetch(`http://localhost:8000/api/loans/analytics/?region=${currentRegion}`, {
+      const baseUrl = loanService.api.defaults.baseURL;
+      const response = await fetch(`${baseUrl}/loans/analytics/?region=${currentRegion}`, {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`
         }
@@ -591,12 +596,15 @@ const ManagerDashboard = () => {
                     {new Date(loan.created_at).toLocaleDateString()}
                   </td>
                   <td className="px-4 py-4 text-right">
-                    <div className="flex justify-end gap-2">
+                    <div className="flex justify-end gap-2 text-slate-900 dark:text-slate-100 italic">
                       {loan.status === 'UNVERIFIED' && (
                         <Button 
                           size="xs" 
-                          className="bg-blue-600 hover:bg-blue-700 text-white"
-                          onClick={() => handleUpdateLoanStatus(loan.id, 'VERIFIED')}
+                          className="bg-blue-600 hover:bg-blue-700 text-white font-bold"
+                          onClick={() => {
+                            setSelectedCustomer(customers.find(c => c.id === loan.user));
+                            setSelectedLoan(loan);
+                          }}
                           disabled={updating}
                         >
                           Verify
@@ -695,7 +703,12 @@ const ManagerDashboard = () => {
                         size="sm" 
                         variant="outline"
                         className="border-amber-200 text-amber-700 hover:bg-amber-50 gap-2"
-                        onClick={() => handleVerifyUser(cust.id)}
+                        onClick={() => {
+                          const loan = loans.find(l => l.user === cust.id && l.status === 'UNVERIFIED');
+                          setReviewingCustomer(cust);
+                          setReviewingLoan(loan);
+                          setIsReviewOpen(true);
+                        }}
                         disabled={updating}
                       >
                         <UserCheck className="w-4 h-4" />
@@ -749,7 +762,10 @@ const ManagerDashboard = () => {
                     ID: {customers.find(c => c.id === selectedLoan.user)?.profile?.national_id || 'N/A'}
                   </p>
                   <p className="text-sm text-slate-500">
-                    Income: KES {Number(customers.find(c => c.id === selectedLoan.user)?.profile?.monthly_income || 0).toLocaleString()}
+                    Location: {customers.find(c => c.id === selectedLoan.user)?.profile?.town}, {customers.find(c => c.id === selectedLoan.user)?.profile?.region}
+                  </p>
+                  <p className="text-sm text-slate-500 capitalize">
+                    {customers.find(c => c.id === selectedLoan.user)?.profile?.employment_status || 'N/A'} • KES {Number(customers.find(c => c.id === selectedLoan.user)?.profile?.monthly_income || 0).toLocaleString()}/mo
                   </p>
                 </div>
                 <div>
@@ -764,7 +780,7 @@ const ManagerDashboard = () => {
                 </div>
               </div>
               
-              <div className="space-y-4">
+              <div className="space-y-4 text-right flex flex-col items-end">
                <div>
                   <label className="text-xs font-bold text-slate-400 uppercase tracking-wider">Status</label>
                   <div className="mt-1">
@@ -775,11 +791,35 @@ const ManagerDashboard = () => {
                 </div>
                 <div>
                   <label className="text-xs font-bold text-slate-400 uppercase tracking-wider">Duration</label>
-                  <p className="text-lg font-semibold text-slate-800 dark:text-slate-200">{selectedLoan.duration_months} Months</p>
+                  <p className="text-lg font-semibold text-slate-800 dark:text-slate-200">
+                    {selectedLoan.duration_weeks ? `${selectedLoan.duration_weeks} Weeks` : `${selectedLoan.duration_months} Months`}
+                  </p>
                 </div>
-                <div>
-                  <label className="text-xs font-bold text-slate-400 uppercase tracking-wider">Date Applied</label>
-                  <p className="text-slate-600 dark:text-slate-400">{new Date(selectedLoan.created_at).toLocaleString()}</p>
+                
+                {/* Visual Identity for Manager Review */}
+                <div className="flex gap-2 h-24 mt-2">
+                   {customers.find(c => c.id === selectedLoan.user)?.profile?.profile_image && (
+                     <div className="h-full aspect-square rounded-lg overflow-hidden border border-slate-200 bg-slate-100">
+                        <img 
+                          src={customers.find(c => c.id === selectedLoan.user).profile.profile_image.startsWith('http') 
+                            ? customers.find(c => c.id === selectedLoan.user).profile.profile_image 
+                            : `${loanService.api.defaults.baseURL.replace('/api', '')}${customers.find(c => c.id === selectedLoan.user).profile.profile_image}`} 
+                          alt="Profile" 
+                          className="w-full h-full object-cover"
+                        />
+                     </div>
+                   )}
+                   {customers.find(c => c.id === selectedLoan.user)?.profile?.national_id_image && (
+                     <div className="h-full aspect-[3/2] rounded-lg overflow-hidden border border-slate-200 bg-slate-100">
+                        <img 
+                          src={customers.find(c => c.id === selectedLoan.user).profile.national_id_image.startsWith('http') 
+                            ? customers.find(c => c.id === selectedLoan.user).profile.national_id_image 
+                            : `${loanService.api.defaults.baseURL.replace('/api', '')}${customers.find(c => c.id === selectedLoan.user).profile.national_id_image}`} 
+                          alt="ID" 
+                          className="w-full h-full object-cover"
+                        />
+                     </div>
+                   )}
                 </div>
               </div>
             </div>
@@ -826,7 +866,7 @@ const ManagerDashboard = () => {
                            </div>
                          </div>
                          <a 
-                           href={`http://localhost:8000${doc.file}`} 
+                           href={doc.file.startsWith('http') ? doc.file : `${loanService.api.defaults.baseURL.replace('/api', '')}${doc.file}`} 
                            target="_blank" 
                            rel="noopener noreferrer"
                            className="text-xs text-primary-600 hover:underline font-bold"
@@ -1004,16 +1044,35 @@ const ManagerDashboard = () => {
               {!selectedCustomer.is_verified && (
                 <Button 
                   className="bg-primary-600 hover:bg-primary-700 text-white flex items-center gap-2"
-                  onClick={() => handleVerifyUser(selectedCustomer.id)}
+                  onClick={() => {
+                    const loan = loans.find(l => l.user === selectedCustomer.id && l.status === 'UNVERIFIED');
+                    setReviewingCustomer(selectedCustomer);
+                    setReviewingLoan(loan);
+                    setIsReviewOpen(true);
+                    setSelectedCustomer(null);
+                  }}
                   disabled={updating}
                 >
                   <UserCheck className="w-4 h-4" />
-                  Approve Verification
+                  Review & Verify
                 </Button>
               )}
             </div>
           </Card>
         </div>
+      )}
+
+      {isReviewOpen && (
+        <CustomerHistoryModal 
+          isOpen={isReviewOpen}
+          customer={reviewingCustomer}
+          loanToVerify={reviewingLoan}
+          onVerified={() => {
+            setIsReviewOpen(false);
+            window.location.reload();
+          }}
+          onClose={() => setIsReviewOpen(false)}
+        />
       )}
     </div>
   );

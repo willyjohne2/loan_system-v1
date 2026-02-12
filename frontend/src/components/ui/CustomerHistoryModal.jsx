@@ -3,11 +3,12 @@ import { loanService } from '../../api/api';
 import { Card, Button, Table } from '../ui/Shared';
 import { X, TrendingUp, TrendingDown, Clock, CheckCircle, FileText, Wallet } from 'lucide-react';
 
-const CustomerHistoryModal = ({ customer, isOpen, onClose }) => {
+const CustomerHistoryModal = ({ customer, isOpen, onClose, loanToVerify, onVerified }) => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [loans, setLoans] = useState([]);
   const [repayments, setRepayments] = useState([]);
+  const [updating, setUpdating] = useState(false);
   const [stats, setStats] = useState({
     totalBorrowed: 0,
     totalPaid: 0,
@@ -20,6 +21,20 @@ const CustomerHistoryModal = ({ customer, isOpen, onClose }) => {
       fetchHistory();
     }
   }, [isOpen, customer]);
+
+  const handleVerify = async () => {
+    if (!loanToVerify) return;
+    setUpdating(true);
+    try {
+      await loanService.api.patch(`/loans/${loanToVerify.id}/`, { status: 'VERIFIED' });
+      onVerified?.();
+      onClose();
+    } catch (err) {
+      alert("Verification failed: " + (err.response?.data?.error || err.message));
+    } finally {
+      setUpdating(false);
+    }
+  };
 
   const fetchHistory = async () => {
     setLoading(true);
@@ -159,6 +174,28 @@ const CustomerHistoryModal = ({ customer, isOpen, onClose }) => {
                 </div>
               </div>
 
+              {/* Profile Deep Dive */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6 p-5 bg-slate-50 dark:bg-slate-800/30 rounded-2xl border border-slate-100 dark:border-slate-800">
+                <div className="space-y-1">
+                  <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">National ID No</span>
+                  <p className="font-bold text-slate-800 dark:text-slate-200">{customer.profile?.national_id || 'N/A'}</p>
+                </div>
+                <div className="space-y-1">
+                  <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Location</span>
+                  <p className="font-bold text-slate-800 dark:text-slate-200">
+                    {customer.profile?.town}, {customer.profile?.county}
+                    <span className="block text-[10px] font-medium text-slate-500">{customer.profile?.village || 'No Village'} - {customer.profile?.region}</span>
+                  </p>
+                </div>
+                <div className="space-y-1">
+                  <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Employment</span>
+                  <p className="font-bold text-slate-800 dark:text-slate-200">
+                    {customer.profile?.employment_status || 'N/A'}
+                    <span className="block text-[10px] font-medium text-emerald-600">KES {Number(customer.profile?.monthly_income || 0).toLocaleString()}/mo</span>
+                  </p>
+                </div>
+              </div>
+
               {/* Lists */}
               <div className="space-y-8">
                 <div>
@@ -223,7 +260,25 @@ const CustomerHistoryModal = ({ customer, isOpen, onClose }) => {
           )}
         </div>
 
-        <div className="p-4 border-t border-slate-100 dark:border-slate-800 flex justify-end bg-slate-50/30 dark:bg-slate-800/30">
+        <div className="p-4 border-t border-slate-100 dark:border-slate-800 flex justify-between items-center bg-slate-50/30 dark:bg-slate-800/30">
+          <div className="flex items-center gap-2">
+            {loanToVerify && (
+              <div className="flex items-center gap-3">
+                 <div className="hidden sm:block">
+                   <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none">Reviewing Loan</p>
+                   <p className="text-sm font-bold text-indigo-600">KES {Number(loanToVerify.principal_amount).toLocaleString()}</p>
+                 </div>
+                 <Button 
+                   onClick={handleVerify} 
+                   disabled={updating}
+                   className="bg-blue-600 hover:bg-blue-700 text-white px-6 font-bold flex items-center gap-2"
+                 >
+                   {updating ? <div className="animate-spin w-4 h-4 border-2 border-white border-t-transparent rounded-full" /> : <CheckCircle className="w-4 h-4" />}
+                   VERIFY DOCUMENTS
+                 </Button>
+              </div>
+            )}
+          </div>
           <Button onClick={onClose} variant="secondary" className="px-8">Close Trail</Button>
         </div>
       </Card>

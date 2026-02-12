@@ -13,6 +13,7 @@ const AdminLoans = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [isBulkModalOpen, setIsBulkModalOpen] = useState(false);
   const [selectedCustomer, setSelectedCustomer] = useState(null);
+  const [selectedLoan, setSelectedLoan] = useState(null);
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
   const [updatingId, setUpdatingId] = useState(null);
 
@@ -169,10 +170,14 @@ const AdminLoans = () => {
                           <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                             {loan.status === 'UNVERIFIED' && (
                               <button 
-                                onClick={() => handleStatusUpdate(loan.id, 'VERIFIED')}
-                                className="p-1 px-2 text-[10px] font-bold bg-blue-50 text-blue-600 rounded hover:bg-blue-600 hover:text-white transition-colors"
+                                onClick={() => {
+                                  setSelectedCustomer(customers[loan.user]);
+                                  setSelectedLoan(loan);
+                                  setIsHistoryOpen(true);
+                                }}
+                                className="p-1 px-3 text-[10px] font-black bg-blue-600 text-white rounded hover:bg-blue-700 transition-all shadow-md shadow-blue-500/20"
                               >
-                                VERIFY
+                                REVIEW & VERIFY
                               </button>
                             )}
                             {loan.status === 'VERIFIED' && (
@@ -235,9 +240,12 @@ const AdminLoans = () => {
         <CustomerHistoryModal 
           isOpen={isHistoryOpen}
           customer={selectedCustomer}
+          loanToVerify={selectedLoan}
+          onVerified={fetchAllData}
           onClose={() => {
             setIsHistoryOpen(false);
             setSelectedCustomer(null);
+            setSelectedLoan(null);
           }}
         />
       )}

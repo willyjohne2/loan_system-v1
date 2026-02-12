@@ -25,7 +25,8 @@ const LoanApplicationForm = ({ customer, onSuccess, onCancel }) => {
     duration_type: 'MONTHS', // 'WEEKS' or 'MONTHS'
     duration_value: 12,
     loan_reason: '',
-    loan_reason_other: ''
+    loan_reason_other: '',
+    agreedToTerms: false
   });
 
   const loanReasons = [
@@ -56,8 +57,11 @@ const LoanApplicationForm = ({ customer, onSuccess, onCancel }) => {
   }, []);
 
   const handleChange = (e) => {
-    const { name, value } = e.target;
-    setFormData(prev => ({ ...prev, [name]: value }));
+    const { name, value, type, checked } = e.target;
+    setFormData(prev => ({ 
+      ...prev, 
+      [name]: type === 'checkbox' ? checked : value 
+    }));
   };
 
   const handleSubmit = async (e) => {
@@ -67,8 +71,10 @@ const LoanApplicationForm = ({ customer, onSuccess, onCancel }) => {
       return;
     }
 
-    setLoading(true);
-    setError('');
+    if (!formData.agreedToTerms) {
+      setError('You must agree to the Terms and Conditions to proceed');
+      return;
+    }
     try {
       const payload = {
         user: customer.id,
@@ -223,14 +229,33 @@ const LoanApplicationForm = ({ customer, onSuccess, onCancel }) => {
           </div>
         </div>
 
+        <div className="flex items-center gap-3 p-4 bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-slate-100 dark:border-slate-800">
+          <input 
+            type="checkbox" 
+            id="agreedToTerms" 
+            name="agreedToTerms"
+            checked={formData.agreedToTerms}
+            onChange={handleChange}
+            className="w-5 h-5 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
+            required
+          />
+          <label htmlFor="agreedToTerms" className="text-sm font-medium text-slate-700 dark:text-slate-300 cursor-pointer">
+            I agree to the <span className="text-indigo-600 dark:text-indigo-400 font-bold underline">Loan Terms & Conditions</span> and confirm all details are accurate.
+          </label>
+        </div>
+
         <div className="flex flex-col sm:flex-row justify-between items-center gap-4 pt-6 mt-6 border-t dark:border-slate-800">
           <Button type="button" variant="secondary" onClick={onCancel} className="w-full sm:w-auto px-8">
             Dismiss
           </Button>
           <Button 
             type="submit" 
-            disabled={loading}
-            className="w-full sm:flex-1 bg-indigo-600 hover:bg-indigo-700 text-white font-bold h-11 shadow-lg shadow-indigo-500/20"
+            disabled={loading || !formData.agreedToTerms}
+            className={`w-full sm:flex-1 font-bold h-11 shadow-lg transition-all ${
+              formData.agreedToTerms 
+                ? 'bg-indigo-600 hover:bg-indigo-700 text-white shadow-indigo-500/20' 
+                : 'bg-slate-200 text-slate-400 cursor-not-allowed shadow-none'
+            }`}
           >
             {loading ? 'Processing...' : 'Submit Application'}
           </Button>

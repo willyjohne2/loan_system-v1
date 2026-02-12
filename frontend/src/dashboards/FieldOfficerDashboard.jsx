@@ -5,6 +5,7 @@ import { Users, Wallet, UserPlus, TrendingUp, Calendar, ArrowUpRight, DollarSign
 import CustomerRegistrationForm from '../components/forms/CustomerRegistrationForm';
 import LoanApplicationForm from '../components/forms/LoanApplicationForm';
 import RepaymentModal from '../components/ui/RepaymentModal';
+import CustomerHistoryModal from '../components/ui/CustomerHistoryModal';
 
 const FieldOfficerDashboard = () => {
   const [loading, setLoading] = useState(true);
@@ -13,6 +14,9 @@ const FieldOfficerDashboard = () => {
   const [isRegistering, setIsRegistering] = useState(false);
   const [applyingForLoan, setApplyingForLoan] = useState(null);
   const [selectedLoan, setSelectedLoan] = useState(null);
+  const [reviewingLoan, setReviewingLoan] = useState(null);
+  const [reviewingCustomer, setReviewingCustomer] = useState(null);
+  const [isReviewOpen, setIsReviewOpen] = useState(false);
   const [stats, setStats] = useState({
     today: 0,
     thisWeek: 0,
@@ -269,9 +273,18 @@ const FieldOfficerDashboard = () => {
                       <p className="text-xs font-black text-indigo-600">KES {loan.amount.toLocaleString()}</p>
                    </div>
                    <div className="flex justify-between items-center mt-3">
-                      <span className="text-[9px] text-slate-400 font-medium">AWAITING DOCS</span>
-                      <Button size="sm" onClick={() => handleVerify(loan.id)} className="h-7 text-[10px] px-4 bg-indigo-600 hover:bg-indigo-700">
-                        Verify Now
+                      <span className="text-[9px] text-slate-400 font-medium uppercase tracking-tighter">Needs Documentation Review</span>
+                      <Button 
+                        size="sm" 
+                        onClick={() => {
+                          const customerObj = customers.find(c => c.id === loan.user);
+                          setReviewingCustomer(customerObj);
+                          setReviewingLoan(loan);
+                          setIsReviewOpen(true);
+                        }} 
+                        className="h-7 text-[10px] px-4 bg-indigo-600 hover:bg-indigo-700 font-bold"
+                      >
+                        REVIEW & VERIFY
                       </Button>
                    </div>
                 </div>
@@ -286,6 +299,20 @@ const FieldOfficerDashboard = () => {
           loan={selectedLoan}
           onClose={() => setSelectedLoan(null)}
           onSuccess={() => fetchData()}
+        />
+      )}
+
+      {reviewingCustomer && (
+        <CustomerHistoryModal 
+          isOpen={isReviewOpen}
+          customer={reviewingCustomer}
+          loanToVerify={reviewingLoan}
+          onVerified={fetchData}
+          onClose={() => {
+            setIsReviewOpen(false);
+            setReviewingCustomer(null);
+            setReviewingLoan(null);
+          }}
         />
       )}
     </div>
