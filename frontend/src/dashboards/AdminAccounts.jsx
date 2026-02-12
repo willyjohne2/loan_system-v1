@@ -231,11 +231,6 @@ const AdminAccounts = () => {
           Total: <strong>{admins.length}</strong> admin account(s)
         </div>
       )}
-    </div>
-  );
-};
-
-export default AdminAccounts;
 
       {/* Invitation Modal */}
       {showInviteModal && (
@@ -309,7 +304,6 @@ export default AdminAccounts;
           </div>
         </div>
       )}
-
     </div>
   );
 };
