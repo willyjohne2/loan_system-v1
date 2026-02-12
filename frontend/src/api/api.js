@@ -26,6 +26,14 @@ api.interceptors.request.use((config) => {
 api.interceptors.response.use(
   (response) => response,
   (error) => {
+    if (error.response && error.response.status === 401) {
+      console.warn('Unauthorized request! Clearing local storage and redirecting to login...');
+      localStorage.removeItem('loan_user');
+      // Only redirect if we're not already on a login page to avoid loops
+      if (!window.location.pathname.includes('/login')) {
+        window.location.href = '/login';
+      }
+    }
     return Promise.reject(error);
   }
 );
@@ -132,6 +140,10 @@ export const loanService = {
   },
   getSMSLogs: async () => {
     const res = await api.get('/sms-logs/');
+    return res.data;
+  },
+  getAnalytics: async (region = '') => {
+    const res = await api.get(`/loans/analytics/?region=${region}`);
     return res.data;
   },
   api // Export raw axios instance for custom calls

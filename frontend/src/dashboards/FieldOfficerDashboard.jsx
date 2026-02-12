@@ -82,6 +82,9 @@ const FieldOfficerDashboard = () => {
 
   useEffect(() => {
     fetchData();
+    // Add real-time update interval (every 30 seconds)
+    const interval = setInterval(fetchData, 30000);
+    return () => clearInterval(interval);
   }, []);
 
   if (isRegistering) {

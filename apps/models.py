@@ -31,6 +31,10 @@ class Admins(models.Model):
     def is_anonymous(self):
         return False
 
+    @property
+    def is_active(self):
+        return not self.is_blocked
+
 
 class AdminInvitation(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)

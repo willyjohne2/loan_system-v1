@@ -95,23 +95,11 @@ const ManagerDashboard = () => {
 
   const [analytics, setAnalytics] = useState({ monthly_disbursements: [], status_breakdown: [] });
 
-  useEffect(() => {
-    fetchAnalytics();
-  }, [user]);
-
   const fetchAnalytics = async () => {
     try {
-      const baseUrl = loanService.api.defaults.baseURL;
-      const response = await fetch(`${baseUrl}/loans/analytics/?region=${currentRegion}`, {
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
-        }
-      });
-      if (response.ok) {
-        const data = await response.json();
-        if (data.monthly_disbursements.length > 0) {
-          setAnalytics(data);
-        }
+      const data = await loanService.getAnalytics(currentRegion);
+      if (data && data.monthly_disbursements) {
+        setAnalytics(data);
       }
     } catch (err) {
       console.error('Error fetching analytics:', err);
@@ -234,6 +222,15 @@ const ManagerDashboard = () => {
 
   useEffect(() => {
     fetchCoreData();
+    fetchAnalytics();
+    
+    // Auto-refresh every 60 seconds
+    const interval = setInterval(() => {
+      fetchCoreData();
+      fetchAnalytics();
+    }, 60000);
+    
+    return () => clearInterval(interval);
   }, [selectedCounty]);
 
   const getStatusColor = (status) => {
@@ -350,7 +347,7 @@ const ManagerDashboard = () => {
           variant="success"
         />
         <StatCard 
-          label="Unverified Loans" 
+          label="Actions Needed" 
           value={loadingStats ? "..." : stats.unverifiedLoans.toString()} 
           icon={Clock}
           trend={stats.unverifiedLoans > 10 ? "up" : "down"}

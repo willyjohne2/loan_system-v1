@@ -62,6 +62,7 @@ const CustomerRegistrationForm = ({ onSuccess, onApplyLoan }) => {
     // Step 4: Verification Images
     profile_image: null,
     national_id_image: null,
+    agreed_to_terms: false,
   });
 
   const [profilePreview, setProfilePreview] = useState(null);
@@ -549,7 +550,23 @@ const CustomerRegistrationForm = ({ onSuccess, onApplyLoan }) => {
                 </span>
               </div>
             </div>
-            <p className="text-xs text-gray-400">
+            
+            <div className="flex items-center gap-3 p-4 bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-slate-100 dark:border-slate-800 mt-6">
+              <input 
+                type="checkbox" 
+                id="agreed_to_terms" 
+                name="agreed_to_terms"
+                checked={formData.agreed_to_terms}
+                onChange={(e) => setFormData(prev => ({...prev, agreed_to_terms: e.target.checked}))}
+                className="w-5 h-5 rounded border-slate-300 text-primary-600 focus:ring-primary-500 cursor-pointer"
+                required
+              />
+              <label htmlFor="agreed_to_terms" className="text-sm font-medium text-slate-700 dark:text-slate-300 cursor-pointer">
+                I confirm that I have verified the original documents and the customer agrees to the <span className="text-primary-600 dark:text-primary-400 font-bold underline">Management Policies</span>.
+              </label>
+            </div>
+
+            <p className="text-xs text-gray-400 mt-2">
               Once registered, you can start a loan application for this customer.
             </p>
           </div>
@@ -652,7 +669,7 @@ const CustomerRegistrationForm = ({ onSuccess, onApplyLoan }) => {
                 
                 <Button 
                   onClick={step === 5 ? handleSubmit : nextStep}
-                  disabled={loading}
+                  disabled={loading || (step === 5 && !formData.agreed_to_terms)}
                   className="flex items-center gap-2 bg-primary-600 hover:bg-primary-700 text-white"
                 >
                   {loading ? 'Submitting...' : step === 5 ? 'Register Customer' : 'Next Step'}

@@ -43,7 +43,8 @@ const AdminOverview = () => {
     newCustomersMonth: 0,
     overdue30: 0,
     overdue60: 0,
-    overdue90: 0
+    overdue90: 0,
+    actionsNeeded: 0
   });
   const [loading, setLoading] = useState(true);
   const [loadingLogs, setLoadingLogs] = useState(true);
@@ -102,12 +103,15 @@ const AdminOverview = () => {
           amount: monthlyData[month]
         })));
 
+        const actionsNeeded = loans.filter(l => ['UNVERIFIED', 'VERIFIED', 'PENDING'].includes((l.status || '').toUpperCase())).length;
+
         setStats(prev => ({
           ...prev,
           totalLoans: totalAmount,
           totalPaid: repaidAmount,
           outstanding: totalAmount - repaidAmount,
           activeLoans: statusCounts.approved,
+          actionsNeeded,
           defaultRate: statusCounts.defaulted,
           repaymentRate: Math.round((repaidAmount / totalAmount) * 100) || 0,
         }));

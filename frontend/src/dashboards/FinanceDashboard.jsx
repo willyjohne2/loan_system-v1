@@ -117,6 +117,9 @@ const FinanceDashboard = () => {
 
   useEffect(() => {
     fetchData();
+    // Refresh every 45s for finance data
+    const interval = setInterval(fetchData, 45000);
+    return () => clearInterval(interval);
   }, []);
 
   return (
@@ -158,7 +161,7 @@ const FinanceDashboard = () => {
           accent={stats.netFlow >= 0 ? 'emerald' : 'orange'}
         />
         <StatCard 
-          label="Pending Approvals" 
+          label="Actions Needed" 
           value={stats.pendingApprovalsCount.toString()} 
           icon={Clock}
           accent="indigo"

@@ -228,8 +228,9 @@ class LoginView(views.APIView):
                 admin.save()
 
                 try:
-                    refresh = RefreshToken()
-                    refresh["user_id"] = str(admin.id)
+                    # Use for_user to ensure all standard claims are correctly set
+                    # Even if Admins is not the default User model, simplejwt will use its pk
+                    refresh = RefreshToken.for_user(admin)
                     refresh["admin_id"] = str(admin.id)
                     refresh["role"] = admin.role
 
