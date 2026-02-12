@@ -11,10 +11,10 @@ dj-database-url
 djangorestframework
 djangorestframework-simplejwt
 django-cors-headers
-bcrypt==3.2.2
-PyJWT==2.7.0
+bcrypt>=4.2.0
+PyJWT>=2.10.0
 
 # Utilities
 python-dotenv
-requests==2.31.0
-Pillow==10.2.0
+requests>=2.32.0
+Pillow>=10.4.0
