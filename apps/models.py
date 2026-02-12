@@ -73,7 +73,8 @@ class LoanProducts(models.Model):
     interest_rate = models.DecimalField(
         max_digits=5, decimal_places=2, null=True, blank=True
     )
-    duration_months = models.IntegerField()
+    duration_months = models.IntegerField(null=True, blank=True)
+    duration_weeks = models.IntegerField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True, null=True)
 
     class Meta:
@@ -92,7 +93,8 @@ class Loans(models.Model):
     base_interest_rate = models.DecimalField(
         max_digits=5, decimal_places=2, null=True, blank=True
     )
-    duration_months = models.IntegerField()
+    duration_months = models.IntegerField(null=True, blank=True)
+    duration_weeks = models.IntegerField(null=True, blank=True)
     loan_reason = models.TextField(blank=True, null=True)
     loan_reason_other = models.TextField(blank=True, null=True)
     status = models.TextField(default="UNVERIFIED", db_index=True)
@@ -114,8 +116,17 @@ class Loans(models.Model):
     def total_repayable_amount(self):
         principal = float(self.principal_amount)
         rate = float(self.interest_rate or 0)
-        # Assuming simple interest for now based on duration
-        return principal + (principal * (rate / 100) * (self.duration_months / 12))
+
+        # Simple interest calculation based on duration
+        if self.duration_weeks:
+            # Assuming rate is annual rate, or we can treat as total rate?
+            # User says "more time = more interest", which simple interest does.
+            # Convert weeks to fraction of year (52 weeks)
+            return principal + (principal * (rate / 100) * (self.duration_weeks / 52))
+        elif self.duration_months:
+            return principal + (principal * (rate / 100) * (self.duration_months / 12))
+
+        return principal + (principal * (rate / 100))
 
     @property
     def amount_paid(self):

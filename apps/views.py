@@ -1076,7 +1076,7 @@ class LoanDetailView(generics.RetrieveUpdateDestroyAPIView):
             if new_status == "VERIFIED" and loan.user.phone:
                 msg = (
                     f"Hello {loan.user.full_name}, your loan application for KES {loan.principal_amount:,.2f} "
-                    "has been VERIFIED. It is now moving to the approval stage."
+                    "has been VERIFIED by our officer. It is now awaiting final approval."
                 )
                 send_sms_async([loan.user.phone], msg)
                 SMSLog.objects.create(
@@ -1087,10 +1087,24 @@ class LoanDetailView(generics.RetrieveUpdateDestroyAPIView):
                     type="AUTO",
                 )
 
-            elif new_status == "AWARDED" and loan.user.phone:
+            elif new_status == "APPROVED" and loan.user.phone:
                 msg = (
                     f"Congratulations {loan.user.full_name}! Your loan of KES {loan.principal_amount:,.2f} "
-                    "has been AWARDED. The funds will be disbursed to your registered mobile number shortly."
+                    "has been APPROVED. Your funds are being prepared for disbursement."
+                )
+                send_sms_async([loan.user.phone], msg)
+                SMSLog.objects.create(
+                    sender=getattr(self.request, "user", None),
+                    recipient_phone=loan.user.phone,
+                    recipient_name=loan.user.full_name,
+                    message=msg,
+                    type="AUTO",
+                )
+
+            elif new_status == "DISBURSED" and loan.user.phone:
+                msg = (
+                    f"Hello {loan.user.full_name}, KES {loan.principal_amount:,.2f} has been DISBURSED to your mobile wallet. "
+                    f"Repayment is due as per your {loan.duration_weeks or loan.duration_months} schedule. Thank you."
                 )
                 send_sms_async([loan.user.phone], msg)
                 SMSLog.objects.create(

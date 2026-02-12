@@ -180,70 +180,40 @@ const CustomerRegistrationForm = ({ onSuccess, onApplyLoan }) => {
       data.append('phone', formData.phone);
       if (formData.email) data.append('email', formData.email);
       
-      // Step 2-4: Profile Details
+      // Profile Details
       data.append('national_id', formData.national_id);
-      data.append('date_of_birth', formData.date_of_birth);
+      if (formData.date_of_birth) data.append('date_of_birth', formData.date_of_birth);
       data.append('region', formData.region);
       data.append('county', formData.county);
       data.append('town', formData.town);
       data.append('village', formData.village);
       data.append('address', formData.address);
       data.append('employment_status', formData.employment_status);
-      data.append('monthly_income', formData.monthly_income);
+      if (formData.monthly_income) data.append('monthly_income', formData.monthly_income);
 
-      if (formData.profile_image) data.append('profile_image', formData.profile_image);
-      if (formData.national_id_image) data.append('national_id_image', formData.national_id_image);
-
-      if (!isExistingUser) {
-        const userRes = await loanService.api.post('/users/', {
-          full_name: formData.full_name,
-          phone: formData.phone,
-          email: formData.email
-        });
-        const userId = userRes.data.id;
-        setRegisteredUser(userRes.data);
-
-        const profileData = new FormData();
-        profileData.append('user', userId);
-        profileData.append('national_id', formData.national_id);
-        profileData.append('date_of_birth', formData.date_of_birth);
-        profileData.append('region', formData.region);
-        profileData.append('county', formData.county);
-        profileData.append('town', formData.town);
-        profileData.append('village', formData.village);
-        profileData.append('address', formData.address);
-        profileData.append('employment_status', formData.employment_status);
-        profileData.append('monthly_income', formData.monthly_income);
-        if (formData.profile_image) profileData.append('profile_image', formData.profile_image);
-        if (formData.national_id_image) profileData.append('national_id_image', formData.national_id_image);
-
-        await loanService.api.post('/user-profiles/', profileData);
-      } else {
-        const userRes = await loanService.api.patch(`/users/${existingUserId}/`, {
-          full_name: formData.full_name,
-          email: formData.email
-        });
-        setRegisteredUser(userRes.data);
-        
-        // Update profile
-        const profileData = new FormData();
-        profileData.append('national_id', formData.national_id);
-        profileData.append('date_of_birth', formData.date_of_birth);
-        profileData.append('monthly_income', formData.monthly_income);
-        if (formData.profile_image) profileData.append('profile_image', formData.profile_image);
-        if (formData.national_id_image) profileData.append('national_id_image', formData.national_id_image);
-        
-        // Need to find profile ID
-        const profileId = (await loanService.api.get(`/user-profiles/?user=${existingUserId}`)).data.results?.[0]?.id;
-        if (profileId) {
-          await loanService.api.patch(`/user-profiles/${profileId}/`, profileData);
-        }
+      if (formData.profile_image instanceof File) {
+        data.append('profile_image', formData.profile_image);
+      }
+      if (formData.national_id_image instanceof File) {
+        data.append('national_id_image', formData.national_id_image);
       }
 
+      let userRes;
+      if (isExistingUser && existingUserId) {
+        userRes = await loanService.api.patch(`/users/${existingUserId}/`, data, {
+          headers: { 'Content-Type': 'multipart/form-data' }
+        });
+      } else {
+        userRes = await loanService.api.post('/users/', data, {
+          headers: { 'Content-Type': 'multipart/form-data' }
+        });
+      }
+
+      setRegisteredUser(userRes.data);
       setIsFinished(true);
     } catch (err) {
-      setError(err?.response?.data?.error || err.message || 'Failed to register customer');
-      console.error(err);
+      setError(err?.response?.data?.error || err.message || 'Failed to process registration');
+      console.error('Registration/Update failed:', err);
     } finally {
       setLoading(false);
     }
