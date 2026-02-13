@@ -14,6 +14,14 @@ class SMSHandler:
             if self.username == "sandbox"
             else "https://api.africastalking.com"
         )
+        if self.username == "sandbox":
+            print(
+                "[INFO] SMS handler initialized in SANDBOX mode. SMS will NOT be sent to real devices."
+            )
+        elif not self.api_key:
+            print(
+                "[WARNING] SMS handler initialized without API KEY. SMS will be MOCKED."
+            )
 
     def send_sms(self, recipients, message):
         """

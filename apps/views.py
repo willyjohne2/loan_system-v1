@@ -72,6 +72,12 @@ def send_verification_email_async(full_name, email, verification_code):
         from_email = os.getenv("FROM_EMAIL")
         brevo_api_key = os.getenv("BREVO_API_KEY")
 
+        if not brevo_api_key or not from_email:
+            print(
+                f"[ERROR] Email setup missing: BREVO_API_KEY={bool(brevo_api_key)}, FROM_EMAIL={bool(from_email)}"
+            )
+            return
+
         url = "https://api.brevo.com/v3/smtp/email"
         headers = {
             "accept": "application/json",
@@ -110,6 +116,13 @@ def send_invitation_email_async(email, role, invited_by_name, token, branch=None
         sender_name = os.getenv("SENDER_NAME", "Azariah Credit Ltd")
         from_email = os.getenv("FROM_EMAIL")
         brevo_api_key = os.getenv("BREVO_API_KEY")
+
+        if not brevo_api_key or not from_email:
+            print(
+                f"[ERROR] Email setup missing for Invitation: BREVO_API_KEY={bool(brevo_api_key)}, FROM_EMAIL={bool(from_email)}"
+            )
+            return
+
         # You would typically have a frontend URL for invitations
         invite_url = f"{os.getenv('FRONTEND_URL', 'http://localhost:5173')}/signup?token={token}&email={email}&role={role}"
         if branch:
@@ -152,6 +165,12 @@ def send_password_reset_email_async(full_name, email, reset_code):
         sender_name = os.getenv("SENDER_NAME", "Azariah Credit Ltd")
         from_email = os.getenv("FROM_EMAIL")
         brevo_api_key = os.getenv("BREVO_API_KEY")
+
+        if not brevo_api_key or not from_email:
+            print(
+                f"[ERROR] Email setup missing for Password Reset: BREVO_API_KEY={bool(brevo_api_key)}, FROM_EMAIL={bool(from_email)}"
+            )
+            return
 
         url = "https://api.brevo.com/v3/smtp/email"
         headers = {
@@ -757,7 +776,7 @@ class LoanListCreateView(generics.ListCreateAPIView):
             loan.id,
             new_data=LoanSerializer(loan).data,
             log_type="GENERAL",
-            ip_address=ip
+            ip_address=ip,
         )
 
         create_loan_activity(
@@ -1114,8 +1133,9 @@ class MpesaCallbackView(views.APIView):
     def post(self, request):
         if not (request.user.role == "ADMIN" or request.user.is_super_admin):
             from rest_framework.exceptions import PermissionDenied
+
             raise PermissionDenied("Only Administrators can modify system settings.")
-        
+
         data = request.data
         print(f"M-Pesa Callback Received: {json.dumps(data)}")
 
@@ -1492,6 +1512,7 @@ class SystemSettingsView(views.APIView):
     def get(self, request):
         if not (request.user.role == "ADMIN" or request.user.is_super_admin):
             from rest_framework.exceptions import PermissionDenied
+
             raise PermissionDenied("Only Administrators can view system settings.")
         settings = SystemSettings.objects.all()
         serializer = SystemSettingsSerializer(settings, many=True)
@@ -1532,7 +1553,7 @@ class AdminDeleteView(views.APIView):
     def delete(self, request, admin_id):
         try:
             admin_to_delete = Admins.objects.get(id=admin_id)
-            
+
             if str(request.user.id) == str(admin_id):
                 return Response(
                     {"error": "You cannot dismiss your own administrative account"},
