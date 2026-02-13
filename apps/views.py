@@ -2377,13 +2377,13 @@ class FinanceAnalyticsView(views.APIView):
 
 
 class AdminInviteView(views.APIView):
-    permission_classes = [IsSuperAdmin]
+    permission_classes = [IsAdminUser]
 
     def post(self, request):
         # request.user is an instance of Admins model via CustomJWTAuthentication
         if not request.user or request.user.role != "ADMIN":
             return Response(
-                {"error": "Only administrators can invite others"}, status=403
+                {"error": "Only administrators can invite others"}, status=status.HTTP_403_FORBIDDEN
             )
 
         emails = request.data.get("emails")  # Changed from 'email' to 'emails' (list)
