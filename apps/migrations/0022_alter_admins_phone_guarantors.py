@@ -5,31 +5,59 @@ import uuid
 from django.db import migrations, models
 
 
+def clean_duplicate_phones(apps, schema_editor):
+    Admins = apps.get_model("apps", "Admins")
+    phones = Admins.objects.values_list("phone", flat=True).exclude(phone__isnull=True)
+    seen = set()
+    for admin in Admins.objects.exclude(phone__isnull=True):
+        if admin.phone in seen:
+            admin.phone = None
+            admin.save()
+        else:
+            seen.add(admin.phone)
+
+
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('apps', '0021_seed_simulation_capital'),
+        ("apps", "0021_seed_simulation_capital"),
     ]
 
     operations = [
+        migrations.RunPython(clean_duplicate_phones),
         migrations.AlterField(
-            model_name='admins',
-            name='phone',
+            model_name="admins",
+            name="phone",
             field=models.CharField(blank=True, max_length=20, null=True, unique=True),
         ),
         migrations.CreateModel(
-            name='Guarantors',
+            name="Guarantors",
             fields=[
-                ('id', models.UUIDField(default=uuid.uuid4, editable=False, primary_key=True, serialize=False)),
-                ('full_name', models.TextField()),
-                ('national_id', models.CharField(max_length=50)),
-                ('phone', models.CharField(max_length=20)),
-                ('created_at', models.DateTimeField(auto_now_add=True)),
-                ('user', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='guarantors', to='apps.users')),
+                (
+                    "id",
+                    models.UUIDField(
+                        default=uuid.uuid4,
+                        editable=False,
+                        primary_key=True,
+                        serialize=False,
+                    ),
+                ),
+                ("full_name", models.TextField()),
+                ("national_id", models.CharField(max_length=50)),
+                ("phone", models.CharField(max_length=20)),
+                ("created_at", models.DateTimeField(auto_now_add=True)),
+                (
+                    "user",
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.CASCADE,
+                        related_name="guarantors",
+                        to="apps.users",
+                    ),
+                ),
             ],
             options={
-                'db_table': 'guarantors',
-                'managed': True,
+                "db_table": "guarantors",
+                "managed": True,
             },
         ),
     ]
