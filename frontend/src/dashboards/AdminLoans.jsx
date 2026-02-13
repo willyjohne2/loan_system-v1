@@ -266,8 +266,8 @@ const AdminLoans = () => {
           </div>
         </div>
 
-        <div className="overflow-x-auto max-h-[450px] overflow-y-auto scrollbar-thin scrollbar-thumb-slate-200 dark:scrollbar-thumb-slate-800">
-          <table className="w-full sticky-header">
+        <div className="overflow-x-auto -mx-6 md:mx-0 px-6 md:px-0 max-h-[550px] overflow-y-auto scrollbar-thin scrollbar-thumb-slate-200 dark:scrollbar-thumb-slate-800">
+          <table className="w-full sticky-header min-w-[1000px]">
             <thead>
               <tr className="bg-slate-50 dark:bg-slate-800/50 border-b border-slate-100 dark:border-slate-800 sticky top-0 z-10 shadow-sm">
                 <th className="text-left p-4 text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest">Loan ID</th>

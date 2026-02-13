@@ -42,7 +42,7 @@ export const Button = ({ className, variant = 'primary', loading = false, childr
  * Card Component
  */
 export const Card = ({ className, children }) => (
-  <div className={cn("bg-white rounded-xl border border-slate-200 shadow-sm dark:bg-slate-900 dark:border-slate-800 p-6", className)}>
+  <div className={cn("bg-white rounded-xl border border-slate-200 shadow-sm dark:bg-slate-900 dark:border-slate-800 p-4 md:p-6", className)}>
     {children}
   </div>
 );
@@ -51,11 +51,11 @@ export const Card = ({ className, children }) => (
  * Table Component
  */
 export const Table = ({ headers, data, renderRow, className }) => (
-  <div className={cn("overflow-x-auto rounded-lg border border-slate-200 dark:border-slate-800", className)}>
-    <table className="w-full text-sm text-left">
+  <div className={cn("w-full overflow-x-auto rounded-lg border border-slate-200 dark:border-slate-800", className)}>
+    <table className="w-full text-xs md:text-sm text-left min-w-[600px]">
       <thead className="bg-slate-50 text-slate-600 dark:bg-slate-800/50 dark:text-slate-400 font-medium">
         <tr>
-          {headers.map((h, i) => <th key={i} className="px-6 py-4">{h}</th>)}
+          {headers.map((h, i) => <th key={i} className="px-4 md:px-6 py-3 md:py-4">{h}</th>)}
         </tr>
       </thead>
       <tbody className="divide-y divide-slate-200 dark:divide-slate-800">
@@ -83,22 +83,22 @@ export const StatCard = ({ label, value, icon: Icon, trend, trendValue, variant 
   return (
     <Card 
       className={cn(
-        "flex items-start justify-between p-4 md:p-6 transition-transform hover:scale-[1.02] active:scale-[0.98]",
+        "flex items-center md:items-start justify-between p-3 md:p-6 transition-transform hover:scale-[1.02] active:scale-[0.98]",
         onClick && "cursor-pointer"
       )}
       onClick={onClick}
     >
       <div className="flex-1 min-w-0">
-        <p className="text-xs md:text-sm font-medium text-slate-500 dark:text-slate-400 truncate">{label}</p>
-        <h3 className="text-lg md:text-2xl font-bold mt-1 text-slate-800 dark:text-white truncate">{value}</h3>
+        <p className="text-[10px] md:text-sm font-medium text-slate-500 dark:text-slate-400 truncate">{label}</p>
+        <h3 className="text-base md:text-2xl font-bold mt-0.5 md:mt-1 text-slate-800 dark:text-white truncate">{value}</h3>
         {trend && (
-          <p className={cn("text-[10px] md:text-xs font-medium mt-2 flex items-center gap-1", isTrendUp ? 'text-emerald-600' : 'text-rose-600')}>
+          <p className={cn("text-[8px] md:text-xs font-medium mt-1 md:mt-2 flex items-center gap-1", isTrendUp ? 'text-emerald-600' : 'text-rose-600')}>
             {isTrendUp ? '↑' : '↓'} {trendLabel}
           </p>
         )}
       </div>
-      <div className={cn("p-2 md:p-3 rounded-lg shrink-0", iconVariants[variant])}>
-        <Icon className="w-5 h-5 md:w-6 h-6" />
+      <div className={cn("p-1.5 md:p-3 rounded-lg shrink-0 ml-2", iconVariants[variant])}>
+        <Icon className="w-4 h-4 md:w-6 md:h-6" />
       </div>
     </Card>
   );

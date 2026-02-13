@@ -16,6 +16,9 @@ import ManagerDashboardWrapper from './dashboards/ManagerDashboardWrapper';
 import FinanceDashboardWrapper from './dashboards/FinanceDashboardWrapper';
 import FieldOfficerDashboardWrapper from './dashboards/FieldOfficerDashboardWrapper';
 
+import { ActionLogs } from './dashboards/AdminActivityModal'; // Checking if used
+import { ScrollToTop } from './components/ui/ScrollToTop';
+
 const App = () => {
   return (
     <AuthProvider>
@@ -54,6 +57,7 @@ const App = () => {
           <Route path="/" element={<Navigate to="/login" replace />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
+        <ScrollToTop />
       </BrowserRouter>
     </AuthProvider>
   );

@@ -421,7 +421,7 @@ const ManagerDashboard = () => {
       </div>
 
       {/* Branchal KPIs */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-6">
         <StatCard 
           label="Customers Served" 
           value={loadingTables ? "..." : stats.served.toString()} 
@@ -724,10 +724,10 @@ const ManagerDashboard = () => {
            </div>
         </div>
         
-        <div className="overflow-x-auto max-h-[450px] overflow-y-auto scrollbar-thin scrollbar-thumb-slate-200 dark:scrollbar-thumb-slate-800">
-          <table className="w-full text-left">
+        <div className="overflow-x-auto -mx-6 md:mx-0 px-6 md:px-0 max-h-[450px] overflow-y-auto scrollbar-thin scrollbar-thumb-slate-200 dark:scrollbar-thumb-slate-800">
+          <table className="w-full text-left min-w-[700px]">
             <thead className="sticky top-0 z-10">
-              <tr className="text-xs font-black text-slate-500 uppercase border-b border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900">
+              <tr className="text-[10px] md:text-xs font-black text-slate-500 uppercase border-b border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900">
                 <th className="px-4 py-3">Loan ID</th>
                 <th className="px-4 py-3">Customer</th>
                 <th className="px-4 py-3">Product</th>

@@ -235,8 +235,8 @@ const AdminOverview = () => {
   );
 
   return (
-    <div className="space-y-8 animate-in fade-in duration-500">
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+    <div className="space-y-4 md:space-y-8 animate-in fade-in duration-500">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-6">
         <StatCard 
           label="Total Portfolio" 
           value={`KES ${stats.totalLoans.toLocaleString()}`} 
