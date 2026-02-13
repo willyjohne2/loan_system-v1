@@ -237,26 +237,6 @@ const AdminAccounts = () => {
         branches={['Kagio', 'Embu', 'Thika', 'Naivasha']}
       />
     </div>
-                <button
-                  type="submit"
-                  disabled={inviting}
-                  className="flex-1 px-6 py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold transition-all shadow-lg flex items-center justify-center gap-2 disabled:opacity-50"
-                >
-                  {inviting ? (
-                    <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
-                  ) : (
-                    <>
-                      <Send className="w-4 h-4" />
-                      Send Invite
-                    </>
-                  )}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-    </div>
   );
 };
 

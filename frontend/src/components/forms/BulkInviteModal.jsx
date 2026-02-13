@@ -10,6 +10,13 @@ const BulkInviteModal = ({ isOpen, onClose, defaultRole = 'FIELD_OFFICER', branc
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
+  // Sync role state with prop when modal opens/changes
+  React.useEffect(() => {
+    if (isOpen) {
+      setRole(defaultRole);
+    }
+  }, [isOpen, defaultRole]);
+
   if (!isOpen) return null;
 
   const handleAddEmail = () => {

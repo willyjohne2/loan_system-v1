@@ -83,10 +83,13 @@ const AdminOfficers = ({ role = 'FINANCIAL_OFFICER' }) => {
         </div>
         <Button 
           className="flex items-center"
-          onClick={() => setIsInviting(true)}
+          onClick={() => {
+            console.log('Opening invitation modal for:', role);
+            setIsInviting(true);
+          }}
         >
           <UserPlus className="w-4 h-4 mr-2" />
-          Invite {role === 'FIELD_OFFICER' ? 'Field' : 'Finance'} Officers
+          Register {role === 'FIELD_OFFICER' ? 'Field Officer' : 'Financial Officer'}
         </Button>
       </div>
 
