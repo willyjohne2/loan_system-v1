@@ -1,12 +1,17 @@
 import React, { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { Card, Button } from '../components/ui/Shared';
-import { User, Mail, Shield, Smartphone, Lock, Save, AlertCircle } from 'lucide-react';
+import { User, Mail, Shield, Smartphone, Lock, Save, AlertCircle, CheckCircle2 } from 'lucide-react';
+import TwoFactorSetupModal from '../components/ui/TwoFactorSetupModal';
+import DisableTwoFactorModal from '../components/ui/DisableTwoFactorModal';
 
 const ProfileSettings = () => {
-  const { user } = useAuth();
+  const { user, updateUser } = useAuth();
   const [isEditing, setIsEditing] = useState(false);
+  const [show2FASetup, setShow2FASetup] = useState(false);
+  const [show2FADisable, setShow2FADisable] = useState(false);
   
+  const is2FAEnabled = user?.admin?.is_two_factor_enabled || user?.is_two_factor_enabled;
   const userName = user?.admin?.full_name || user?.full_name || user?.name || 'User';
   const userEmail = user?.admin?.email || user?.email || '';
   const userPhone = user?.admin?.phone || user?.phone || 'Not provided';
@@ -108,17 +113,53 @@ const ProfileSettings = () => {
                 Security & Verification
              </h3>
              <div className="space-y-6">
-                <div className="flex items-center justify-between p-4 bg-amber-50 dark:bg-amber-900/10 rounded-xl border border-amber-100 dark:border-amber-900/30">
+                <div className={`flex items-center justify-between p-4 rounded-xl border ${
+                  is2FAEnabled 
+                    ? 'bg-emerald-50 dark:bg-emerald-900/10 border-emerald-100 dark:border-emerald-900/30' 
+                    : 'bg-amber-50 dark:bg-amber-900/10 border-amber-100 dark:border-amber-900/30'
+                }`}>
                    <div className="flex items-center gap-4">
                       <div className="p-2 bg-white dark:bg-slate-800 rounded-lg shadow-sm">
-                         <Shield className="w-5 h-5 text-amber-600" />
+                         {is2FAEnabled ? (
+                           <CheckCircle2 className="w-5 h-5 text-emerald-600" />
+                         ) : (
+                           <Shield className="w-5 h-5 text-amber-600" />
+                         )}
                       </div>
                       <div>
-                         <p className="text-sm font-bold text-amber-900 dark:text-amber-400 uppercase tracking-tighter">Two-Factor Auth</p>
-                         <p className="text-xs text-amber-800 dark:text-amber-500/80">Enhance your account security with SMS or Email OTP</p>
+                         <p className={`text-sm font-bold uppercase tracking-tighter ${
+                           is2FAEnabled ? 'text-emerald-900 dark:text-emerald-400' : 'text-amber-900 dark:text-amber-400'
+                         }`}>
+                           Two-Factor Auth: {is2FAEnabled ? 'ACTIVE' : 'INACTIVE'}
+                         </p>
+                         <p className={`text-xs ${
+                           is2FAEnabled ? 'text-emerald-800 dark:text-emerald-500/80' : 'text-amber-800 dark:text-amber-500/80'
+                         }`}>
+                           {is2FAEnabled 
+                             ? 'Your account is protected with TOTP verification' 
+                             : 'Enhance your account security with an Authenticator App'
+                           }
+                         </p>
                       </div>
                    </div>
-                   <Button size="sm" className="bg-amber-600 hover:bg-amber-700 border-none px-6">Configure</Button>
+                   {is2FAEnabled ? (
+                     <Button 
+                       size="sm" 
+                       variant="outline"
+                       onClick={() => setShow2FADisable(true)} 
+                       className="border-emerald-200 text-emerald-700 hover:bg-emerald-50"
+                     >
+                       Disable
+                     </Button>
+                   ) : (
+                     <Button 
+                       size="sm" 
+                       onClick={() => setShow2FASetup(true)} 
+                       className="bg-amber-600 hover:bg-amber-700 border-none px-6"
+                     >
+                       Enable
+                     </Button>
+                   )}
                 </div>
 
                 <div className="flex items-center justify-between py-4 border-t border-slate-100 dark:border-slate-800">
@@ -140,6 +181,18 @@ const ProfileSettings = () => {
           </div>
         </div>
       </div>
+
+      <TwoFactorSetupModal 
+        isOpen={show2FASetup} 
+        onClose={() => setShow2FASetup(false)} 
+        onStatusChange={(enabled) => updateUser({ is_two_factor_enabled: enabled })}
+      />
+
+      <DisableTwoFactorModal 
+        isOpen={show2FADisable} 
+        onClose={() => setShow2FADisable(false)} 
+        onStatusChange={(enabled) => updateUser({ is_two_factor_enabled: enabled })}
+      />
     </div>
   );
 };

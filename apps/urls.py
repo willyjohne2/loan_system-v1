@@ -1,6 +1,10 @@
 from django.urls import path
 from .views import (
     LoginView,
+    Login2FAVerifyView,
+    Enable2FAView,
+    VerifyEnable2FAView,
+    Disable2FAView,
     UserListCreateView,
     UserDetailView,
     CheckUserView,
@@ -36,6 +40,14 @@ from .views import (
 )
 
 urlpatterns = [
+    path("auth/2fa/verify/", Login2FAVerifyView.as_view(), name="2fa-verify"),
+    path("auth/2fa/enable/", Enable2FAView.as_view(), name="2fa-enable"),
+    path(
+        "auth/2fa/verify-enable/",
+        VerifyEnable2FAView.as_view(),
+        name="2fa-verify-enable",
+    ),
+    path("auth/2fa/disable/", Disable2FAView.as_view(), name="2fa-disable"),
     path(
         "deactivation-requests/",
         DeactivationRequestListCreateView.as_view(),

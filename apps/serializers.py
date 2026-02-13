@@ -40,6 +40,7 @@ class AdminSerializer(serializers.ModelSerializer):
             "is_verified",
             "is_blocked",
             "is_super_admin",
+            "is_two_factor_enabled",
             "created_at",
         ]
 

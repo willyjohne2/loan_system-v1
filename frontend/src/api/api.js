@@ -39,6 +39,26 @@ api.interceptors.response.use(
 );
 
 export const loanService = {
+  login: async (credentials) => {
+    const res = await api.post('/login/', credentials);
+    return res.data;
+  },
+  verify2FA: async (data) => {
+    const res = await api.post('/auth/2fa/verify/', data);
+    return res.data;
+  },
+  enable2FA: async () => {
+    const res = await api.post('/auth/2fa/enable/');
+    return res.data;
+  },
+  verifyEnable2FA: async (data) => {
+    const res = await api.post('/auth/2fa/verify-enable/', data);
+    return res.data;
+  },
+  disable2FA: async (data) => {
+    const res = await api.post('/auth/2fa/disable/', data);
+    return res.data;
+  },
   getManagers: async () => {
     const res = await api.get('/admins/?role=MANAGER');
     return res.data;

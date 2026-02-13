@@ -18,6 +18,8 @@ class Admins(models.Model):
     branch = models.TextField(blank=True, null=True)
     password_reset_code = models.CharField(max_length=6, blank=True, null=True)
     password_reset_expires = models.DateTimeField(blank=True, null=True)
+    two_factor_secret = models.CharField(max_length=32, blank=True, null=True)
+    is_two_factor_enabled = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True, null=True)
 
     class Meta:

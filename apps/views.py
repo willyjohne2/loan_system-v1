@@ -5,6 +5,7 @@ import threading
 import os
 import json
 import requests
+import pyotp
 from django.core.mail import send_mail
 from django.conf import settings
 from django.utils import timezone
@@ -233,6 +234,20 @@ class LoginView(views.APIView):
                 admin.failed_login_attempts = 0
                 admin.save()
 
+                # Check if 2FA is enabled
+                if admin.is_two_factor_enabled:
+                    # Return a temporary session or reference to handle 2FA verification
+                    # We can use a short-lived token or just the admin ID for now
+                    # For security, let's return a partial success response
+                    return Response(
+                        {
+                            "id": str(admin.id),
+                            "two_factor_required": True,
+                            "email": admin.email,
+                        },
+                        status=status.HTTP_200_OK,
+                    )
+
                 try:
                     # Use for_user to ensure all standard claims are correctly set
                     # Even if Admins is not the default User model, simplejwt will use its pk
@@ -268,6 +283,128 @@ class LoginView(views.APIView):
         except Admins.DoesNotExist:
             return Response(
                 {"error": "Invalid credentials"}, status=status.HTTP_401_UNAUTHORIZED
+            )
+
+
+class Login2FAVerifyView(views.APIView):
+    permission_classes = [permissions.AllowAny]
+
+    def post(self, request):
+        admin_id = request.data.get("id")
+        otp_code = request.data.get("code")
+
+        if not admin_id or not otp_code:
+            return Response(
+                {"error": "Admin ID and OTP code are required."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        try:
+            admin = Admins.objects.get(id=admin_id)
+            if admin.is_blocked:
+                return Response(
+                    {"error": "Account is blocked"}, status=status.HTTP_403_FORBIDDEN
+                )
+
+            totp = pyotp.TOTP(admin.two_factor_secret)
+            if totp.verify(otp_code):
+                refresh = RefreshToken.for_user(admin)
+                refresh["admin_id"] = str(admin.id)
+                refresh["role"] = admin.role
+
+                return Response(
+                    {
+                        "access": str(refresh.access_token),
+                        "refresh": str(refresh),
+                        "role": admin.role,
+                        "admin": AdminSerializer(admin).data,
+                    }
+                )
+            else:
+                return Response(
+                    {"error": "Invalid OTP code"}, status=status.HTTP_401_UNAUTHORIZED
+                )
+        except Admins.DoesNotExist:
+            return Response(
+                {"error": "Invalid admin ID"}, status=status.HTTP_401_UNAUTHORIZED
+            )
+
+
+class Enable2FAView(views.APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request):
+        admin = request.user
+        if admin.is_two_factor_enabled:
+            return Response(
+                {"error": "2FA is already enabled"}, status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Generate a new secret if not already set
+        if not admin.two_factor_secret:
+            admin.two_factor_secret = pyotp.random_base32()
+            admin.save()
+
+        totp = pyotp.TOTP(admin.two_factor_secret)
+        # Use a more friendly label for the authenticator app
+        provisioning_uri = totp.provisioning_uri(
+            name=admin.email, issuer_name="LoanManagementSystem"
+        )
+
+        return Response(
+            {"secret": admin.two_factor_secret, "otpauth_url": provisioning_uri}
+        )
+
+
+class VerifyEnable2FAView(views.APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request):
+        admin = request.user
+        otp_code = request.data.get("code")
+
+        if not otp_code:
+            return Response(
+                {"error": "OTP code is required"}, status=status.HTTP_400_BAD_REQUEST
+            )
+
+        if not admin.two_factor_secret:
+            return Response(
+                {"error": "2FA setup not initiated"}, status=status.HTTP_400_BAD_REQUEST
+            )
+
+        totp = pyotp.TOTP(admin.two_factor_secret)
+        if totp.verify(otp_code):
+            admin.is_two_factor_enabled = True
+            admin.save()
+            return Response({"message": "2FA enabled successfully"})
+        else:
+            return Response(
+                {"error": "Invalid OTP code"}, status=status.HTTP_400_BAD_REQUEST
+            )
+
+
+class Disable2FAView(views.APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request):
+        admin = request.user
+        otp_code = request.data.get("code")
+
+        if not otp_code:
+            return Response(
+                {"error": "OTP code is required"}, status=status.HTTP_400_BAD_REQUEST
+            )
+
+        totp = pyotp.TOTP(admin.two_factor_secret)
+        if totp.verify(otp_code):
+            admin.is_two_factor_enabled = False
+            admin.two_factor_secret = None
+            admin.save()
+            return Response({"message": "2FA disabled successfully"})
+        else:
+            return Response(
+                {"error": "Invalid OTP code"}, status=status.HTTP_400_BAD_REQUEST
             )
 
 
