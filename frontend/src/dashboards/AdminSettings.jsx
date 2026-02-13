@@ -10,8 +10,86 @@ import {
   ArrowUpRight,
   ArrowDownRight,
   Clock,
-  TrendingUp
+  TrendingUp,
+  Edit,
+  Check,
+  X
 } from 'lucide-react';
+
+const LoanProductCard = ({ product, onUpdate }) => {
+  const [isEditing, setIsEditing] = useState(false);
+  const [rate, setRate] = useState(product.interest_rate);
+  const [saving, setSaving] = useState(false);
+
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      await onUpdate(product.id, { interest_rate: rate });
+      setIsEditing(false);
+    } catch (err) {
+      alert("Failed to update interest rate");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="flex items-center justify-between p-4 bg-white dark:bg-slate-800/50 rounded-xl border border-slate-100 dark:border-slate-700 hover:shadow-md transition-shadow">
+      <div className="flex items-center gap-3">
+        <div className="w-10 h-10 rounded-full bg-indigo-50 dark:bg-indigo-900/20 flex items-center justify-center">
+            <Percent className="w-5 h-5 text-indigo-600" />
+        </div>
+        <div>
+          <h4 className="font-bold text-slate-800 dark:text-white capitalize">{product.name}</h4>
+          <p className="text-[10px] text-slate-500 uppercase font-medium">Monthly Rate</p>
+        </div>
+      </div>
+
+      <div className="flex items-center gap-2">
+        {isEditing ? (
+          <>
+            <div className="relative">
+              <input 
+                type="number"
+                step="0.1"
+                className="w-20 pl-3 pr-7 py-1.5 bg-slate-50 dark:bg-slate-900 border border-indigo-200 dark:border-indigo-900/30 rounded-lg font-bold text-center outline-none focus:ring-2 focus:ring-indigo-500"
+                value={rate}
+                onChange={(e) => setRate(e.target.value)}
+                autoFocus
+              />
+              <span className="absolute right-2 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-400">%</span>
+            </div>
+            <button 
+              onClick={handleSave}
+              disabled={saving}
+              className="p-1.5 bg-emerald-100 text-emerald-700 rounded-lg hover:bg-emerald-200"
+            >
+              {saving ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
+            </button>
+            <button 
+              onClick={() => { setIsEditing(false); setRate(product.interest_rate); }}
+              className="p-1.5 bg-slate-100 text-slate-600 rounded-lg hover:bg-slate-200"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </>
+        ) : (
+          <>
+            <div className="px-4 py-1.5 bg-slate-50 dark:bg-slate-900 rounded-lg text-lg font-black text-slate-800 dark:text-white">
+              {product.interest_rate}%
+            </div>
+            <button 
+              onClick={() => setIsEditing(true)}
+              className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 rounded-lg transition-colors"
+            >
+              <Edit className="w-4 h-4" />
+            </button>
+          </>
+        )}
+      </div>
+    </div>
+  );
+};
 
 const AdminSettings = () => {
   const [settings, setSettings] = useState({
@@ -21,29 +99,41 @@ const AdminSettings = () => {
     MSG_TEMPLATE_DEFAULTER: "Hello {name}, your loan of KES {principal:,.2f} is OVERDUE. Interest accumulated: KES {interest:,.2f}. Remaining balance: KES {balance:,.2f}. Please pay via Paybill.",
     MSG_TEMPLATE_REPAID: "Hello {name}, thank you for your commitment to repaying your previous loan. You are now eligible to apply for a newer, larger loan. Visit our nearest office or apply online today!"
   });
+  const [loanProducts, setLoanProducts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState(null);
 
   useEffect(() => {
-    fetchSettings();
+    fetchData();
   }, []);
 
-  const fetchSettings = async () => {
+  const fetchData = async () => {
     try {
-      const data = await loanService.getSettings();
-      // Ensure we have numbers where expected
+      const [settingsData, productsData] = await Promise.all([
+        loanService.getSettings(),
+        loanService.getLoanProducts()
+      ]);
+
       setSettings(prev => ({
         ...prev,
-        ...data,
-        DEFAULT_INTEREST_RATE: Number(data.DEFAULT_INTEREST_RATE || 15),
-        OVERDUE_PENALTY_RATE: Number(data.OVERDUE_PENALTY_RATE || 5),
+        ...settingsData,
+        DEFAULT_INTEREST_RATE: Number(settingsData.DEFAULT_INTEREST_RATE || 15),
+        OVERDUE_PENALTY_RATE: Number(settingsData.OVERDUE_PENALTY_RATE || 5),
       }));
+
+      setLoanProducts(productsData.results || productsData);
     } catch (err) {
       console.error("Failed to fetch settings:", err);
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleProductUpdate = async (id, data) => {
+    await loanService.updateLoanProduct(id, data);
+    // Refresh local state
+    setLoanProducts(prev => prev.map(p => p.id === id ? { ...p, ...data } : p));
   };
 
   const handleSave = async () => {
@@ -93,7 +183,7 @@ const AdminSettings = () => {
         </div>
       )}
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+      <div className="grid grid-cols-1 gap-8">
         {/* Basic Interest Rate */}
         <Card className="p-8">
           <div className="flex items-center gap-4 mb-8">
@@ -101,167 +191,38 @@ const AdminSettings = () => {
                <Percent className="w-6 h-6 text-primary-600" />
             </div>
             <div>
-              <h3 className="text-lg font-bold text-slate-900 dark:text-white">Standard Interest Rate</h3>
-              <p className="text-sm text-slate-500">Base monthly interest for new loan applications</p>
+              <h3 className="text-xl font-bold text-slate-900 dark:text-white">Loan Product Interest Rates</h3>
+              <p className="text-sm text-slate-500">Configure monthly interest rates for each specific product</p>
             </div>
           </div>
 
-          <div className="space-y-6">
-            <div className="flex items-center justify-between p-6 bg-slate-50 dark:bg-slate-800 rounded-2xl border border-slate-100 dark:border-slate-700">
-              <span className="text-sm font-medium">Monthly Rate (%)</span>
-              <div className="flex items-center gap-4">
-                <button 
-                  onClick={() => setSettings({...settings, DEFAULT_INTEREST_RATE: Math.max(0, settings.DEFAULT_INTEREST_RATE - 0.5)})}
-                  className="p-1 hover:bg-slate-200 dark:hover:bg-slate-700 rounded text-slate-500"
-                >
-                  <ArrowDownRight className="w-4 h-4" />
-                </button>
-                <input 
-                  type="number"
-                  step="0.1"
-                  className="w-20 text-center font-bold text-xl bg-transparent focus:outline-none dark:text-white"
-                  value={settings.DEFAULT_INTEREST_RATE}
-                  onChange={(e) => setSettings({...settings, DEFAULT_INTEREST_RATE: parseFloat(e.target.value)})}
-                />
-                <button 
-                   onClick={() => setSettings({...settings, DEFAULT_INTEREST_RATE: settings.DEFAULT_INTEREST_RATE + 0.5})}
-                   className="p-1 hover:bg-slate-200 dark:hover:bg-slate-700 rounded text-slate-500"
-                >
-                  <ArrowUpRight className="w-4 h-4" />
-                </button>
-              </div>
-            </div>
+          <div className="space-y-4">
+            {loanProducts.length === 0 ? (
+                <div className="text-center py-6 text-slate-400">No products found</div>
+            ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    {loanProducts.map(product => (
+                        <LoanProductCard 
+                            key={product.id} 
+                            product={product} 
+                            onUpdate={handleProductUpdate} 
+                        />
+                    ))}
+                </div>
+            )}
 
-            <div className="flex items-start gap-3 p-4 bg-primary-50/50 dark:bg-primary-900/10 rounded-lg">
+            <div className="flex items-start gap-3 p-4 bg-primary-50/50 dark:bg-primary-900/10 rounded-lg mt-8">
               <Info className="w-5 h-5 text-primary-500 shrink-0 mt-0.5" />
-              <p className="text-xs text-primary-800/80 dark:text-primary-400">
-                This rate applies to all loan products by default unless overridden at the individual product level. 
-                Calculated per month using standard reducing balance or fixed models.
-              </p>
-            </div>
-          </div>
-        </Card>
-
-        {/* Penalty Policy */}
-        <Card className="p-8 border-t-4 border-t-amber-500">
-          <div className="flex items-center gap-4 mb-8">
-            <div className="p-3 bg-amber-50 dark:bg-amber-900/20 rounded-xl">
-               <AlertTriangle className="w-6 h-6 text-amber-600" />
-            </div>
-            <div>
-              <h3 className="text-lg font-bold text-slate-900 dark:text-white">Overdue Penalty Policy</h3>
-              <p className="text-sm text-slate-500">Auto-calculated adjustments for late repayments</p>
-            </div>
-          </div>
-
-          <div className="space-y-6">
-            <div className="space-y-4">
-              <label className="text-sm font-semibold text-slate-700 dark:text-slate-300">Default Interest Adjustment</label>
-              <div className="flex items-center justify-between p-4 bg-amber-50/50 dark:bg-amber-900/5 rounded-xl border border-amber-100 dark:border-amber-900/20">
-                <span className="text-xs font-medium text-amber-900 dark:text-amber-400">Penalty Percentage</span>
-                <div className="flex items-center gap-2">
-                  <input 
-                    type="number"
-                    className="w-16 bg-white dark:bg-slate-800 border border-amber-200 dark:border-amber-900/30 rounded p-1 text-center font-bold"
-                    value={settings.OVERDUE_PENALTY_RATE}
-                    onChange={(e) => setSettings({...settings, OVERDUE_PENALTY_RATE: parseFloat(e.target.value)})}
-                  />
-                  <span className="text-sm font-bold text-amber-900 dark:text-amber-400">%</span>
-                </div>
-              </div>
-            </div>
-
-            <div className="flex items-start gap-3 p-4 bg-slate-50 dark:bg-slate-800/50 rounded-lg">
-              <Clock className="w-5 h-5 text-slate-400 shrink-0 mt-0.5" />
-              <div className="space-y-2">
-                 <p className="text-xs text-slate-500">
-                   When a loan becomes <span className="font-bold text-red-500">OVERDUE</span>, the monthly interest rate will 
-                   <span className="mx-1 uppercase font-bold text-amber-600">increase</span> 
-                   by this value.
-                 </p>
-                 <Badge variant="warning">Example: 15% + {settings.OVERDUE_PENALTY_RATE}% = {settings.DEFAULT_INTEREST_RATE + settings.OVERDUE_PENALTY_RATE}%</Badge>
+              <div className="space-y-1">
+                <p className="text-sm text-primary-900 dark:text-primary-400 font-semibold">Policy Update:</p>
+                <p className="text-xs text-primary-800/80 dark:text-primary-400">
+                    Interest rates are fixed at the time of application. Changing a rate here will only affect <strong>new</strong> loans. 
+                    Verified and disbursed loans remain unchanged. Note: There is no interest increase for overdue loans; the selected product rate applies throughout the loan duration.
+                </p>
               </div>
             </div>
           </div>
         </Card>
-
-        {/* Multi-tier Rules */}
-        <Card className="lg:col-span-2 p-8">
-           <h3 className="text-lg font-bold mb-6 flex items-center gap-2">
-             <TrendingUp className="w-5 h-5 text-indigo-500" />
-             Calculation Logic (Automated)
-           </h3>
-           
-           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              {[
-                { 
-                  title: 'New Loans', 
-                  desc: 'Interest applied on approval', 
-                  rate: settings.DEFAULT_INTEREST_RATE, 
-                  color: 'primary' 
-                },
-                { 
-                  title: 'Ongoing', 
-                  desc: 'Standard monthly accrual', 
-                  rate: settings.DEFAULT_INTEREST_RATE, 
-                  color: 'success' 
-                },
-                { 
-                  title: 'Defaulted', 
-                  desc: 'Compounded penalty rate', 
-                  rate: settings.DEFAULT_INTEREST_RATE + settings.OVERDUE_PENALTY_RATE, 
-                  color: 'danger' 
-                },
-              ].map((tier, idx) => (
-                <div key={idx} className="p-4 bg-slate-50 dark:bg-slate-800/50 rounded-2xl border border-slate-100 dark:border-slate-700">
-                   <p className="text-xs font-bold text-slate-500 uppercase tracking-widest">{tier.title}</p>
-                   <div className="mt-2 flex items-baseline gap-1">
-                      <span className={`text-2xl font-black text-${tier.color}-600`}>{tier.rate}%</span>
-                      <span className="text-xs text-slate-500 font-medium">/ mo</span>
-                   </div>
-                   <p className="text-[10px] text-slate-400 mt-2 italic">{tier.desc}</p>
-                </div>
-              ))}
-           </div>          <Card className="p-6 md:col-span-2">
-            <div className="flex items-center gap-3 mb-6">
-              <div className="p-2 bg-blue-100 text-blue-600 rounded-lg dark:bg-blue-900/30 dark:text-blue-400">
-                <Info className="w-5 h-5" />
-              </div>
-              <h3 className="text-lg font-bold text-slate-900 dark:text-white">Communication Templates</h3>
-            </div>
-            
-            <div className="space-y-6">
-              <div>
-                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
-                  Defaulter Reminder Template
-                </label>
-                <textarea
-                  rows={3}
-                  value={settings.MSG_TEMPLATE_DEFAULTER}
-                  onChange={(e) => setSettings({ ...settings, MSG_TEMPLATE_DEFAULTER: e.target.value })}
-                  className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/20 dark:bg-slate-800 dark:border-slate-700 dark:text-white"
-                />
-                <p className="mt-2 text-[10px] text-slate-500 uppercase tracking-wider">
-                  Placeholders: <span className="text-primary-600 font-mono">{"{name}"}, {"{principal}"}, {"{interest}"}, {"{balance}"}</span>
-                </p>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
-                  Lead Nurturing Template (Repaid Customers)
-                </label>
-                <textarea
-                  rows={3}
-                  value={settings.MSG_TEMPLATE_REPAID}
-                  onChange={(e) => setSettings({ ...settings, MSG_TEMPLATE_REPAID: e.target.value })}
-                  className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/20 dark:bg-slate-800 dark:border-slate-700 dark:text-white"
-                />
-                <p className="mt-2 text-[10px] text-slate-500 uppercase tracking-wider">
-                  Placeholders: <span className="text-primary-600 font-mono">{"{name}"}</span>
-                </p>
-              </div>
-            </div>
-          </Card>        </Card>
       </div>
     </div>
   );

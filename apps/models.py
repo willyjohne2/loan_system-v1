@@ -7,7 +7,7 @@ class Admins(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     full_name = models.TextField()
     email = models.TextField(unique=True)
-    phone = models.CharField(max_length=20, blank=True, null=True)
+    phone = models.CharField(max_length=20, unique=True, blank=True, null=True)
     role = models.TextField()
     password_hash = models.TextField()
     is_verified = models.BooleanField(default=False)
@@ -67,6 +67,7 @@ class AuditLogs(models.Model):
     record_id = models.UUIDField(blank=True, null=True)
     old_data = models.JSONField(blank=True, null=True)
     new_data = models.JSONField(blank=True, null=True)
+    ip_address = models.GenericIPAddressField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True, null=True)
 
     class Meta:
@@ -126,15 +127,8 @@ class Loans(models.Model):
         principal = float(self.principal_amount)
         rate = float(self.interest_rate or 0)
 
-        # Simple interest calculation based on duration
-        if self.duration_weeks:
-            # Assuming rate is annual rate, or we can treat as total rate?
-            # User says "more time = more interest", which simple interest does.
-            # Convert weeks to fraction of year (52 weeks)
-            return principal + (principal * (rate / 100) * (self.duration_weeks / 52))
-        elif self.duration_months:
-            return principal + (principal * (rate / 100) * (self.duration_months / 12))
-
+        # The interest rate stored (e.g., 25.0, 31.25) is the total interest percentage
+        # for the entire loan duration.
         return principal + (principal * (rate / 100))
 
     @property
@@ -294,12 +288,26 @@ class Users(models.Model):
         Admins, models.SET_NULL, null=True, blank=True, related_name="registered_users"
     )
     is_verified = models.BooleanField(default=False)
+    is_locked = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True, null=True)
     updated_at = models.DateTimeField(auto_now=True, null=True)
 
     class Meta:
         managed = True
         db_table = "users"
+
+
+class Guarantors(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    user = models.ForeignKey(Users, on_delete=models.CASCADE, related_name="guarantors")
+    full_name = models.TextField()
+    national_id = models.CharField(max_length=50)
+    phone = models.CharField(max_length=20)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        managed = True
+        db_table = "guarantors"
 
 
 class MpesaPayments(models.Model):
@@ -406,3 +414,36 @@ class LoanActivity(models.Model):
     class Meta:
         managed = True
         db_table = "loan_activity"
+
+
+class SystemCapital(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    name = models.CharField(max_length=100, unique=True)
+    balance = models.DecimalField(max_digits=15, decimal_places=2, default=0.00)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        managed = True
+        db_table = "system_capital"
+
+
+class LedgerEntry(models.Model):
+    ENTRY_TYPES = (
+        ("DISBURSEMENT", "Disbursement"),
+        ("REPAYMENT", "Repayment"),
+        ("CAPITAL_INJECTION", "Capital Injection"),
+        ("FEES", "Fees"),
+    )
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    capital_account = models.ForeignKey(SystemCapital, on_delete=models.CASCADE)
+    amount = models.DecimalField(max_digits=12, decimal_places=2)
+    entry_type = models.CharField(max_length=20, choices=ENTRY_TYPES)
+    loan = models.ForeignKey(Loans, on_delete=models.SET_NULL, null=True, blank=True)
+    reference_id = models.CharField(max_length=100, blank=True, null=True)
+    note = models.TextField(blank=True, null=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        managed = True
+        db_table = "ledger_entries"

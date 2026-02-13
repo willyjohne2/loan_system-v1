@@ -39,11 +39,16 @@ const LoanApplicationForm = ({ customer, onSuccess, onCancel }) => {
         const data = await loanService.api.get('/loan-products/');
         let products = data.data.results || data.data || [];
         
-        // Sort products so "Inuka" is first
+        // Custom order: Inuka, Jijenge, Fadhili
+        const productOrder = ['inuka', 'jijenge', 'fadhili'];
         products.sort((a, b) => {
-          if (a.name.toLowerCase().includes('inuka')) return -1;
-          if (b.name.toLowerCase().includes('inuka')) return 1;
-          return 0;
+          const nameA = a.name.toLowerCase();
+          const nameB = b.name.toLowerCase();
+          
+          const indexA = productOrder.findIndex(name => nameA.includes(name));
+          const indexB = productOrder.findIndex(name => nameB.includes(name));
+          
+          return (indexA === -1 ? 99 : indexA) - (indexB === -1 ? 99 : indexB);
         });
 
         setLoanProducts(products);
@@ -51,11 +56,16 @@ const LoanApplicationForm = ({ customer, onSuccess, onCancel }) => {
         // Auto-select first product if available
         if (products.length > 0) {
           const firstProduct = products[0];
+          const name = firstProduct.name.toLowerCase();
+          let duration = 4;
+          if (name.includes('jijenge')) duration = 5;
+          if (name.includes('fadhili')) duration = 6;
+
           setFormData(prev => ({ 
             ...prev, 
             loan_product_id: firstProduct.id,
-            duration_type: 'WEEKS', // Default to weeks as per requirement
-            duration_value: firstProduct.duration_weeks || 4 // Default to 4 weeks or product recommendation
+            duration_type: 'WEEKS',
+            duration_value: duration
           }));
         }
       } catch (err) {
@@ -68,15 +78,20 @@ const LoanApplicationForm = ({ customer, onSuccess, onCancel }) => {
   const handleChange = (e) => {
     const { name, value, type, checked } = e.target;
     
-    // If product changes, auto-update duration to weeks and recommended value
+    // If product changes, auto-update duration based on product name
     if (name === 'loan_product_id') {
       const selectedProduct = loanProducts.find(p => p.id === value);
       if (selectedProduct) {
+        const pName = selectedProduct.name.toLowerCase();
+        let duration = 4;
+        if (pName.includes('jijenge')) duration = 5;
+        if (pName.includes('fadhili')) duration = 6;
+
         setFormData(prev => ({
           ...prev,
           loan_product_id: value,
           duration_type: 'WEEKS',
-          duration_value: selectedProduct.duration_weeks || 4
+          duration_value: duration
         }));
         return;
       }
@@ -90,15 +105,32 @@ const LoanApplicationForm = ({ customer, onSuccess, onCancel }) => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!formData.loan_product_id || !formData.principal_amount) {
-      setError('Please select a product and enter amount');
+    
+    // Strict Validation: Ensure all fields are filled
+    if (!formData.loan_product_id) {
+      setError('Please select a loan product');
       return;
     }
-
+    if (!formData.principal_amount || formData.principal_amount <= 0) {
+      setError('Please enter a valid loan amount');
+      return;
+    }
+    if (!formData.loan_reason) {
+      setError('Please select a purpose for the credit');
+      return;
+    }
+    if (formData.loan_reason === 'Other' && !formData.loan_reason_other) {
+      setError('Please specify the reason for the loan');
+      return;
+    }
     if (!formData.agreedToTerms) {
       setError('You must agree to the Terms and Conditions to proceed');
       return;
     }
+
+    setLoading(true);
+    setError('');
+    
     try {
       const payload = {
         user: customer.id,
@@ -213,10 +245,11 @@ const LoanApplicationForm = ({ customer, onSuccess, onCancel }) => {
               name="duration_value"
               type="number"
               value={formData.duration_value}
-              onChange={handleChange}
-              className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-indigo-500 dark:bg-slate-800 dark:border-slate-700 outline-none font-bold" 
+              readOnly
+              className="w-full px-3 py-2 border rounded-lg bg-slate-100 dark:bg-slate-800 border-slate-200 dark:border-slate-700 outline-none font-black text-slate-600 cursor-not-allowed" 
               placeholder="e.g. 4"
             />
+            <p className="text-[10px] text-slate-400 font-medium">Auto-set by Product Policy</p>
           </div>
 
           <div className="md:col-span-2 space-y-1">
@@ -246,6 +279,43 @@ const LoanApplicationForm = ({ customer, onSuccess, onCancel }) => {
             </div>
           )}
         </div>
+
+        {formData.principal_amount > 0 && formData.loan_product_id && (
+          <div className="mt-8 p-5 bg-indigo-50 dark:bg-indigo-900/30 rounded-2xl border-2 border-indigo-100 dark:border-indigo-800/50 shadow-inner">
+             <h4 className="text-[10px] font-black text-indigo-500 uppercase tracking-widest mb-4 flex items-center gap-2">
+                <DollarSign className="w-3 h-3" />
+                Loan Quotation Summary
+             </h4>
+             <div className="space-y-4">
+                <div className="flex justify-between items-end border-b border-indigo-100 dark:border-indigo-800 pb-2">
+                   <span className="text-xs text-slate-500 font-medium">Principal Amount</span>
+                   <span className="text-sm font-black text-slate-800 dark:text-white">KES {Number(formData.principal_amount).toLocaleString()}</span>
+                </div>
+                <div className="flex justify-between items-end border-b border-indigo-100 dark:border-indigo-800 pb-2 text-amber-600">
+                   <span className="text-xs font-medium">Interest ({
+                      formData.duration_value === 4 ? '25%' : 
+                      formData.duration_value === 5 ? '31.25%' : 
+                      formData.duration_value === 6 ? '36.35%' : '0%'
+                   })</span>
+                   <span className="text-sm font-black tracking-tight">+ KES {(Number(formData.principal_amount) * (
+                      formData.duration_value === 4 ? 0.25 : 
+                      formData.duration_value === 5 ? 0.3125 : 
+                      formData.duration_value === 6 ? 0.3635 : 0
+                   )).toLocaleString()}</span>
+                </div>
+                <div className="flex justify-between items-end pt-1">
+                   <span className="text-xs font-black text-slate-700 dark:text-slate-300 uppercase tracking-tighter">Total Liability</span>
+                   <span className="text-xl font-black text-indigo-600 dark:text-indigo-400">
+                      KES {(Number(formData.principal_amount) * (1 + (
+                        formData.duration_value === 4 ? 0.25 : 
+                        formData.duration_value === 5 ? 0.3125 : 
+                        formData.duration_value === 6 ? 0.3635 : 0
+                      ))).toLocaleString()}
+                   </span>
+                </div>
+             </div>
+          </div>
+        )}
 
         <div className="bg-amber-50 dark:bg-amber-900/20 p-4 rounded-xl flex items-start gap-3 mt-6 border border-amber-100 dark:border-amber-900/50">
           <Info className="w-5 h-5 text-amber-600 mt-0.5" />

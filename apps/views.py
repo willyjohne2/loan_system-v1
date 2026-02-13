@@ -8,7 +8,7 @@ import requests
 from django.core.mail import send_mail
 from django.conf import settings
 from django.utils import timezone
-from rest_framework import status, views, permissions, generics
+from rest_framework import status, views, permissions, generics, parsers
 from rest_framework.response import Response
 from rest_framework_simplejwt.tokens import RefreshToken
 from .models import (
@@ -274,6 +274,7 @@ class LoginView(views.APIView):
 class UserListCreateView(generics.ListCreateAPIView):
     serializer_class = UserSerializer
     permission_classes = [permissions.IsAuthenticated]
+    parser_classes = [parsers.MultiPartParser, parsers.FormParser, parsers.JSONParser]
 
     def get_queryset(self):
         user = self.request.user
@@ -310,6 +311,7 @@ class UserListCreateView(generics.ListCreateAPIView):
 class UserDetailView(generics.RetrieveUpdateDestroyAPIView):
     serializer_class = UserSerializer
     permission_classes = [permissions.IsAuthenticated]
+    parser_classes = [parsers.MultiPartParser, parsers.FormParser, parsers.JSONParser]
 
     def get_queryset(self):
         user = self.request.user
@@ -322,6 +324,91 @@ class UserDetailView(generics.RetrieveUpdateDestroyAPIView):
             return Users.objects.filter(created_by=user)
 
         return Users.objects.all()
+
+    def perform_destroy(self, instance):
+        # Prevent locking if customer has outstanding loans
+        has_outstanding = Loans.objects.filter(
+            user=instance,
+            status__in=[
+                "VERIFIED",
+                "APPROVED",
+                "DISBURSED",
+                "ACTIVE",
+                "OVERDUE",
+                "DEFAULTED",
+            ],
+        ).exists()
+
+        if has_outstanding:
+            raise serializers.ValidationError(
+                {
+                    "error": "Cannot lock/delete a customer with an active or outstanding loan portfolio."
+                }
+            )
+
+        # Soft delete: Lock the user instead of deleting
+        instance.is_locked = True
+        instance.save()
+
+        # Create an audit log for this action
+        if self.request.user and self.request.user.is_authenticated:
+            ip = self.request.META.get("REMOTE_ADDR")
+            AuditLogs.objects.create(
+                admin=self.request.user,
+                action="LOCKED_CUSTOMER",
+                log_type="MANAGEMENT",
+                table_name="users",
+                record_id=instance.id,
+                new_data={"is_locked": True},
+                ip_address=ip,
+            )
+
+    def perform_update(self, serializer):
+        instance = self.get_object()
+        user = self.request.user
+        ip = self.request.META.get("REMOTE_ADDR")
+
+        # Prevent phone change if customer has verified loans
+        if (
+            "phone" in serializer.validated_data
+            and serializer.validated_data["phone"] != instance.phone
+        ):
+            has_verified_loans = Loans.objects.filter(
+                user=instance,
+                status__in=[
+                    "VERIFIED",
+                    "APPROVED",
+                    "DISBURSED",
+                    "ACTIVE",
+                    "OVERDUE",
+                    "DEFAULTED",
+                    "REPAID",
+                ],
+            ).exists()
+            if has_verified_loans:
+                raise serializers.ValidationError(
+                    {
+                        "phone": "Phone number cannot be changed once a customer has a verified or active loan for security reasons."
+                    }
+                )
+
+        old_data = {
+            field: str(getattr(instance, field)) for field in serializer.validated_data
+        }
+
+        updated_instance = serializer.save()
+
+        # Log sensitive updates
+        AuditLogs.objects.create(
+            admin=user,
+            action="UPDATE_CUSTOMER",
+            log_type="MANAGEMENT",
+            table_name="users",
+            record_id=instance.id,
+            old_data=old_data,
+            new_data={k: str(v) for k, v in serializer.validated_data.items()},
+            ip_address=ip,
+        )
 
 
 class CheckUserView(views.APIView):
@@ -420,6 +507,20 @@ class LoanListCreateView(generics.ListCreateAPIView):
         user = self.request.user
         created_by = user if (user and user.is_authenticated) else None
 
+        # Check if customer is locked
+        customer_id = self.request.data.get("user")
+        if customer_id:
+            try:
+                customer = Users.objects.get(id=customer_id)
+                if customer.is_locked:
+                    raise serializers.ValidationError(
+                        {
+                            "error": "This customer account is locked/archived and cannot apply for new loans."
+                        }
+                    )
+            except Users.DoesNotExist:
+                pass
+
         interest_rate = self.request.data.get("interest_rate")
         duration_weeks = self.request.data.get("duration_weeks")
         product_id = self.request.data.get("loan_product")
@@ -433,7 +534,7 @@ class LoanListCreateView(generics.ListCreateAPIView):
                 elif weeks == 5:
                     interest_rate = 31.25
                 elif weeks == 6:
-                    interest_rate = 36.25
+                    interest_rate = 36.35
             except (ValueError, TypeError):
                 pass
 
@@ -608,8 +709,7 @@ class MpesaRepaymentView(views.APIView):
 
 class MpesaDisbursementView(views.APIView):
     """
-    Trigger B2C Disbursement.
-    Can handle single loan_id or 'bulk' mode (next 20 approved loans FCFS)
+    Trigger Disbursement with strict security protocols.
     """
 
     permission_classes = [permissions.IsAuthenticated]
@@ -617,78 +717,157 @@ class MpesaDisbursementView(views.APIView):
     def post(self, request):
         user = request.user
         role = getattr(user, "role", None)
+        ip = request.META.get("REMOTE_ADDR")
 
-        if role not in ["ADMIN", "MANAGER", "FINANCIAL_OFFICER"]:
+        if role not in ["ADMIN", "MANAGER", "FINANCE_OFFICER", "FINANCIAL_OFFICER"]:
             return Response(
-                {"error": "Unauthorized to trigger disbursements"},
-                status=status.HTTP_403_FORBIDDEN,
+                {"error": "Unauthorized to trigger disbursements"}, status=403
             )
 
-        mode = request.data.get("mode", "single")  # single or bulk
+        mode = request.data.get("mode", "single")
+        confirmed = request.data.get("confirmed", False)
+        reason = request.data.get("reason", "Standard Disbursement")
 
-        if mode == "bulk":
-            # Get next 20 approved loans starting from oldest (First Come First Served)
-            loans_to_disburse = Loans.objects.filter(status="APPROVED").order_by(
-                "created_at"
-            )[:20]
-            count = loans_to_disburse.count()
+        if not confirmed:
+            return Response(
+                {
+                    "error": "Two-step confirmation required. Please confirm disbursement action."
+                },
+                status=400,
+            )
 
-            if count == 0:
-                return Response(
-                    {"message": "No approved loans found in queue", "results": []},
-                    status=200,
+        # 1. Daily Limit Check (e.g., 500,000 per officer)
+        # Fetch limit from settings or use default
+        try:
+            limit_setting = SystemSettings.objects.get(
+                key="DAILY_OFFICER_DISBURSEMENT_LIMIT"
+            )
+            daily_limit = float(limit_setting.value)
+        except:
+            daily_limit = 500000.0
+
+        today_start = timezone.now().replace(hour=0, minute=0, second=0, microsecond=0)
+
+        # Calculate what this officer has disbursed today
+        today_disbursements = AuditLogs.objects.filter(
+            admin=user, action="LOAN_DISBURSED", created_at__gte=today_start
+        )
+
+        total_today = 0
+        for log in today_disbursements:
+            try:
+                total_today += float(log.new_data.get("amount", 0))
+            except:
+                pass
+
+        if mode == "single":
+            loan_id = request.data.get("loan_id")
+            if not loan_id:
+                return Response({"error": "loan_id is required"}, status=400)
+
+            try:
+                loan = Loans.objects.get(id=loan_id)
+
+                # Check limit
+                if total_today + float(loan.principal_amount) > daily_limit:
+                    return Response(
+                        {
+                            "error": f"Daily disbursement limit of KES {daily_limit:,} exceeded. Current total: KES {total_today:,}"
+                        },
+                        status=403,
+                    )
+
+                # Manual marking protection (redundant but safe)
+                if loan.status != "APPROVED":
+                    return Response(
+                        {
+                            "error": f"Only APPROVED loans can be disbursed. Current status: {loan.status}"
+                        },
+                        status=400,
+                    )
+
+                # Trigger Service
+                from .services import DisbursementService
+
+                DisbursementService.disburse_loan(loan, user)
+
+                # Audit log with sensitive meta
+                AuditLogs.objects.create(
+                    admin=user,
+                    action="LOAN_DISBURSED",
+                    log_type="MANAGEMENT",
+                    table_name="loans",
+                    record_id=loan.id,
+                    old_data={"status": "APPROVED"},
+                    new_data={
+                        "status": "DISBURSED",
+                        "amount": float(loan.principal_amount),
+                        "reason": reason,
+                    },
+                    ip_address=ip,
                 )
 
-            results = []
-            handler = MpesaHandler()
+                return Response(
+                    {
+                        "message": "Disbursement processed successfully",
+                        "status": "success",
+                    }
+                )
 
-            print(f"Starting bulk disbursement for {count} loans...")
+            except Loans.DoesNotExist:
+                return Response({"error": "Loan not found"}, status=404)
+            except Exception as e:
+                return Response({"error": str(e)}, status=500)
+
+        elif mode == "bulk":
+            # Bulk mode also needs limit checks
+            loans_to_disburse = Loans.objects.filter(status="APPROVED").order_by(
+                "created_at"
+            )[:10]
+            results = []
+            current_batch_total = total_today
+
+            from .services import DisbursementService
 
             for loan in loans_to_disburse:
-                phone_number = loan.user.phone
-                if not phone_number:
+                amt = float(loan.principal_amount)
+                if current_batch_total + amt > daily_limit:
                     results.append(
                         {
                             "loan_id": str(loan.id),
                             "status": "failed",
-                            "error": "No phone number",
+                            "error": "Daily limit reached during bulk process",
                         }
                     )
                     continue
 
-                amount = loan.principal_amount
-
-                if not handler.consumer_key:
-                    # Mock Success
-                    res = {"ResponseCode": "0", "status": "MOCK_SUCCESS"}
-                else:
-                    res = handler.b2c_disburse(
-                        phone_number=phone_number,
-                        amount=amount,
-                        Remarks=f"Disbursement for Loan {str(loan.id)[:8]}",
-                    )
-
-                if (
-                    res.get("ResponseCode") == "0"
-                    or res.get("status") == "MOCK_SUCCESS"
-                ):
-                    loan.status = "DISBURSED"
-                    loan.save()
+                try:
+                    DisbursementService.disburse_loan(loan, user)
+                    current_batch_total += amt
                     results.append({"loan_id": str(loan.id), "status": "success"})
-                else:
+
+                    AuditLogs.objects.create(
+                        admin=user,
+                        action="LOAN_DISBURSED",
+                        log_type="MANAGEMENT",
+                        table_name="loans",
+                        record_id=loan.id,
+                        old_data={"status": "APPROVED"},
+                        new_data={
+                            "status": "DISBURSED",
+                            "amount": amt,
+                            "reason": "Bulk Disbursement",
+                        },
+                        ip_address=ip,
+                    )
+                except Exception as e:
                     results.append(
-                        {
-                            "loan_id": str(loan.id),
-                            "status": "failed",
-                            "error": res.get("ResponseDescription"),
-                        }
+                        {"loan_id": str(loan.id), "status": "failed", "error": str(e)}
                     )
 
-            return Response({"message": "Bulk processing complete", "results": results})
-
-        # Single loan mode
-        loan_id = request.data.get("loan_id")
-        if not loan_id:
+            return Response(
+                {"message": "Bulk disbursement completed", "results": results}
+            )
             return Response(
                 {"error": "loan_id is required"}, status=status.HTTP_400_BAD_REQUEST
             )
@@ -703,37 +882,21 @@ class MpesaDisbursementView(views.APIView):
                     status=status.HTTP_400_BAD_REQUEST,
                 )
 
-            phone_number = loan.user.phone
-            if not phone_number:
-                return Response(
-                    {"error": "Borrower has no phone number"},
-                    status=status.HTTP_400_BAD_REQUEST,
-                )
-
-            amount = loan.principal_amount
-            handler = MpesaHandler()
-
-            if not handler.consumer_key:
-                result = {"ResponseCode": "0", "status": "MOCK_SUCCESS"}
-            else:
-                result = handler.b2c_disburse(
-                    phone_number=phone_number,
-                    amount=amount,
-                    Remarks=f"Disbursement for Loan {str(loan.id)[:8]}",
-                )
-
-            if (
-                result.get("ResponseCode") == "0"
-                or result.get("status") == "MOCK_SUCCESS"
-            ):
-                loan.status = "DISBURSED"
-                loan.save()
-
-            return Response(result)
+            DisbursementService.disburse_loan(loan, user)
+            return Response({"message": "Loan disbursed successfully."}, status=200)
 
         except Loans.DoesNotExist:
             return Response(
                 {"error": "Loan not found"}, status=status.HTTP_404_NOT_FOUND
+            )
+        except InsufficientCapitalError as e:
+            return Response(
+                {"error": str(e.detail)}, status=status.HTTP_400_BAD_REQUEST
+            )
+        except Exception as e:
+            return Response(
+                {"error": f"Disbursement failed: {str(e)}"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
 
 
@@ -1431,6 +1594,33 @@ class LoanProductListCreateView(generics.ListCreateAPIView):
     permission_classes = [permissions.AllowAny]
 
 
+class LoanProductDetailView(generics.RetrieveUpdateDestroyAPIView):
+    queryset = LoanProducts.objects.all()
+    serializer_class = LoanProductSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def perform_update(self, serializer):
+        user = self.request.user
+        ip = self.request.META.get("REMOTE_ADDR")
+        instance = self.get_object()
+        old_rate = instance.interest_rate
+
+        product = serializer.save()
+        new_rate = product.interest_rate
+
+        if old_rate != new_rate:
+            AuditLogs.objects.create(
+                admin=user if user.is_authenticated else None,
+                action="UPDATE_LOAN_PRODUCT_RATE",
+                log_type="MANAGEMENT",
+                table_name="loan_products",
+                record_id=product.id,
+                old_data={"interest_rate": float(old_rate) if old_rate else None},
+                new_data={"interest_rate": float(new_rate), "name": product.name},
+                ip_address=ip,
+            )
+
+
 class UserProfileListCreateView(generics.ListCreateAPIView):
     queryset = UserProfiles.objects.all()
     serializer_class = UserProfileSerializer
@@ -1454,78 +1644,110 @@ class LoanDetailView(generics.RetrieveUpdateDestroyAPIView):
         return Loans.objects.all()
 
     def perform_update(self, serializer):
-        old_loan = self.get_object()
-        new_status = self.request.data.get("status")
+        instance = self.get_object()
+        data = self.request.data
+        ip = self.request.META.get("REMOTE_ADDR")
 
+        # 1. Block manual status change to DISBURSED
+        if data.get("status") == "DISBURSED" and instance.status != "DISBURSED":
+            from rest_framework.exceptions import ValidationError
+
+            raise ValidationError(
+                "Loans cannot be manually marked as DISBURSED. Use the disbursement trigger."
+            )
+
+        # 2. Block critical field changes if loan is beyond APPLIED
+        if instance.status in ["VERIFIED", "APPROVED", "DISBURSED", "COMPLETED"]:
+            protected_fields = ["principal_amount", "user", "loan_product"]
+            for field in protected_fields:
+                if field in data:
+                    val = data[field]
+                    orig = getattr(instance, field)
+                    if hasattr(orig, "id"):
+                        if str(val) != str(orig.id):
+                            from rest_framework.exceptions import ValidationError
+
+                            raise ValidationError(
+                                f"Cannot change {field} after loan has been {instance.status}."
+                            )
+                    else:
+                        if str(val) != str(orig):
+                            from rest_framework.exceptions import ValidationError
+
+                            raise ValidationError(
+                                f"Cannot change {field} after loan has been {instance.status}."
+                            )
+
+        old_status = instance.status
         loan = serializer.save()
+        new_status = loan.status
 
-        if new_status and new_status != old_loan.status:
+        if new_status != old_status:
             admin = self.request.user if self.request.user.is_authenticated else None
             create_loan_activity(
                 loan,
                 admin,
                 new_status,
-                f"Status changed from {old_loan.status} to {new_status}",
+                f"Status changed from {old_status} to {new_status}",
+            )
+
+            # Audit Log
+            AuditLogs.objects.create(
+                admin=self.request.user if self.request.user.is_authenticated else None,
+                action="LOAN_UPDATE",
+                log_type="MANAGEMENT",
+                table_name="loans",
+                record_id=loan.id,
+                old_data={"status": old_status},
+                new_data={"status": new_status},
+                ip_address=ip,
             )
 
             create_notification(
                 loan.user,
-                f"Your loan status has been updated to {new_status}.",
+                f"Loan {loan.loan_id} Update",
+                f"The status of your loan has been updated to {new_status}.",
             )
 
-            # Audit Log for Status Change
-            AuditLogs.objects.create(
-                admin=admin,
-                action=f"Changed loan {loan.id} status from {old_loan.status} to {new_status}",
-                log_type="STATUS",
-                table_name="loans",
-                record_id=loan.id,
-                old_data={"status": old_loan.status},
-                new_data={"status": new_status},
+
+class LoanDisbursementView(views.APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request, pk):
+        try:
+            loan = Loans.objects.get(pk=pk)
+        except Loans.DoesNotExist:
+            return Response(
+                {"error": "Loan not found"}, status=status.HTTP_404_NOT_FOUND
             )
 
-            # SMS Notifications for specific status changes
-            if new_status == "VERIFIED" and loan.user.phone:
-                msg = (
-                    f"Hello {loan.user.full_name}, your loan application for KES {loan.principal_amount:,.2f} "
-                    "has been VERIFIED by our officer. It is now awaiting final approval."
-                )
-                send_sms_async([loan.user.phone], msg)
-                SMSLog.objects.create(
-                    sender=getattr(self.request, "user", None),
-                    recipient_phone=loan.user.phone,
-                    recipient_name=loan.user.full_name,
-                    message=msg,
-                    type="AUTO",
-                )
+        user = request.user
+        if not hasattr(user, "role") or user.role != "FINANCE_OFFICER":
+            return Response(
+                {"error": "Only Finance Officers can disburse loans."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
 
-            elif new_status == "APPROVED" and loan.user.phone:
-                msg = (
-                    f"Congratulations {loan.user.full_name}! Your loan of KES {loan.principal_amount:,.2f} "
-                    "has been APPROVED. Your funds are being prepared for disbursement."
-                )
-                send_sms_async([loan.user.phone], msg)
-                SMSLog.objects.create(
-                    sender=getattr(self.request, "user", None),
-                    recipient_phone=loan.user.phone,
-                    recipient_name=loan.user.full_name,
-                    message=msg,
-                    type="AUTO",
-                )
+        if loan.status != "APPROVED":
+            return Response(
+                {"error": "Only approved loans can be disbursed."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
 
-            elif new_status == "DISBURSED" and loan.user.phone:
-                msg = (
-                    f"Hello {loan.user.full_name}, KES {loan.principal_amount:,.2f} has been DISBURSED to your mobile wallet. "
-                    f"Repayment is due as per your {loan.duration_weeks or loan.duration_months} schedule. Thank you."
-                )
-                send_sms_async([loan.user.phone], msg)
-                SMSLog.objects.create(
-                    sender=getattr(self.request, "user", None),
-                    recipient_phone=loan.user.phone,
-                    recipient_name=loan.user.full_name,
-                    message=msg,
-                    type="AUTO",
-                )
+        try:
+            DisbursementService.disburse_loan(loan, user)
+            return Response(
+                {"message": "Loan disbursed successfully."}, status=status.HTTP_200_OK
+            )
+        except InsufficientCapitalError as e:
+            return Response(
+                {"error": str(e.detail)}, status=status.HTTP_400_BAD_REQUEST
+            )
+        except Exception as e:
+            return Response(
+                {"error": f"An unexpected error occurred: {str(e)}"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
 
 
 class LoanDocumentCreateView(generics.CreateAPIView):
@@ -1640,6 +1862,259 @@ class LoanAnalyticsView(views.APIView):
         return Response(data)
 
 
+class FinanceAnalyticsView(views.APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        from django.db.models import Sum, Q, F
+        from django.db.models.functions import TruncDate
+        from datetime import timedelta
+        from .models import (
+            SystemCapital,
+            Loans,
+            Repayments,
+            LedgerEntry,
+            RepaymentSchedule,
+        )
+
+        today = timezone.now().date()
+
+        # Get Capital Balance
+        capital = SystemCapital.objects.filter(name="Simulation Capital").first()
+        balance = float(capital.balance) if capital else 0.0
+
+        # Last 60 days range
+        sixty_days_ago = timezone.now() - timedelta(days=60)
+
+        # Money Out (Total Principal of Disbursed Loans - ONLY DISBURSED)
+        # We include all statuses that represent funds already given to customers
+        disbursed_statuses = ["DISBURSED", "ACTIVE", "OVERDUE", "CLOSED", "REPAID"]
+        money_out_query = Loans.objects.filter(status__in=disbursed_statuses)
+        money_out = (
+            money_out_query.aggregate(total=Sum("principal_amount"))["total"] or 0
+        )
+
+        # Money In (Total amount repaid)
+        money_in = Repayments.objects.aggregate(total=Sum("amount_paid"))["total"] or 0
+
+        # Aging Report Analysis
+        # 1-30 days, 31-60 days, 61-90 days, 90+ days overdue
+        aging_30 = (
+            Loans.objects.filter(
+                status="OVERDUE",
+                repaymentschedule__due_date__lt=today,
+                repaymentschedule__due_date__gte=today - timedelta(days=30),
+            )
+            .distinct()
+            .aggregate(total=Sum("principal_amount"))["total"]
+            or 0
+        )
+        aging_60 = (
+            Loans.objects.filter(
+                status="OVERDUE",
+                repaymentschedule__due_date__lt=today - timedelta(days=30),
+                repaymentschedule__due_date__gte=today - timedelta(days=60),
+            )
+            .distinct()
+            .aggregate(total=Sum("principal_amount"))["total"]
+            or 0
+        )
+        aging_90 = (
+            Loans.objects.filter(
+                status="OVERDUE",
+                repaymentschedule__due_date__lt=today - timedelta(days=60),
+            )
+            .distinct()
+            .aggregate(total=Sum("principal_amount"))["total"]
+            or 0
+        )
+
+        # Rolling 15-day window for Line Charts (7 days history, Today, 7 days future)
+        seven_days_ago = today - timedelta(days=7)
+        seven_days_future = today + timedelta(days=7)
+
+        # Actuals (History)
+        actual_disbursements = (
+            Loans.objects.filter(
+                status__in=disbursed_statuses,
+                created_at__date__gte=seven_days_ago,
+                created_at__date__lte=today,
+            )
+            .annotate(date=TruncDate("created_at"))
+            .values("date")
+            .annotate(amount=Sum("principal_amount"))
+        )
+
+        actual_repayments = (
+            Repayments.objects.filter(
+                payment_date__date__gte=seven_days_ago, payment_date__date__lte=today
+            )
+            .annotate(date=TruncDate("payment_date"))
+            .values("date")
+            .annotate(amount=Sum("amount_paid"))
+        )
+
+        # Projections (Future Schedules)
+        scheduled_repayments = (
+            RepaymentSchedule.objects.filter(
+                due_date__gt=today, due_date__lte=seven_days_future
+            )
+            .values("due_date")
+            .annotate(amount=Sum("amount_due"))
+        )
+
+        # Build timeline map
+        timeline_map = {}
+        curr = seven_days_ago
+        while curr <= seven_days_future:
+            d_str = curr.strftime("%Y-%m-%d")
+            timeline_map[d_str] = {
+                "date": d_str,
+                "disbursement": 0.0,
+                "repayment": 0.0,
+                "is_future": curr > today,
+                "label": "TODAY" if curr == today else curr.strftime("%d %b"),
+            }
+            curr += timedelta(days=1)
+
+        for item in actual_disbursements:
+            d_str = str(item["date"])[:10]
+            if d_str in timeline_map:
+                timeline_map[d_str]["disbursement"] = float(item["amount"] or 0)
+
+        for item in actual_repayments:
+            d_str = str(item["date"])[:10]
+            if d_str in timeline_map:
+                timeline_map[d_str]["repayment"] = float(item["amount"] or 0)
+
+        for item in scheduled_repayments:
+            # schedule due_date is a date object
+            d_str = str(item["due_date"])[:10]
+            if d_str in timeline_map:
+                timeline_map[d_str]["repayment"] += float(item["amount"] or 0)
+
+        # Weekly History for BarCharts (Last 10 weeks)
+        ten_weeks_ago = today - timedelta(weeks=10)
+        from django.db.models.functions import TruncWeek
+
+        weekly_disbursed_query = (
+            Loans.objects.filter(
+                status__in=disbursed_statuses, created_at__date__gte=ten_weeks_ago
+            )
+            .annotate(week=TruncWeek("created_at"))
+            .values("week")
+            .annotate(amount=Sum("principal_amount"))
+            .order_by("week")
+        )
+
+        weekly_repaid_query = (
+            Repayments.objects.filter(payment_date__date__gte=ten_weeks_ago)
+            .annotate(week=TruncWeek("payment_date"))
+            .values("week")
+            .annotate(amount=Sum("amount_paid"))
+            .order_by("week")
+        )
+
+        # Pre-fill last 10 weeks
+        weekly_disbursed = []
+        weekly_repaid = []
+
+        # Create a map of existing data for quick lookup
+        disp_map = {
+            str(x["week"])[:10]: float(x["amount"]) for x in weekly_disbursed_query
+        }
+        repay_map = {
+            str(x["week"])[:10]: float(x["amount"]) for x in weekly_repaid_query
+        }
+
+        for i in range(9, -1, -1):  # Last 10 weeks
+            target_date = today - timedelta(weeks=i)
+            # Find the start of the week for this date
+            start_of_week = target_date - timedelta(days=target_date.weekday())
+            w_key = start_of_week.strftime("%Y-%m-%d")
+
+            weekly_disbursed.append(
+                {
+                    "week": start_of_week.strftime("%d %b"),
+                    "amount": disp_map.get(w_key, 0.0),
+                }
+            )
+            weekly_repaid.append(
+                {
+                    "week": start_of_week.strftime("%d %b"),
+                    "amount": repay_map.get(w_key, 0.0),
+                }
+            )
+
+        # Trial Balance Context (Grouped Capital/Assets/Liabilities)
+        trial_balance = [
+            {"account": "Simulation Capital", "debit": 0, "credit": balance},
+            {
+                "account": "Loan Portfolio (Principal)",
+                "debit": float(money_out),
+                "credit": 0,
+            },
+            {"account": "Interest Receivable", "debit": 0, "credit": 0},
+            {"account": "Repayments Pool", "debit": float(money_in), "credit": 0},
+        ]
+
+        # Collection Log (Last 50 entries)
+        collections = Repayments.objects.select_related("loan__user").order_by(
+            "-payment_date"
+        )[:50]
+        collection_log = [
+            {
+                "id": str(r.id),
+                "customer": r.loan.user.full_name,
+                "amount": float(r.amount_paid),
+                "date": r.payment_date.strftime("%Y-%m-%d %H:%M"),
+                "method": r.payment_method,
+                "reference": r.reference_code,
+            }
+            for r in collections
+        ]
+
+        # Cashbook (Last 100 Ledger entries)
+        ledger_entries = LedgerEntry.objects.select_related("loan__user").order_by(
+            "-created_at"
+        )[:100]
+        cashbook = [
+            {
+                "id": str(entry.id),
+                "date": entry.created_at.strftime("%Y-%m-%d %H:%M"),
+                "type": entry.entry_type,
+                "amount": float(entry.amount),
+                "customer": (
+                    entry.loan.user.full_name
+                    if entry.loan and entry.loan.user
+                    else "SYSTEM"
+                ),
+                "reference": entry.reference_id or "N/A",
+                "note": entry.note or "",
+            }
+            for entry in ledger_entries
+        ]
+
+        return Response(
+            {
+                "balance": balance,
+                "money_out": float(money_out),
+                "money_in": float(money_in),
+                "history": list(timeline_map.values()),
+                "weekly_disbursed": weekly_disbursed,
+                "weekly_repaid": weekly_repaid,
+                "trial_balance": trial_balance,
+                "cashbook": cashbook,
+                "aging_report": {
+                    "days_30": float(aging_30),
+                    "days_60": float(aging_60),
+                    "days_90": float(aging_90),
+                },
+                "collection_log": collection_log,
+            }
+        )
+
+
 class AdminInviteView(views.APIView):
     permission_classes = [permissions.IsAuthenticated]
 
@@ -1730,3 +2205,66 @@ class AdminInviteView(views.APIView):
             },
             status=201,
         )
+
+
+class DirectSMSView(views.APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request):
+        user = request.user
+        recipient_phone = request.data.get("phone")
+        message = request.data.get("message")
+        user_id = request.data.get("user_id") or request.data.get("customer_id")
+
+        if not recipient_phone and user_id:
+            try:
+                from .models import Users
+
+                target_user = Users.objects.get(id=user_id)
+                recipient_phone = target_user.phone_number
+            except Users.DoesNotExist:
+                return Response({"error": "Customer not found"}, status=404)
+
+        if not all([recipient_phone, message]):
+            return Response({"error": "Phone and message are required"}, status=400)
+
+        # Restricted roles
+        if getattr(user, "role", None) not in [
+            "ADMIN",
+            "MANAGER",
+            "FINANCIAL_OFFICER",
+            "FIELD_OFFICER",
+        ]:
+            return Response({"error": "Unauthorized to send direct SMS"}, status=403)
+
+        try:
+            from .utils.sms import send_sms_async
+
+            send_sms_async([recipient_phone], message)
+
+            # Log the SMS
+            from .models import SMSLog, AuditLogs
+
+            SMSLog.objects.create(
+                sender=user,
+                recipient_phone=recipient_phone,
+                recipient_name=request.data.get("recipient_name", "Customer"),
+                message=message,
+                type="DIRECT",
+                status="SENT",
+            )
+
+            # Audit log
+            AuditLogs.objects.create(
+                admin=user,
+                action="SENT_DIRECT_SMS",
+                log_type="COMMUNICATION",
+                table_name="sms_logs",
+                record_id=user_id,
+                new_data={"phone": recipient_phone, "message": message},
+                ip_address=request.META.get("REMOTE_ADDR"),
+            )
+
+            return Response({"message": "Message sent successfully"})
+        except Exception as e:
+            return Response({"error": str(e)}, status=500)

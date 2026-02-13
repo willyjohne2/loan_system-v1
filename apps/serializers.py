@@ -1,4 +1,5 @@
 from rest_framework import serializers
+import json
 from .models import (
     Admins,
     Users,
@@ -14,6 +15,7 @@ from .models import (
     LoanActivity,
     SMSLog,
     DeactivationRequest,
+    Guarantors,
 )
 
 
@@ -41,6 +43,39 @@ class AdminSerializer(serializers.ModelSerializer):
             "created_at",
         ]
 
+    def validate_phone(self, value):
+        import re
+
+        normalized = re.sub(r"\D", "", value)
+        if normalized.startswith("0") and len(normalized) == 10:
+            normalized = "254" + normalized[1:]
+        elif (normalized.startswith("7") or normalized.startswith("1")) and len(
+            normalized
+        ) == 9:
+            normalized = "254" + normalized
+
+        if (
+            Admins.objects.filter(phone=normalized)
+            .exclude(id=getattr(self.instance, "id", None))
+            .exists()
+        ):
+            raise serializers.ValidationError(
+                "This phone number is already registered to another staff member."
+            )
+
+        if Users.objects.filter(phone=normalized).exists():
+            raise serializers.ValidationError(
+                "This phone number is already registered to a customer."
+            )
+
+        return normalized
+
+
+class GuarantorSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Guarantors
+        fields = ["id", "full_name", "national_id", "phone"]
+
 
 class LoanDocumentSerializer(serializers.ModelSerializer):
     class Meta:
@@ -64,6 +99,7 @@ class UserProfileSerializer(serializers.ModelSerializer):
 
 class UserSerializer(serializers.ModelSerializer):
     profile = UserProfileSerializer(required=False)
+    guarantors = GuarantorSerializer(many=True, read_only=True)
     national_id = serializers.CharField(write_only=True, required=False)
     has_active_loan = serializers.SerializerMethodField()
 
@@ -98,6 +134,22 @@ class UserSerializer(serializers.ModelSerializer):
             normalized
         ) == 9:
             normalized = "254" + normalized
+
+        # Check uniqueness across both Users and Admins
+        if (
+            Users.objects.filter(phone=normalized)
+            .exclude(id=getattr(self.instance, "id", None))
+            .exists()
+        ):
+            raise serializers.ValidationError(
+                "This phone number is already registered to a customer."
+            )
+
+        if Admins.objects.filter(phone=normalized).exists():
+            raise serializers.ValidationError(
+                "This phone number is already registered to a staff member."
+            )
+
         return normalized
 
     def validate_national_id(self, value):
@@ -115,7 +167,9 @@ class UserSerializer(serializers.ModelSerializer):
 
     def create(self, validated_data):
         national_id = validated_data.pop("national_id", None)
-        profile_data = self.context.get("request").data
+        request = self.context.get("request")
+        profile_data = request.data
+        files = request.FILES
 
         # Ensure email is None if empty string
         if "email" in validated_data and not validated_data["email"]:
@@ -123,70 +177,117 @@ class UserSerializer(serializers.ModelSerializer):
 
         user = Users.objects.create(**validated_data)
 
+        # Handle Guarantors
+        guarantors_data = profile_data.get("guarantors")
+        if isinstance(guarantors_data, str):
+            try:
+                guarantors_data = json.loads(guarantors_data)
+            except:
+                guarantors_data = []
+
+        if guarantors_data and isinstance(guarantors_data, list):
+            for g in guarantors_data:
+                # Basic validation for guarantor fields
+                if g.get("full_name") and g.get("phone"):
+                    Guarantors.objects.create(
+                        user=user,
+                        full_name=g.get("full_name"),
+                        national_id=g.get("national_id", ""),
+                        phone=g.get("phone"),
+                    )
+
+        # Build profile defaults
+        profile_defaults = {
+            "national_id": national_id or profile_data.get("national_id"),
+            "date_of_birth": profile_data.get("date_of_birth") or None,
+            "branch": profile_data.get("branch"),
+            "town": profile_data.get("town"),
+            "village": profile_data.get("village"),
+            "address": profile_data.get("address"),
+            "employment_status": profile_data.get("employment_status"),
+            "monthly_income": profile_data.get("monthly_income") or None,
+        }
+
+        # Extract images primarily from FILES
+        if files.get("profile_image"):
+            profile_defaults["profile_image"] = files.get("profile_image")
+
+        if files.get("national_id_image"):
+            profile_defaults["national_id_image"] = files.get("national_id_image")
+
         # Use update_or_create to populate the fields correctly
         UserProfiles.objects.update_or_create(
             user=user,
-            defaults={
-                "national_id": national_id or profile_data.get("national_id"),
-                "date_of_birth": profile_data.get("date_of_birth") or None,
-                "branch": profile_data.get("branch"),
-                "branch": profile_data.get("branch"),
-                "town": profile_data.get("town"),
-                "village": profile_data.get("village"),
-                "address": profile_data.get("address"),
-                "employment_status": profile_data.get("employment_status"),
-                "monthly_income": profile_data.get("monthly_income") or None,
-                "profile_image": profile_data.get("profile_image"),
-                "national_id_image": profile_data.get("national_id_image"),
-            },
+            defaults=profile_defaults,
         )
         return user
 
     def update(self, instance, validated_data):
         national_id = validated_data.pop("national_id", None)
-        profile_data = self.context.get("request").data
+        request = self.context.get("request")
+        profile_data = request.data
+        files = request.FILES
 
-        # Update user fields
+        # Update the basic User fields
         for attr, value in validated_data.items():
-            if attr == "email" and not value:
+            if attr == "email" and value == "":
                 value = None
             setattr(instance, attr, value)
         instance.save()
 
-        # Update or create profile
-        profile, created = UserProfiles.objects.get_or_create(user=instance)
+        # Handle Guarantors (Replace existing if provided)
+        guarantors_data = profile_data.get("guarantors")
+        if isinstance(guarantors_data, str):
+            try:
+                guarantors_data = json.loads(guarantors_data)
+            except:
+                guarantors_data = None
 
-        # Update profile fields if provided
-        profile_fields = [
-            "date_of_birth",
-            "branch",
-            "branch",
-            "town",
-            "village",
-            "address",
-            "employment_status",
-            "monthly_income",
-        ]
+        if guarantors_data is not None and isinstance(guarantors_data, list):
+            # Clear existing and re-add
+            instance.guarantors.all().delete()
+            for g in guarantors_data:
+                if g.get("full_name") and g.get("phone"):
+                    Guarantors.objects.create(
+                        user=instance,
+                        full_name=g.get("full_name"),
+                        national_id=g.get("national_id", ""),
+                        phone=g.get("phone"),
+                    )
 
-        # Priority to validation-passed national_id
-        if national_id:
-            profile.national_id = national_id
-        elif "national_id" in profile_data:
-            profile.national_id = profile_data.get("national_id")
+        # Handle updating or creating the related profile
+        profile_defaults = {
+            "national_id": national_id or profile_data.get("national_id"),
+            "date_of_birth": profile_data.get("date_of_birth") or None,
+            "branch": profile_data.get("branch"),
+            "town": profile_data.get("town"),
+            "village": profile_data.get("village"),
+            "address": profile_data.get("address"),
+            "employment_status": profile_data.get("employment_status"),
+            "monthly_income": profile_data.get("monthly_income") or None,
+        }
 
-        for field in profile_fields:
-            if field in profile_data:
-                val = profile_data.get(field)
-                if field in ["date_of_birth", "monthly_income"] and not val:
-                    val = None
-                setattr(profile, field, val)
+        # Only update images if they are provided in files
+        if files.get("profile_image"):
+            profile_defaults["profile_image"] = files.get("profile_image")
+        elif (
+            "profile_image" in profile_data and profile_data["profile_image"] == "null"
+        ):
+            profile_defaults["profile_image"] = None
 
-        if "profile_image" in profile_data:
-            profile.profile_image = profile_data.get("profile_image")
-        if "national_id_image" in profile_data:
-            profile.national_id_image = profile_data.get("national_id_image")
+        if files.get("national_id_image"):
+            profile_defaults["national_id_image"] = files.get("national_id_image")
+        elif (
+            "national_id_image" in profile_data
+            and profile_data["national_id_image"] == "null"
+        ):
+            profile_defaults["national_id_image"] = None
 
-        profile.save()
+        UserProfiles.objects.update_or_create(
+            user=instance,
+            defaults=profile_defaults,
+        )
+
         return instance
 
 
@@ -199,6 +300,11 @@ class LoanProductSerializer(serializers.ModelSerializer):
 class LoanSerializer(serializers.ModelSerializer):
     documents = LoanDocumentSerializer(many=True, read_only=True)
     activities = LoanActivitySerializer(many=True, read_only=True)
+    customer_name = serializers.ReadOnlyField(source="user.full_name")
+    customer_phone = serializers.ReadOnlyField(source="user.phone")
+    product_name = serializers.ReadOnlyField(source="loan_product.name")
+    guarantor_phone = serializers.SerializerMethodField()
+
     remaining_balance = serializers.DecimalField(
         max_digits=12, decimal_places=2, read_only=True
     )
@@ -212,6 +318,10 @@ class LoanSerializer(serializers.ModelSerializer):
     class Meta:
         model = Loans
         fields = "__all__"
+
+    def get_guarantor_phone(self, obj):
+        guarantor = obj.user.guarantors.first()
+        return guarantor.phone if guarantor else "No Guarantor"
 
     def validate(self, data):
         user = data.get("user")

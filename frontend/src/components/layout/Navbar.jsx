@@ -3,8 +3,14 @@ import { Bell, Search, User, LogOut, Settings, ChevronDown, CheckCheck, Menu } f
 import { useAuth } from '../../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import { loanService } from '../../api/api';
+import { clsx } from 'clsx';
+import { twMerge } from 'tailwind-merge';
 
-const Navbar = ({ title, onMenuClick }) => {
+function cn(...inputs) {
+  return twMerge(clsx(inputs));
+}
+
+const Navbar = ({ title, onMenuClick, isSidebarOpen }) => {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
   const [showMenu, setShowMenu] = useState(false);
@@ -57,21 +63,33 @@ const Navbar = ({ title, onMenuClick }) => {
   };
 
   return (
-    <header className="h-16 bg-white border-b border-slate-200 dark:bg-slate-900 dark:border-slate-800 flex items-center justify-between px-4 md:px-8 sticky top-0 z-10">
-      <div className="flex items-center gap-4">
+    <header className="h-16 md:h-20 bg-white/80 dark:bg-slate-900/80 backdrop-blur-md border-b border-slate-200 dark:border-slate-800 flex items-center justify-between px-4 md:px-8 sticky top-0 z-40 transition-all">
+      <div className="flex items-center gap-3 md:gap-4">
         <button 
           onClick={onMenuClick}
-          className="lg:hidden p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg"
+          className="p-2 text-slate-600 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800 rounded-xl transition-all active:scale-95 group"
+          title={isSidebarOpen ? "Hide Menu" : "Show Menu"}
         >
-          <Menu className="w-6 h-6 text-slate-600 dark:text-slate-400" />
+          <Menu className={cn(
+            "w-6 h-6 transition-transform",
+            isSidebarOpen && "rotate-180"
+          )} />
         </button>
-        <h2 className="text-lg md:text-xl font-semibold text-slate-800 dark:text-white truncate max-w-[150px] md:max-w-none">
-          {title}
-        </h2>
+        <div className="flex flex-col">
+          <div className="flex items-center gap-2">
+            <span className="text-[10px] font-black text-indigo-600 bg-indigo-50 px-1.5 py-0.5 rounded sm:hidden uppercase tracking-tighter">LOANDO</span>
+            <h2 className="text-sm md:text-xl font-black text-slate-900 dark:text-white truncate max-w-[140px] sm:max-w-[200px] md:max-w-none tracking-tight">
+              {title}
+            </h2>
+          </div>
+          <span className="text-[10px] text-slate-400 font-medium hidden sm:inline uppercase tracking-widest">
+            Azariah Credit Ltd &bull; Dashboard
+          </span>
+        </div>
       </div>
 
-      <div className="flex items-center space-x-2 md:space-x-6">
-        <div className="relative hidden md:block">
+      <div className="flex items-center space-x-1 sm:space-x-3 md:space-x-6">
+        <div className="relative hidden lg:block">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
           <input
             type="text"
@@ -183,16 +201,6 @@ const Navbar = ({ title, onMenuClick }) => {
                 >
                   <Settings className="w-4 h-4 mr-3" />
                   Settings
-                </button>
-              </div>
-
-              <div className="border-t border-slate-200 dark:border-slate-700 p-2">
-                <button
-                  onClick={handleLogout}
-                  className="flex items-center w-full px-4 py-2 text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded transition-colors font-medium"
-                >
-                  <LogOut className="w-4 h-4 mr-3" />
-                  Logout
                 </button>
               </div>
             </div>

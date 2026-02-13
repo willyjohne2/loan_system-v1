@@ -28,6 +28,7 @@ import {
   History,
   Lock,
   Eye,
+  PieChart,
 } from 'lucide-react';
 
 const AdminOverview = () => {
@@ -55,6 +56,7 @@ const AdminOverview = () => {
     repaid: 0,
     defaulted: 0
   });
+  const [productDistribution, setProductDistribution] = useState([]);
   const [chartData, setChartData] = useState([]);
   const [isChartPlaceholder, setIsChartPlaceholder] = useState(false);
   const [auditLogs, setAuditLogs] = useState([]);
@@ -77,7 +79,10 @@ const AdminOverview = () => {
         const loans = loansData.results || loansData || [];
         const repayments = repaymentsData.results || repaymentsData || [];
 
-        const totalAmount = loans.reduce((acc, l) => acc + parseAmount(l.principal_amount), 0);
+        const disbursedStatuses = ['DISBURSED', 'ACTIVE', 'OVERDUE', 'CLOSED', 'REPAID'];
+        const totalAmount = loans
+          .filter(l => disbursedStatuses.includes((l.status || '').toUpperCase()))
+          .reduce((acc, l) => acc + parseAmount(l.principal_amount), 0);
         const repaidAmount = repayments.reduce((acc, r) => acc + parseAmount(r.amount_paid), 0);
 
         const statusCounts = loans.reduce(
@@ -91,6 +96,20 @@ const AdminOverview = () => {
           },
           { approved: 0, pending: 0, repaid: 0, defaulted: 0 }
         );
+
+        // Product Distribution for Pie Chart
+        const productCounts = loans.reduce((acc, l) => {
+          const name = l.product_name || 'Generic';
+          acc[name] = (acc[name] || 0) + 1;
+          return acc;
+        }, {});
+        
+        const formattedProducts = Object.keys(productCounts).map(name => ({
+          name: name.toUpperCase(),
+          value: productCounts[name]
+        })).sort((a, b) => b.value - a.value);
+
+        setProductDistribution(formattedProducts);
 
         // Process Chart Data: Show last 6 months
         const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
@@ -248,8 +267,8 @@ const AdminOverview = () => {
         />
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        <Card className="lg:col-span-2 p-8">
+      <div className="grid grid-cols-1 xl:grid-cols-3 gap-8">
+        <Card className="xl:col-span-2 p-8">
            <div className="flex items-center justify-between mb-8">
               <h3 className="text-lg font-semibold text-slate-900 dark:text-white flex items-center gap-2">
                  <BarChart3 className="w-5 h-5 text-primary-600" />
@@ -328,6 +347,50 @@ const AdminOverview = () => {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+        <Card className="p-8">
+          <div className="flex items-center justify-between mb-6">
+             <h3 className="text-lg font-semibold text-slate-900 dark:text-white flex items-center gap-2">
+                <PieChart className="w-5 h-5 text-indigo-600" />
+                Loan Product Distribution
+             </h3>
+             <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Popularity by volume</span>
+          </div>
+          <div className="h-[300px] w-full flex flex-col md:flex-row items-center justify-center">
+             <div className="w-full h-full">
+                <ResponsiveContainer width="100%" height="100%">
+                  <RePieChart>
+                    <Pie
+                      data={productDistribution.length > 0 ? productDistribution : [{ name: 'N/A', value: 1 }]}
+                      cx="50%"
+                      cy="50%"
+                      innerRadius={60}
+                      outerRadius={85}
+                      paddingAngle={5}
+                      dataKey="value"
+                    >
+                      {(productDistribution.length > 0 ? productDistribution : [{ name: 'N/A', value: 1 }]).map((entry, index) => (
+                        <Cell key={`cell-${index}`} fill={['#6366f1', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6'][index % 5]} />
+                      ))}
+                    </Pie>
+                    <ChartTooltip 
+                      contentStyle={{ backgroundColor: '#1e293b', borderRadius: '12px', border: 'none', color: '#fff' }}
+                      itemStyle={{ color: '#fff' }}
+                    />
+                  </RePieChart>
+                </ResponsiveContainer>
+             </div>
+             <div className="w-full md:w-auto space-y-2 mt-4 md:mt-0 md:pl-8">
+                {productDistribution.map((entry, index) => (
+                   <div key={entry.name} className="flex items-center gap-3">
+                      <div className="w-3 h-3 rounded-full" style={{ backgroundColor: ['#6366f1', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6'][index % 5] }}></div>
+                      <span className="text-sm font-medium text-slate-600 dark:text-slate-400">{entry.name}</span>
+                      <span className="text-xs font-black text-slate-900 dark:text-white">{entry.value}</span>
+                   </div>
+                ))}
+             </div>
+          </div>
+        </Card>
+
         <Card className="p-8 border-t-4 border-t-red-600">
           <div className="flex items-center justify-between mb-6">
              <h3 className="text-lg font-semibold text-slate-900 dark:text-white flex items-center gap-2">

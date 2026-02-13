@@ -10,6 +10,8 @@ const FieldOfficerDashboardWrapper = () => {
 
   const getTitle = () => {
     if (location.pathname.includes('/customers')) return 'Customers';
+    if (location.pathname.includes('/register-customer')) return 'Customer Registration';
+    if (location.pathname.includes('/apply-loan')) return 'Loan Application';
     if (location.pathname.includes('/profile')) return 'Account Profile';
     return 'Field Officer Dashboard';
   };
@@ -19,6 +21,8 @@ const FieldOfficerDashboardWrapper = () => {
       <Routes>
         <Route index element={<FieldOfficerDashboard />} />
         <Route path="dashboard" element={<FieldOfficerDashboard />} />
+        <Route path="register-customer" element={<FieldOfficerDashboard isRegisteringDefault={true} />} />
+        <Route path="apply-loan" element={<FieldOfficerDashboard isApplyingDefault={true} />} />
         <Route path="profile" element={<ProfileSettings />} />
       </Routes>
     </Layout>

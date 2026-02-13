@@ -1,9 +1,73 @@
 import React, { useEffect, useState } from 'react';
 import { loanService } from '../api/api';
 import { Table, StatCard, Button } from '../components/ui/Shared';
-import { Search, Filter, UserPlus } from 'lucide-react';
+import { Search, Filter, UserPlus, Trash2, Lock, Unlock, MessageSquare, Send, X } from 'lucide-react';
 import CustomerRegistrationForm from '../components/forms/CustomerRegistrationForm';
 import CustomerHistoryModal from '../components/ui/CustomerHistoryModal';
+
+const DirectSMSModal = ({ customer, isOpen, onClose }) => {
+  const [message, setMessage] = useState('');
+  const [sending, setSending] = useState(false);
+
+  if (!isOpen) return null;
+
+  const handleSend = async () => {
+    if (!message.trim()) return;
+    setSending(true);
+    try {
+      await loanService.sendDirectSMS({
+        user_id: customer.id,
+        message: message.trim()
+      });
+      alert('SMS queued for delivery');
+      onClose();
+    } catch (err) {
+      alert('Failed to send SMS: ' + (err.response?.data?.error || err.message));
+    } finally {
+      setSending(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
+      <div className="bg-white dark:bg-slate-900 rounded-xl shadow-2xl w-full max-w-md overflow-hidden">
+        <div className="px-6 py-4 border-b border-slate-100 dark:border-slate-800 flex justify-between items-center bg-slate-50 dark:bg-slate-800/50">
+          <div>
+            <h3 className="text-lg font-bold text-slate-900 dark:text-white">Send SMS</h3>
+            <p className="text-xs text-slate-500">To: {customer.full_name} ({customer.phone_number})</p>
+          </div>
+          <button onClick={onClose} className="p-2 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-full">
+            <X className="w-5 h-5 text-slate-500" />
+          </button>
+        </div>
+        
+        <div className="p-6 space-y-4">
+          <textarea
+            value={message}
+            onChange={(e) => setMessage(e.target.value)}
+            placeholder="Type your message here..."
+            className="w-full h-32 p-3 text-sm border border-slate-200 dark:border-slate-700 rounded-lg dark:bg-slate-800 focus:ring-2 focus:ring-primary-500 outline-none resize-none"
+          />
+          <p className="text-[10px] text-slate-400">
+            Note: Standard SMS rates apply. Messages are logged for auditing.
+          </p>
+        </div>
+
+        <div className="px-6 py-4 bg-slate-50 dark:bg-slate-800/50 flex justify-end gap-3">
+          <Button variant="secondary" onClick={onClose} disabled={sending}>Cancel</Button>
+          <Button onClick={handleSend} disabled={sending || !message.trim()} className="flex items-center gap-2">
+            {sending ? 'Sending...' : (
+              <>
+                <Send className="w-4 h-4" />
+                Send Message
+              </>
+            )}
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+};
 
 const AdminCustomers = () => {
   const [customers, setCustomers] = useState([]);
@@ -12,6 +76,11 @@ const AdminCustomers = () => {
   const [isRegistering, setIsRegistering] = useState(false);
   const [selectedCustomer, setSelectedCustomer] = useState(null);
   const [showHistory, setShowHistory] = useState(false);
+  const [showSMS, setShowSMS] = useState(false);
+
+  useEffect(() => {
+    fetchData();
+  }, []);
 
   const fetchData = async () => {
     setLoading(true);
@@ -72,9 +141,16 @@ const AdminCustomers = () => {
     }
   };
 
-  useEffect(() => {
-    fetchData();
-  }, []);
+  const handleDelete = async (customer) => {
+    if (window.confirm(`Are you sure you want to "delete" ${customer.full_name}? This will lock their account and keep their records for legal reference.`)) {
+      try {
+        await loanService.deleteCustomer(customer.id);
+        fetchData();
+      } catch (err) {
+        alert("Failed to lock customer: " + (err.response?.data?.error || err.message));
+      }
+    }
+  };
 
   if (isRegistering) {
     return (
@@ -149,29 +225,59 @@ const AdminCustomers = () => {
           renderRow={(customer) => {
             const balance = customer.totalBorrowed - customer.totalRepaid;
             return (
-              <tr key={customer.id} className="hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
+              <tr key={customer.id} className={`hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors ${customer.is_locked ? 'opacity-60 bg-red-50/50 dark:bg-red-950/10' : ''}`}>
                 <td className="px-6 py-4">
-                  <p className="font-medium text-slate-900 dark:text-white">{customer.full_name}</p>
-                  <p className="text-xs text-slate-500">ID: {customer.id}</p>
+                  <div className="flex items-center gap-2">
+                    {customer.is_locked && <Lock className="w-3 h-3 text-red-500" />}
+                    <p className="font-medium text-slate-900 dark:text-white truncate max-w-[150px]">{customer.full_name}</p>
+                  </div>
+                  <p className="text-[10px] text-slate-500 uppercase">ID: {customer.id.slice(0, 8)}</p>
                 </td>
                 <td className="px-6 py-4 text-slate-900 dark:text-white font-medium">KES {customer.totalBorrowed.toLocaleString()}</td>
                 <td className="px-6 py-4 text-emerald-600 font-medium">KES {customer.totalRepaid.toLocaleString()}</td>
                 <td className="px-6 py-4 text-rose-600 font-semibold">KES {balance.toLocaleString()}</td>
                 <td className="px-6 py-4">
-                  <span className={`px-2 py-1 text-xs font-semibold rounded-full ${balance <= 0 ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'}`}>
-                    {balance <= 0 ? 'Cleared' : 'Active'}
-                  </span>
+                  {customer.is_locked ? (
+                    <span className="px-2 py-1 text-[10px] font-black rounded uppercase bg-red-100 text-red-700 dark:bg-red-900/30">
+                      Locked/Archived
+                    </span>
+                  ) : (
+                    <span className={`px-2 py-1 text-[10px] font-black rounded uppercase ${balance <= 0 ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'}`}>
+                      {balance <= 0 ? 'Cleared' : 'Active'}
+                    </span>
+                  )}
                 </td>
                 <td className="px-6 py-4 text-right">
-                  <button 
-                    onClick={() => {
-                        setSelectedCustomer(customer);
-                        setShowHistory(true);
-                    }}
-                    className="text-primary-600 font-medium hover:underline"
-                  >
-                    View History
-                  </button>
+                  <div className="flex items-center justify-end gap-3">
+                    <button 
+                      onClick={() => {
+                          setSelectedCustomer(customer);
+                          setShowSMS(true);
+                      }}
+                      className="p-2 text-slate-400 hover:text-primary-600 hover:bg-primary-50 dark:hover:bg-primary-900/20 rounded-lg transition-colors"
+                      title="Send Individual SMS"
+                    >
+                      <MessageSquare className="w-4 h-4" />
+                    </button>
+                    <button 
+                      onClick={() => {
+                          setSelectedCustomer(customer);
+                          setShowHistory(true);
+                      }}
+                      className="text-primary-600 font-medium hover:underline text-sm"
+                    >
+                      View History
+                    </button>
+                    {!customer.is_locked && (
+                      <button 
+                        onClick={() => handleDelete(customer)}
+                        className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
+                        title="Lock/Delete Customer"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    )}
+                  </div>
                 </td>
               </tr>
             );
@@ -185,6 +291,17 @@ const AdminCustomers = () => {
             isOpen={showHistory}
             onClose={() => {
                 setShowHistory(false);
+                setSelectedCustomer(null);
+            }}
+          />
+      )}
+
+      {selectedCustomer && (
+          <DirectSMSModal 
+            customer={selectedCustomer}
+            isOpen={showSMS}
+            onClose={() => {
+                setShowSMS(false);
                 setSelectedCustomer(null);
             }}
           />

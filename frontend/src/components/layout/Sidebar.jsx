@@ -72,16 +72,16 @@ const Sidebar = ({ isOpen, onClose }) => {
 
   return (
     <>
-      {/* Mobile Overlay */}
+      {/* Mobile/Tablet Overlay */}
       {isOpen && (
         <div 
-          className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-40 lg:hidden"
+          className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-40 xl:hidden transition-opacity duration-300"
           onClick={onClose}
         />
       )}
 
       <aside className={cn(
-        "w-64 h-screen bg-white border-r border-slate-200 dark:bg-slate-900 dark:border-slate-800 flex flex-col fixed left-0 top-0 z-50 transition-transform duration-300 lg:translate-x-0",
+        "w-64 h-screen bg-white border-r border-slate-200 dark:bg-slate-900 dark:border-slate-800 flex flex-col fixed left-0 top-0 z-50 transition-all duration-300 ease-in-out shadow-2xl xl:shadow-none",
         isOpen ? "translate-x-0" : "-translate-x-full"
       )}>
         <div className="p-6 flex flex-col gap-4">
@@ -89,9 +89,10 @@ const Sidebar = ({ isOpen, onClose }) => {
             <h1 className="text-xl font-black text-primary-600 dark:text-primary-400 tracking-tighter leading-tight">Azariah Credit Ltd</h1>
             <button 
               onClick={onClose}
-              className="lg:hidden p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg"
+              className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-all active:scale-95 group"
+              title="Close Menu"
             >
-              <X className="w-5 h-5 text-slate-500" />
+              <X className="w-5 h-5 text-slate-500 group-hover:rotate-90 transition-transform" />
             </button>
           </div>
 
@@ -139,13 +140,28 @@ const Sidebar = ({ isOpen, onClose }) => {
         </nav>
 
       <div className="p-4 border-t border-slate-200 dark:border-slate-800">
-        <button
-          onClick={logout}
-          className="flex items-center w-full px-4 py-3 text-sm font-medium text-red-600 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
-        >
-          <LogOut className="w-5 h-5 mr-3" />
-          Logout
-        </button>
+        <div className="bg-slate-50 dark:bg-slate-800/50 rounded-xl p-3">
+          <div className="flex items-center gap-3 mb-3">
+            <div className="w-8 h-8 rounded-full bg-primary-100 dark:bg-primary-900/30 flex items-center justify-center text-primary-600 dark:text-primary-400 font-bold text-xs">
+              {user?.role?.charAt(0)}
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-xs font-bold text-slate-900 dark:text-white truncate">{user?.full_name || 'Staff Member'}</p>
+              <p className="text-[10px] text-slate-500 truncate uppercase mt-0.5">{activeRole?.replace('_', ' ')}</p>
+            </div>
+          </div>
+          <button
+            onClick={() => {
+              if (window.confirm('Are you sure you want to sign out?')) {
+                logout();
+              }
+            }}
+            className="flex items-center w-full px-3 py-2 text-xs font-bold text-red-600 hover:bg-red-50 dark:hover:bg-red-900/10 rounded-lg transition-colors border border-transparent hover:border-red-100"
+          >
+            <LogOut className="w-4 h-4 mr-2" />
+            Sign Out System
+          </button>
+        </div>
       </div>
     </aside>
   </>

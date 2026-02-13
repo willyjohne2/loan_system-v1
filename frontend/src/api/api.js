@@ -63,6 +63,14 @@ export const loanService = {
     const res = await api.get('/loans/');
     return res.data;
   },
+  getLoanProducts: async () => {
+    const res = await api.get('/loan-products/');
+    return res.data;
+  },
+  updateLoanProduct: async (id, data) => {
+    const res = await api.patch(`/loan-products/${id}/`, data);
+    return res.data;
+  },
   updateLoan: async (id, data) => {
     const res = await api.patch(`/loans/${id}/`, data);
     return res.data;
@@ -73,6 +81,10 @@ export const loanService = {
   },
   updateCustomer: async (id, data) => {
     const res = await api.patch(`/users/${id}/`, data);
+    return res.data;
+  },
+  deleteCustomer: async (id) => {
+    const res = await api.delete(`/users/${id}/`);
     return res.data;
   },
   getRepayments: async () => {
@@ -89,6 +101,14 @@ export const loanService = {
   },
   getAuditLogs: async (params = {}) => {
     const res = await api.get('/audit-logs/', { params });
+    return res.data;
+  },
+  getFinancialAnalytics: async () => {
+    const res = await api.get('/finance/analytics/');
+    return res.data;
+  },
+  sendDirectSMS: async (data) => {
+    const res = await api.post('/loans/direct-sms/', data);
     return res.data;
   },
   getDeactivationRequests: async () => {

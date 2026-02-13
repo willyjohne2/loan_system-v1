@@ -10,7 +10,9 @@ const AdminLoans = () => {
   const [customers, setCustomers] = useState({});
   const [loading, setLoading] = useState(true);
   const [filterStatus, setFilterStatus] = useState('ALL');
+  const [filterProduct, setFilterProduct] = useState('ALL');
   const [searchTerm, setSearchTerm] = useState('');
+  const [activeTab, setActiveTab] = useState('ACTIVE'); // 'ACTIVE', 'PENDING', 'REJECTED'
   const [isBulkModalOpen, setIsBulkModalOpen] = useState(false);
   const [selectedCustomer, setSelectedCustomer] = useState(null);
   const [selectedLoan, setSelectedLoan] = useState(null);
@@ -63,15 +65,17 @@ const AdminLoans = () => {
     setUpdatingId(loanId);
     try {
       // 1. Call the M-Pesa Disbursement API
-      const response = await loanService.api.post('/payments/disburse/', { loan_id: loanId });
+      const response = await loanService.api.post('/payments/disburse/', { 
+        loan_id: loanId,
+        mode: 'single'
+      });
       
-      if (response.data.ResponseCode === '0' || response.data.status === 'MOCK_SUCCESS') {
-        // 2. Update status to DISBURSED
-        await loanService.api.patch(`/loans/${loanId}/`, { status: 'DISBURSED' });
-        alert("Disbursement initiated successfully!");
+      // The backend now returns a message on success and handles the status update
+      if (response.data.message || response.data.status === 'success' || response.data.ResponseCode === '0' || response.data.status === 'MOCK_SUCCESS') {
+        alert(response.data.message || "Disbursement initiated successfully!");
         await fetchAllData();
       } else {
-        alert("M-Pesa Error: " + (response.data.ResponseDescription || "Unknown error"));
+        alert("Disbursement Error: " + (response.data.ResponseDescription || response.data.error || "Unknown error"));
       }
     } catch (err) {
       alert("Failed to disburse: " + (err.response?.data?.error || err.message));
@@ -81,13 +85,34 @@ const AdminLoans = () => {
   };
 
   const filteredLoans = loans.filter(loan => {
+    // Filter by Tab
+    const isDisbursed = ['DISBURSED', 'ACTIVE', 'OVERDUE', 'CLOSED', 'REPAID'].includes(loan.status);
+    const isPending = ['UNVERIFIED', 'VERIFIED', 'APPROVED', 'PENDING'].includes(loan.status);
+    const isRejected = loan.status === 'REJECTED';
+
+    if (activeTab === 'ACTIVE' && !isDisbursed) return false;
+    if (activeTab === 'PENDING' && !isPending) return false;
+    if (activeTab === 'REJECTED' && !isRejected) return false;
+
     const matchesStatus = filterStatus === 'ALL' || loan.status === filterStatus;
+    const matchesProduct = filterProduct === 'ALL' || loan.product_name === filterProduct;
     const customer = customers[loan.user] || {};
     const customerName = customer.full_name || '';
     const matchesSearch = customerName.toLowerCase().includes(searchTerm.toLowerCase()) || 
-                         loan.id.toString().includes(searchTerm);
-    return matchesStatus && matchesSearch;
+                         loan.id.toString().includes(searchTerm) ||
+                         (loan.product_name || '').toLowerCase().includes(searchTerm.toLowerCase());
+    return matchesStatus && matchesProduct && matchesSearch;
   });
+
+  const getTotals = (loansList) => {
+    return loansList.reduce((acc, loan) => {
+      acc.principal += Number(loan.principal_amount || 0);
+      acc.repayable += Number(loan.total_repayable_amount || 0);
+      return acc;
+    }, { principal: 0, repayable: 0 });
+  };
+
+  const totals = getTotals(filteredLoans);
 
   const getStatusColor = (status) => {
     switch (status) {
@@ -132,6 +157,8 @@ const AdminLoans = () => {
     }
   };
 
+  const uniqueProducts = [...new Set(loans.map(l => l.product_name).filter(Boolean))];
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
@@ -159,13 +186,45 @@ const AdminLoans = () => {
         </div>
       </div>
 
+      <div className="flex bg-slate-100 dark:bg-slate-800 p-1 rounded-xl w-fit">
+        {[
+          { id: 'ACTIVE', label: 'Disbursed Portfolio', icon: CheckCircle },
+          { id: 'PENDING', label: 'Pending Apps', icon: Clock },
+          { id: 'REJECTED', label: 'Rejected', icon: XCircle }
+        ].map(tab => (
+          <button
+            key={tab.id}
+            onClick={() => {
+              setActiveTab(tab.id);
+              setFilterStatus('ALL');
+            }}
+            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-black transition-all ${
+              activeTab === tab.id 
+                ? 'bg-white dark:bg-slate-700 text-primary-600 shadow-sm' 
+                : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'
+            }`}
+          >
+            <tab.icon className="w-3.5 h-3.5" />
+            {tab.label.toUpperCase()}
+            <span className="ml-1 bg-slate-200 dark:bg-slate-600 px-1.5 py-0.5 rounded-full text-[10px]">
+              {loans.filter(l => {
+                const s = l.status;
+                if (tab.id === 'ACTIVE') return ['DISBURSED', 'ACTIVE', 'OVERDUE', 'CLOSED', 'REPAID'].includes(s);
+                if (tab.id === 'PENDING') return ['UNVERIFIED', 'VERIFIED', 'APPROVED', 'PENDING'].includes(s);
+                return s === 'REJECTED';
+              }).length}
+            </span>
+          </button>
+        ))}
+      </div>
+
       <Card className="p-0 overflow-hidden border-none shadow-sm dark:bg-slate-900">
         <div className="p-6 border-b border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/20 flex flex-col md:flex-row gap-4">
           <div className="relative flex-1">
             <Search className="absolute left-3 top-2.5 w-4 h-4 text-slate-400" />
             <input 
               className="pl-10 pr-4 py-2 w-full border rounded-lg text-sm bg-white dark:bg-slate-800 dark:border-slate-700 dark:text-white focus:ring-2 focus:ring-primary-500 outline-none transition-all" 
-              placeholder="Search by customer name or loan ID..." 
+              placeholder={`Search in ${activeTab.toLowerCase()} loans...`} 
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
             />
@@ -174,26 +233,48 @@ const AdminLoans = () => {
             <Filter className="w-4 h-4 text-slate-400" />
             <select 
               className="border rounded-lg px-3 py-2 text-sm bg-white dark:bg-slate-800 dark:border-slate-700 dark:text-white outline-none focus:ring-2 focus:ring-primary-500 font-bold"
+              value={filterProduct}
+              onChange={(e) => setFilterProduct(e.target.value)}
+            >
+              <option value="ALL">ALL PRODUCTS</option>
+              {uniqueProducts.map(p => (
+                <option key={p} value={p}>{p.toUpperCase()}</option>
+              ))}
+            </select>
+            <select 
+              className="border rounded-lg px-3 py-2 text-sm bg-white dark:bg-slate-800 dark:border-slate-700 dark:text-white outline-none focus:ring-2 focus:ring-primary-500 font-bold"
               value={filterStatus}
               onChange={(e) => setFilterStatus(e.target.value)}
             >
               <option value="ALL">ALL STATUSES</option>
-              <option value="UNVERIFIED">UNVERIFIED</option>
-              <option value="VERIFIED">VERIFIED</option>
-              <option value="APPROVED">APPROVED</option>
-              <option value="DISBURSED">DISBURSED</option>
-              <option value="REJECTED">REJECTED</option>
+              {activeTab === 'ACTIVE' && (
+                <>
+                  <option value="DISBURSED">DISBURSED</option>
+                  <option value="ACTIVE">ACTIVE</option>
+                  <option value="OVERDUE">OVERDUE</option>
+                </>
+              )}
+              {activeTab === 'PENDING' && (
+                <>
+                  <option value="UNVERIFIED">UNVERIFIED</option>
+                  <option value="VERIFIED">VERIFIED</option>
+                  <option value="APPROVED">APPROVED</option>
+                </>
+              )}
+              {activeTab === 'REJECTED' && <option value="REJECTED">REJECTED</option>}
             </select>
           </div>
         </div>
 
-        <div className="overflow-x-auto">
-          <table className="w-full">
+        <div className="overflow-x-auto max-h-[450px] overflow-y-auto scrollbar-thin scrollbar-thumb-slate-200 dark:scrollbar-thumb-slate-800">
+          <table className="w-full sticky-header">
             <thead>
-              <tr className="bg-slate-50 dark:bg-slate-800/50 border-b border-slate-100 dark:border-slate-800">
+              <tr className="bg-slate-50 dark:bg-slate-800/50 border-b border-slate-100 dark:border-slate-800 sticky top-0 z-10 shadow-sm">
                 <th className="text-left p-4 text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest">Loan ID</th>
                 <th className="text-left p-4 text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest">Customer Profile</th>
+                <th className="text-left p-4 text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest">Product</th>
                 <th className="text-left p-4 text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest">Principal</th>
+                <th className="text-left p-4 text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest">Repayable</th>
                 <th className="text-left p-4 text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest">Duration</th>
                 <th className="text-left p-4 text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest">Status</th>
                 <th className="text-right p-4 text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest whitespace-nowrap">Workflow Actions</th>
@@ -214,8 +295,16 @@ const AdminLoans = () => {
                         PH: {customers[loan.user]?.phone} | ACC: {customers[loan.user]?.profile?.national_id || 'N/A'}
                       </div>
                     </td>
+                    <td className="p-4">
+                      <span className="px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-[10px] font-bold text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-700 uppercase">
+                        {loan.product_name}
+                      </span>
+                    </td>
                     <td className="p-4 text-sm font-black text-slate-700 dark:text-slate-200">
                       KES {Number(loan.principal_amount).toLocaleString()}
+                    </td>
+                    <td className="p-4 text-sm font-bold text-emerald-600 dark:text-emerald-400">
+                      KES {Number(loan.total_repayable_amount).toLocaleString()}
                     </td>
                     <td className="p-4 text-xs font-medium text-slate-600 dark:text-slate-400">
                       {loan.duration_weeks ? `${loan.duration_weeks} Weeks` : `${loan.duration_months} Months`}
@@ -284,12 +373,28 @@ const AdminLoans = () => {
                 ))
               ) : (
                 <tr>
-                  <td colSpan="5" className="p-12 text-center text-slate-400 text-sm italic">
-                    No loan applications found matching criteria.
+                  <td colSpan="8" className="px-6 py-12 text-center text-slate-500">
+                    No {activeTab.toLowerCase()} loans found matching your criteria.
                   </td>
                 </tr>
               )}
             </tbody>
+            {filteredLoans.length > 0 && (
+              <tfoot className="sticky bottom-0 z-10 bg-slate-50 dark:bg-slate-800 font-bold border-t-2 border-slate-200 dark:border-slate-700 shadow-[0_-2px_10px_rgba(0,0,0,0.05)]">
+                <tr>
+                  <td colSpan="3" className="p-4 text-right text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest">
+                    Portfolio Subtotals:
+                  </td>
+                  <td className="p-4 text-sm font-black text-primary-600 dark:text-primary-400">
+                    KES {totals.principal.toLocaleString()}
+                  </td>
+                  <td className="p-4 text-sm font-black text-emerald-600 dark:text-emerald-400">
+                    KES {totals.repayable.toLocaleString()}
+                  </td>
+                  <td colSpan="3"></td>
+                </tr>
+              </tfoot>
+            )}
           </table>
         </div>
       </Card>

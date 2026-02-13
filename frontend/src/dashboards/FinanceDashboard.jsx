@@ -1,6 +1,21 @@
 import React, { useEffect, useState } from 'react';
 import { loanService } from '../api/api';
-import { Table, Card, StatCard, Button } from '../components/ui/Shared';
+import { Table, Card, StatCard, Button, cn } from '../components/ui/Shared';
+import { 
+  AreaChart, 
+  Area, 
+  XAxis, 
+  YAxis, 
+  CartesianGrid, 
+  Tooltip, 
+  ResponsiveContainer,
+  BarChart,
+  Bar,
+  Legend,
+  PieChart,
+  Pie,
+  Cell
+} from 'recharts';
 import { 
   Briefcase, 
   ArrowUpRight, 
@@ -16,9 +31,17 @@ import {
   Activity,
   History,
   Send,
-  Users
+  Users,
+  BarChart3
 } from 'lucide-react';
 import BulkCustomerSMSModal from '../components/ui/BulkCustomerSMSModal';
+
+const PRODUCT_COLORS = {
+  'Inuka': '#4f46e5', // Indigo
+  'Jijenge': '#10b981', // Emerald
+  'Fadhili': '#f59e0b', // Amber
+  'Generic': '#64748b'  // Slate
+};
 
 const FinanceDashboard = () => {
   const [loading, setLoading] = useState(true);
@@ -26,6 +49,7 @@ const FinanceDashboard = () => {
   const [error, setError] = useState('');
   const [loans, setLoans] = useState([]);
   const [repayments, setRepayments] = useState([]);
+  const [history, setHistory] = useState([]);
   const [stats, setStats] = useState({
     borrowed: 0,
     repaid: 0,
@@ -33,9 +57,40 @@ const FinanceDashboard = () => {
     todayDisbursed: 0,
     todayCollected: 0,
     pendingApprovalsCount: 0,
-    netFlow: 0
+    netFlow: 0,
+    capitalBalance: 0,
+    totalMoneyOut: 0,
+    totalMoneyIn: 0
   });
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [reportData, setReportData] = useState({
+    trial_balance: [],
+    cashbook: [],
+    aging_report: {},
+    collection_log: [],
+    weekly_disbursed: [],
+    weekly_repaid: []
+  });
+  const [activeReport, setActiveReport] = useState(null); // 'trial', 'cashbook', 'collection', 'aging'
+  const [activeTab, setActiveTab] = useState('ACTIVE');
+  const [productDistribution, setProductDistribution] = useState([]);
+
+  // Logic for filtered totals
+  const getTotals = (loansList) => {
+    return (loansList || []).reduce((acc, l) => ({
+      repayable: acc.repayable + Number(l.total_repayable_amount || 0),
+      principal: acc.principal + Number(l.principal_amount || 0)
+    }), { repayable: 0, principal: 0 });
+  };
+
+  const filteredLoansForTotals = (loans || []).filter(l => {
+    const s = l.status;
+    if (activeTab === 'ACTIVE') return ['DISBURSED', 'ACTIVE', 'OVERDUE', 'CLOSED', 'REPAID'].includes(s);
+    if (activeTab === 'PENDING') return ['UNVERIFIED', 'VERIFIED', 'APPROVED', 'PENDING'].includes(s);
+    return s === 'REJECTED';
+  });
+
+  const totals = getTotals(filteredLoansForTotals);
 
   const fetchData = async () => {
     setLoading(true);
@@ -47,22 +102,36 @@ const FinanceDashboard = () => {
         return Number.isFinite(num) ? num : 0;
       };
 
-      // Fetch core financial data first
-      const [loanData, repaymentData] = await Promise.all([
+      // Fetch core financial data and analytics
+      const [loanData, repaymentData, analyticsData] = await Promise.all([
         loanService.getLoans(),
         loanService.getRepayments(),
+        loanService.getFinancialAnalytics()
       ]);
 
       const loansList = loanData?.results || loanData || [];
       const repaymentsList = repaymentData?.results || repaymentData || [];
+      const analytics = analyticsData;
+
+      // Calculate product distribution for pie chart (counts all loans regardless of status)
+      const productCounts = loansList.reduce((acc, l) => {
+        const name = l.product_name || 'Generic';
+        acc[name] = (acc[name] || 0) + 1;
+        return acc;
+      }, {});
+      setProductDistribution(Object.entries(productCounts).map(([name, count]) => ({ name, value: count })));
 
       const todayStr = new Date().toISOString().split('T')[0];
 
-      const totalBorrowed = loansList.reduce((acc, l) => acc + parseAmount(l.principal_amount), 0);
+      // Only count loans that have actually been DISBURSED or are active/overdue/closed/repaid
+      const disbursedStatuses = ['DISBURSED', 'ACTIVE', 'OVERDUE', 'CLOSED', 'REPAID'];
+      const disbursedLoans = loansList.filter(l => disbursedStatuses.includes((l.status || '').toUpperCase()));
+
+      const totalBorrowed = disbursedLoans.reduce((acc, l) => acc + parseAmount(l.principal_amount), 0);
       const totalRepaid = repaymentsList.reduce((acc, r) => acc + parseAmount(r.amount_paid), 0);
       
       const todayDisbursed = loansList
-        .filter(l => (l.created_at || '').startsWith(todayStr) && l.status === 'DISBURSED')
+        .filter(l => (l.created_at || '').startsWith(todayStr) && disbursedStatuses.includes((l.status || '').toUpperCase()))
         .reduce((acc, l) => acc + parseAmount(l.principal_amount), 0);
 
       const todayCollected = repaymentsList
@@ -74,6 +143,15 @@ const FinanceDashboard = () => {
 
       setLoans(loansList);
       setRepayments(repaymentsList);
+      setHistory(analytics.history || []);
+      setReportData({
+        trial_balance: analytics.trial_balance || [],
+        cashbook: analytics.cashbook || [],
+        aging_report: analytics.aging_report || {},
+        collection_log: analytics.collection_log || [],
+        weekly_disbursed: analytics.weekly_disbursed || [],
+        weekly_repaid: analytics.weekly_repaid || []
+      });
       
       setStats(prev => ({
         ...prev,
@@ -83,7 +161,10 @@ const FinanceDashboard = () => {
         todayDisbursed,
         todayCollected,
         pendingApprovalsCount: pendingList.length,
-        netFlow: todayCollected - todayDisbursed
+        netFlow: analytics.balance,
+        capitalBalance: analytics.balance,
+        totalMoneyOut: analytics.money_out,
+        totalMoneyIn: analytics.money_in
       }));
 
       setLoading(false); // Stats ready
@@ -152,16 +233,17 @@ const FinanceDashboard = () => {
   };
 
   const handleSingleDisburse = async (loanId) => {
-    if (!window.confirm("Disburse this specific loan now via M-Pesa?")) return;
+    if (!window.confirm("Disburse this specific loan now?")) return;
     
     setLoading(true);
     try {
       const response = await loanService.api.post('/payments/disburse/', { loan_id: loanId, mode: 'single' });
-      if (response.data.ResponseCode === '0' || response.data.status === 'MOCK_SUCCESS') {
-        alert("Disbursement initiated successfully!");
+      // The backend now returns a message on success
+      if (response.data.message || response.data.status === 'success' || response.data.ResponseCode === '0' || response.data.status === 'MOCK_SUCCESS') {
+        alert(response.data.message || "Disbursement initiated successfully!");
         await fetchData();
       } else {
-        alert("M-Pesa Error: " + (response.data.ResponseDescription || "Unknown error"));
+        alert("Disbursement Error: " + (response.data.ResponseDescription || response.data.error || "Unknown error"));
       }
     } catch (err) {
       alert("Failed to disburse: " + (err.response?.data?.error || err.message));
@@ -205,29 +287,254 @@ const FinanceDashboard = () => {
       {/* Main KPIs */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         <StatCard 
-          label="Money Out (Today)" 
-          value={`KES ${stats.todayDisbursed.toLocaleString()}`} 
+          label="Total Money Out" 
+          value={`KES ${stats.totalMoneyOut.toLocaleString()}`} 
           icon={ArrowUpRight}
           trend={{ value: 'Disbursed', isPositive: false }}
+          variant="danger"
         />
         <StatCard 
-          label="Money In (Today)" 
-          value={`KES ${stats.todayCollected.toLocaleString()}`} 
+          label="Total Money In" 
+          value={`KES ${stats.totalMoneyIn.toLocaleString()}`} 
           icon={ArrowDownLeft}
-          trend={{ value: 'Collected', isPositive: true }}
+          trend={{ value: 'Repaid', isPositive: true }}
+          variant="success"
         />
         <StatCard 
-          label="Net Cash Flow" 
-          value={`KES ${stats.netFlow.toLocaleString()}`} 
-          icon={DollarSign}
-          accent={stats.netFlow >= 0 ? 'emerald' : 'orange'}
+          label="System Capital Balance" 
+          value={`KES ${stats.capitalBalance.toLocaleString()}`} 
+          icon={Wallet}
+          variant={stats.capitalBalance >= 100000 ? 'success' : 'warning'}
         />
         <StatCard 
           label="Actions Needed" 
           value={stats.pendingApprovalsCount.toString()} 
           icon={Clock}
-          accent="indigo"
+          variant="info"
         />
+      </div>
+
+      {/* Analytics Graphs - Rolling Window */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+        <Card>
+          <div className="flex items-center justify-between mb-6">
+            <h3 className="text-lg font-semibold text-slate-900 dark:text-white flex items-center gap-2">
+              <TrendingUp className="w-5 h-5 text-emerald-600" />
+              Disbursement Rolling View (15d)
+            </h3>
+          </div>
+          <div className="h-[250px] w-full min-h-[250px] relative">
+            <ResponsiveContainer width="99%" height="100%">
+              <AreaChart data={history} margin={{ left: 10, right: 10, top: 10, bottom: 0 }}>
+                <defs>
+                  <linearGradient id="colorDisburse" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#10b981" stopOpacity={0.1}/>
+                    <stop offset="95%" stopColor="#10b981" stopOpacity={0}/>
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
+                <XAxis 
+                  dataKey="label" 
+                  tick={{fontSize: 10}} 
+                  minTickGap={5}
+                />
+                <YAxis tick={{fontSize: 10}} tickFormatter={(val) => `K${val/1000}k`} />
+                <Tooltip 
+                  contentStyle={{ backgroundColor: '#fff', borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
+                  formatter={(val) => [`KES ${val.toLocaleString()}`, 'Amount']}
+                />
+                <Area 
+                  type="monotone" 
+                  dataKey="disbursement" 
+                  stroke="#10b981" 
+                  fillOpacity={1} 
+                  fill="url(#colorDisburse)" 
+                  strokeWidth={2}
+                />
+              </AreaChart>
+            </ResponsiveContainer>
+          </div>
+          <p className="text-[10px] text-center text-slate-400 mt-2 uppercase tracking-tighter">History ← TODAY → Projections</p>
+        </Card>
+
+        <Card>
+          <div className="flex items-center justify-between mb-6">
+            <h3 className="text-lg font-semibold text-slate-900 dark:text-white flex items-center gap-2">
+              <History className="w-5 h-5 text-indigo-600" />
+              Collection rolling View (15d)
+            </h3>
+          </div>
+          <div className="h-[250px] w-full min-h-[250px] relative">
+            <ResponsiveContainer width="99%" height="100%">
+              <AreaChart data={history} margin={{ left: 10, right: 10, top: 10, bottom: 0 }}>
+                <defs>
+                  <linearGradient id="colorRepay" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#6366f1" stopOpacity={0.1}/>
+                    <stop offset="95%" stopColor="#6366f1" stopOpacity={0}/>
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
+                <XAxis 
+                  dataKey="label" 
+                  tick={{fontSize: 10}} 
+                  minTickGap={5}
+                />
+                <YAxis tick={{fontSize: 10}} tickFormatter={(val) => `K${val/1000}k`} />
+                <Tooltip 
+                  contentStyle={{ backgroundColor: '#fff', borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
+                  formatter={(val) => [`KES ${val.toLocaleString()}`, 'Amount']}
+                />
+                <Area 
+                   type="monotone" 
+                   dataKey="repayment" 
+                   stroke="#6366f1" 
+                   fillOpacity={1} 
+                   fill="url(#colorRepay)" 
+                   strokeWidth={2}
+                />
+              </AreaChart>
+            </ResponsiveContainer>
+          </div>
+          <p className="text-[10px] text-center text-slate-400 mt-2 uppercase tracking-tighter">History ← TODAY → Schedule</p>
+        </Card>
+      </div>
+
+      {/* Weekly Performance Bar Charts */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mt-8">
+        <Card>
+          <div className="flex items-center justify-between mb-6">
+            <h3 className="text-lg font-semibold text-slate-900 dark:text-white flex items-center gap-2">
+              <BarChart3 className="w-5 h-5 text-emerald-600" />
+              Weekly Disbursement Volume (10w)
+            </h3>
+          </div>
+          <div className="h-[200px] w-full min-h-[200px] relative">
+            <ResponsiveContainer width="99%" height="100%">
+              <BarChart data={reportData.weekly_disbursed}>
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
+                <XAxis 
+                   dataKey="week" 
+                   tick={{fontSize: 10}}
+                />
+                <YAxis tick={{fontSize: 10}} tickFormatter={(val) => `K${val/1000}k`} />
+                <Tooltip 
+                  contentStyle={{ backgroundColor: '#fff', borderRadius: '8px', border: 'none' }}
+                />
+                <Bar dataKey="amount" fill="#10b981" radius={[4, 4, 0, 0]} barSize={32} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </Card>
+
+        <Card>
+          <div className="flex items-center justify-between mb-6">
+            <h3 className="text-lg font-semibold text-slate-900 dark:text-white flex items-center gap-2">
+              <BarChart3 className="w-5 h-5 text-indigo-600" />
+              Weekly Collection Volume (10w)
+            </h3>
+          </div>
+          <div className="h-[200px] w-full min-h-[200px] relative">
+            <ResponsiveContainer width="99%" height="100%">
+              <BarChart data={reportData.weekly_repaid}>
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
+                <XAxis 
+                   dataKey="week" 
+                   tick={{fontSize: 10}}
+                />
+                <YAxis tick={{fontSize: 10}} tickFormatter={(val) => `K${val/1000}k`} />
+                <Tooltip 
+                  contentStyle={{ backgroundColor: '#fff', borderRadius: '8px', border: 'none' }}
+                />
+                <Bar dataKey="amount" fill="#6366f1" radius={[4, 4, 0, 0]} barSize={32} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </Card>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 mt-8 mb-8">
+        <Card className="lg:col-span-1">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-lg font-semibold text-slate-900 dark:text-white flex items-center gap-2">
+              <Activity className="w-5 h-5 text-indigo-600" />
+              Product Priority
+            </h3>
+          </div>
+          <div className="h-[250px] w-full relative">
+            <ResponsiveContainer width="99%" height="100%">
+              <PieChart>
+                <Pie
+                  data={productDistribution}
+                  cx="50%"
+                  cy="50%"
+                  innerRadius={60}
+                  outerRadius={80}
+                  paddingAngle={5}
+                  dataKey="value"
+                >
+                  {productDistribution.map((entry, index) => (
+                    <Cell 
+                      key={`cell-${index}`} 
+                      fill={PRODUCT_COLORS[entry.name] || PRODUCT_COLORS['Generic']} 
+                    />
+                  ))}
+                </Pie>
+                <Tooltip />
+                <Legend iconType="circle" />
+              </PieChart>
+            </ResponsiveContainer>
+          </div>
+          <p className="text-[10px] text-center text-slate-500 mt-2 uppercase">Popularity by Application Volume</p>
+        </Card>
+
+        <Card className="lg:col-span-2">
+           <div className="flex items-center justify-between mb-4">
+            <h3 className="text-lg font-semibold text-slate-900 dark:text-white flex items-center gap-2">
+              <Briefcase className="w-5 h-5 text-emerald-600" />
+              Pipeline Overview
+            </h3>
+          </div>
+          <div className="space-y-4">
+             <div className="flex items-center justify-between p-3 bg-indigo-50 dark:bg-indigo-900/20 rounded-lg">
+                <span className="text-sm font-medium text-indigo-700 dark:text-indigo-300">Total Active Loans</span>
+                <span className="text-xl font-bold text-indigo-900 dark:text-white">
+                  {loans.filter(l => ['ACTIVE', 'DISBURSED'].includes(l.status)).length}
+                </span>
+             </div>
+             <div className="flex items-center justify-between p-3 bg-emerald-50 dark:bg-emerald-900/20 rounded-lg">
+                <span className="text-sm font-medium text-emerald-700 dark:text-emerald-300">Pending Disbursement</span>
+                <span className="text-xl font-bold text-emerald-900 dark:text-white">
+                  {loans.filter(l => l.status === 'PENDING').length}
+                </span>
+             </div>
+             <div className="flex items-center justify-between p-3 bg-rose-50 dark:bg-rose-900/20 rounded-lg">
+                <span className="text-sm font-medium text-rose-700 dark:text-rose-300">Overdue Portfolio</span>
+                <span className="text-xl font-bold text-rose-900 dark:text-white">
+                  {loans.filter(l => l.status === 'OVERDUE').length}
+                </span>
+             </div>
+          </div>
+        </Card>
+      </div>
+
+      <div className="flex bg-slate-100 dark:bg-slate-800/50 p-1 rounded-xl w-fit mb-4">
+        {[
+          { id: 'ACTIVE', label: 'Disbursed Portfolio' },
+          { id: 'PENDING', label: 'Processing' },
+          { id: 'REJECTED', label: 'Rejected' }
+        ].map(tab => (
+          <button
+            key={tab.id}
+            onClick={() => setActiveTab(tab.id)}
+            className={`px-4 py-2 rounded-lg text-[10px] font-black transition-all ${
+              activeTab === tab.id 
+                ? 'bg-white dark:bg-slate-700 text-indigo-600 shadow-sm' 
+                : 'text-slate-500 hover:text-slate-700'
+            }`}
+          >
+            {tab.label.toUpperCase()}
+          </button>
+        ))}
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
@@ -236,24 +543,43 @@ const FinanceDashboard = () => {
            <div className="flex items-center justify-between mb-6">
               <h3 className="text-lg font-semibold text-slate-900 dark:text-white flex items-center gap-2">
                 <Users className="w-5 h-5 text-indigo-600" />
-                Active Loan Portfolio
+                {activeTab === 'ACTIVE' ? 'Live Loan Portfolio' : activeTab === 'PENDING' ? 'Processing Pipeline' : 'Archived Rejections'}
               </h3>
-              <span className="text-xs font-black text-slate-400 uppercase">Viewing all accounts</span>
+              <span className="text-[10px] font-black text-slate-400 border px-2 py-0.5 rounded tracking-tighter">
+                {loans.filter(l => {
+                  const s = l.status;
+                  if (activeTab === 'ACTIVE') return ['DISBURSED', 'ACTIVE', 'OVERDUE', 'CLOSED', 'REPAID'].includes(s);
+                  if (activeTab === 'PENDING') return ['UNVERIFIED', 'VERIFIED', 'APPROVED', 'PENDING'].includes(s);
+                  return s === 'REJECTED';
+                }).length} ENTRIES
+              </span>
            </div>
-           <div className="overflow-x-auto">
+           <div className="overflow-x-auto max-h-[400px] overflow-y-auto scrollbar-thin scrollbar-thumb-slate-200 dark:scrollbar-thumb-slate-800">
               <table className="w-full text-left">
-                <thead>
-                  <tr className="bg-slate-50 dark:bg-slate-800/50 text-[10px] font-black uppercase text-slate-500 tracking-widest border-b dark:border-slate-800">
+                <thead className="sticky top-0 z-10">
+                  <tr className="bg-slate-50 dark:bg-slate-800/90 text-[10px] font-black uppercase text-slate-500 tracking-widest border-b dark:border-slate-800">
                     <th className="p-4">Loan ID</th>
                     <th className="p-4">Customer</th>
+                    <th className="p-4">Product</th>
                     <th className="p-4">Principal</th>
+                    <th className="p-4 whitespace-nowrap">Total Repayable</th>
                     <th className="p-4">Status</th>
-                    <th className="p-4">Last Sync</th>
+                    <th className="p-4">Date</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                  {loans.length > 0 ? (
-                    loans.slice(0, 10).map((l) => (
+                  {loans.filter(l => {
+                    const s = l.status;
+                    if (activeTab === 'ACTIVE') return ['DISBURSED', 'ACTIVE', 'OVERDUE', 'CLOSED', 'REPAID'].includes(s);
+                    if (activeTab === 'PENDING') return ['UNVERIFIED', 'VERIFIED', 'APPROVED', 'PENDING'].includes(s);
+                    return s === 'REJECTED';
+                  }).length > 0 ? (
+                    loans.filter(l => {
+                      const s = l.status;
+                      if (activeTab === 'ACTIVE') return ['DISBURSED', 'ACTIVE', 'OVERDUE', 'CLOSED', 'REPAID'].includes(s);
+                      if (activeTab === 'PENDING') return ['UNVERIFIED', 'VERIFIED', 'APPROVED', 'PENDING'].includes(s);
+                      return s === 'REJECTED';
+                    }).map((l) => (
                       <tr key={l.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/20 transition-colors">
                         <td className="p-4">
                           <span className="font-mono text-[10px] bg-slate-100 dark:bg-slate-800 px-2 py-1 rounded font-bold border dark:border-slate-700">
@@ -266,7 +592,11 @@ const FinanceDashboard = () => {
                              ID: {l.national_id}
                           </div>
                         </td>
+                        <td className="p-4">
+                          <span className="text-[10px] font-bold text-slate-500 uppercase">{l.product_name}</span>
+                        </td>
                         <td className="p-4 text-sm font-black text-slate-700 dark:text-slate-300">KES {Number(l.principal_amount).toLocaleString()}</td>
+                        <td className="p-4 text-sm font-bold text-emerald-600 dark:text-emerald-400">KES {Number(l.total_repayable_amount).toLocaleString()}</td>
                         <td className="p-4">
                           <span className={`text-[9px] font-black px-2 py-0.5 rounded-full uppercase ${
                              l.status === 'DISBURSED' ? 'bg-emerald-100 text-emerald-700' :
@@ -276,13 +606,32 @@ const FinanceDashboard = () => {
                             {l.status}
                           </span>
                         </td>
-                        <td className="p-4 text-[10px] text-slate-400">{new Date(l.created_at).toLocaleDateString()}</td>
+                        <td className="p-4 text-[10px] text-slate-400 whitespace-nowrap">{new Date(l.created_at).toLocaleDateString()}</td>
                       </tr>
                     ))
                   ) : (
-                    <tr><td colSpan="5" className="p-12 text-center text-slate-400 italic">No historical loans found</td></tr>
+                    <tr><td colSpan="7" className="p-12 text-center text-slate-400 italic">No {activeTab.toLowerCase()} loans found</td></tr>
                   )}
                 </tbody>
+                {loans.filter(l => {
+                    const s = l.status;
+                    if (activeTab === 'ACTIVE') return ['DISBURSED', 'ACTIVE', 'OVERDUE', 'CLOSED', 'REPAID'].includes(s);
+                    if (activeTab === 'PENDING') return ['UNVERIFIED', 'VERIFIED', 'APPROVED', 'PENDING'].includes(s);
+                    return s === 'REJECTED';
+                  }).length > 0 && (
+                  <tfoot className="sticky bottom-0 z-10 bg-slate-50 dark:bg-slate-900 font-bold border-t-2 border-slate-200 dark:border-slate-800">
+                    <tr>
+                      <td colSpan="3" className="p-4 text-right text-[10px] font-black text-slate-500">PORTFOLIO TOTALS:</td>
+                      <td className="p-4 text-sm font-black text-indigo-600 dark:text-indigo-400">
+                        KES {totals.principal.toLocaleString()}
+                      </td>
+                      <td className="p-4 text-sm font-black text-emerald-600 dark:text-emerald-400">
+                        KES {totals.repayable.toLocaleString()}
+                      </td>
+                      <td colSpan="2"></td>
+                    </tr>
+                  </tfoot>
+                )}
               </table>
            </div>
         </Card>
@@ -482,16 +831,32 @@ const FinanceDashboard = () => {
             Audit & Reconciliation
           </h3>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <Button variant="secondary" className="justify-start gap-2 h-12">
+            <Button 
+               variant="secondary" 
+               className={cn("justify-start gap-2 h-12", activeReport === 'trial' && "bg-indigo-50 border-indigo-200")}
+               onClick={() => setActiveReport(activeReport === 'trial' ? null : 'trial')}
+            >
                <Activity className="w-4 h-4" /> Trial Balance
             </Button>
-            <Button variant="secondary" className="justify-start gap-2 h-12">
+            <Button 
+               variant="secondary" 
+               className={cn("justify-start gap-2 h-12", activeReport === 'cashbook' && "bg-indigo-50 border-indigo-200")}
+               onClick={() => setActiveReport(activeReport === 'cashbook' ? null : 'cashbook')}
+            >
                <FileText className="w-4 h-4" /> Cashbook
             </Button>
-            <Button variant="secondary" className="justify-start gap-2 h-12">
+            <Button 
+               variant="secondary" 
+               className={cn("justify-start gap-2 h-12", activeReport === 'collection' && "bg-indigo-50 border-indigo-200")}
+               onClick={() => setActiveReport(activeReport === 'collection' ? null : 'collection')}
+            >
                <History className="w-4 h-4" /> Collection Log
             </Button>
-            <Button variant="secondary" className="justify-start gap-2 h-12">
+            <Button 
+               variant="secondary" 
+               className={cn("justify-start gap-2 h-12", activeReport === 'aging' && "bg-indigo-50 border-indigo-200")}
+               onClick={() => setActiveReport(activeReport === 'aging' ? null : 'aging')}
+            >
                <AlertCircle className="w-4 h-4" /> Aging Report
             </Button>
           </div>
@@ -503,21 +868,139 @@ const FinanceDashboard = () => {
             Financial Control
           </h3>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-             <Button className="justify-start gap-2 h-12">
+             <Button className="justify-start gap-2 h-12" onClick={() => alert("Manual Repayment Feature Coming Soon")}>
                 <DollarSign className="w-4 h-4" /> Manual Repayment
              </Button>
-             <Button className="justify-start gap-2 h-12 bg-slate-900 hover:bg-black">
+             <Button className="justify-start gap-2 h-12 bg-slate-900 hover:bg-black" onClick={() => alert("Freeze accounts is restricted to Super Admins")}>
                 <ArrowRight className="w-4 h-4" /> Freeze Accounts
              </Button>
-             <Button variant="outline" className="justify-start gap-2 h-12">
+             <Button variant="outline" className="justify-start gap-2 h-12" onClick={() => alert("Bulk approval feature is currently undergoing security audit")}>
                 <Briefcase className="w-4 h-4" /> Bulk Approval
              </Button>
-             <Button variant="outline" className="justify-start gap-2 h-12">
+             <Button variant="outline" className="justify-start gap-2 h-12" onClick={() => alert("Rate adjustments require risk committee authorization")}>
                 <TrendingUp className="w-4 h-4" /> Adjust Rates
              </Button>
           </div>
         </Card>
       </div>
+
+      {/* Dynamic Report View */}
+      {activeReport && (
+        <Card className="animate-in slide-in-from-bottom-4 duration-300 border-2 border-indigo-100">
+           <div className="flex items-center justify-between mb-6 border-b pb-4">
+              <h3 className="text-xl font-bold text-slate-900 dark:text-white flex items-center gap-3">
+                 {activeReport === 'trial' && <><Activity className="text-indigo-600" /> Trial Balance (Live)</>}
+                 {activeReport === 'cashbook' && <><FileText className="text-indigo-600" /> Cashbook (Capital Ledger)</>}
+                 {activeReport === 'collection' && <><History className="text-indigo-600" /> Collection Journal</>}
+                 {activeReport === 'aging' && <><AlertCircle className="text-indigo-600" /> Arrears Aging Report</>}
+              </h3>
+              <Button size="sm" variant="ghost" onClick={() => setActiveReport(null)}>Close Report</Button>
+           </div>
+
+           {activeReport === 'trial' && (
+              <div className="overflow-x-auto">
+                 <table className="w-full text-left">
+                    <thead>
+                       <tr className="bg-slate-50 text-[10px] font-black uppercase tracking-widest text-slate-500">
+                          <th className="p-4">Account Name</th>
+                          <th className="p-4 text-right">Debit (Asset/Expense)</th>
+                          <th className="p-4 text-right">Credit (Capital/Liability/Income)</th>
+                       </tr>
+                    </thead>
+                    <tbody className="divide-y text-sm">
+                       {reportData.trial_balance.map((item, i) => (
+                          <tr key={i}>
+                             <td className="p-4 font-bold text-slate-700">{item.account}</td>
+                             <td className="p-4 text-right">{item.debit > 0 ? `KES ${item.debit.toLocaleString()}` : '-'}</td>
+                             <td className="p-4 text-right">{item.credit > 0 ? `KES ${item.credit.toLocaleString()}` : '-'}</td>
+                          </tr>
+                       ))}
+                    </tbody>
+                 </table>
+              </div>
+           )}
+
+           {activeReport === 'cashbook' && (
+              <div className="overflow-x-auto">
+                 <table className="w-full text-left">
+                    <thead>
+                       <tr className="bg-slate-50 text-[10px] font-black uppercase tracking-widest text-slate-500">
+                          <th className="p-4">Date</th>
+                          <th className="p-4">Type</th>
+                          <th className="p-4">Customer/Entity</th>
+                          <th className="p-4">Reference</th>
+                          <th className="p-4 text-right">Amount</th>
+                       </tr>
+                    </thead>
+                    <tbody className="divide-y text-sm">
+                       {reportData.cashbook.map((item, i) => (
+                          <tr key={i} className="hover:bg-slate-50">
+                             <td className="p-4 text-slate-500">{item.date}</td>
+                             <td className="p-4">
+                                <span className={`text-[10px] font-bold px-2 py-0.5 rounded uppercase ${
+                                   item.type === 'DISBURSEMENT' ? 'bg-red-50 text-red-600' : 
+                                   item.type === 'REPAYMENT' ? 'bg-emerald-50 text-emerald-600' : 
+                                   'bg-blue-50 text-blue-600'
+                                }`}>
+                                   {item.type}
+                                </span>
+                             </td>
+                             <td className="p-4 font-bold">{item.customer}</td>
+                             <td className="p-4 font-mono text-xs">{item.reference}</td>
+                             <td className={`p-4 text-right font-black ${item.type === 'DISBURSEMENT' ? 'text-red-600' : 'text-emerald-600'}`}>
+                                {item.type === 'DISBURSEMENT' ? '-' : '+'} KES {item.amount.toLocaleString()}
+                             </td>
+                          </tr>
+                       ))}
+                       {reportData.cashbook.length === 0 && (
+                          <tr><td colSpan="5" className="p-12 text-center text-slate-400 italic">No ledger entries found</td></tr>
+                       )}
+                    </tbody>
+                 </table>
+              </div>
+           )}
+
+           {activeReport === 'collection' && (
+              <div className="overflow-x-auto">
+                 <table className="w-full text-left">
+                    <thead>
+                       <tr className="bg-slate-50 text-[10px] font-black uppercase tracking-widest text-slate-500">
+                          <th className="p-4">Date</th>
+                          <th className="p-4">Customer</th>
+                          <th className="p-4">Ref</th>
+                          <th className="p-4 text-right">Amount</th>
+                       </tr>
+                    </thead>
+                    <tbody className="divide-y text-sm">
+                       {reportData.collection_log.map((item, i) => (
+                          <tr key={i}>
+                             <td className="p-4 text-slate-500">{item.date}</td>
+                             <td className="p-4 font-bold">{item.customer}</td>
+                             <td className="p-4 font-mono text-xs text-indigo-500">{item.reference}</td>
+                             <td className="p-4 text-right font-black text-emerald-600">KES {item.amount.toLocaleString()}</td>
+                          </tr>
+                       ))}
+                    </tbody>
+                 </table>
+              </div>
+           )}
+
+           {activeReport === 'aging' && (
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                 {[
+                    { label: '0-30 Days', val: reportData.aging_report.days_30, color: 'text-amber-600' },
+                    { label: '31-60 Days', val: reportData.aging_report.days_60, color: 'text-orange-600' },
+                    { label: '60+ Days (Bad Debt)', val: reportData.aging_report.days_90, color: 'text-rose-600' },
+                 ].map((bucket, i) => (
+                    <Card key={i} className="text-center p-8 bg-white border shadow-sm">
+                       <p className="text-xs font-black text-slate-400 uppercase tracking-widest mb-2">{bucket.label}</p>
+                       <p className={cn("text-3xl font-black", bucket.color)}>KES {bucket.val.toLocaleString()}</p>
+                    </Card>
+                 ))}
+              </div>
+           )}
+        </Card>
+      )}
 
       <BulkCustomerSMSModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} />
     </div>

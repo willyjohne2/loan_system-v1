@@ -110,6 +110,25 @@ const ManagerDashboard = () => {
   const [reviewingCustomer, setReviewingCustomer] = useState(null);
   const [reviewingLoan, setReviewingLoan] = useState(null);
   const [updating, setUpdating] = useState(false);
+  const [activeTab, setActiveTab] = useState('ACTIVE');
+
+  // Logic for filtered totals
+  const getTotals = (loansList) => {
+    return (loansList || []).reduce((acc, l) => ({
+      repayable: acc.repayable + Number(l.total_repayable_amount || 0),
+      principal: acc.principal + Number(l.principal_amount || 0)
+    }), { repayable: 0, principal: 0 });
+  };
+
+  const filteredLoansForTotals = (loans || []).filter(l => {
+    const s = l.status;
+    if (activeTab === 'ACTIVE') return ['DISBURSED', 'ACTIVE', 'OVERDUE', 'CLOSED', 'REPAID'].includes(s);
+    if (activeTab === 'PENDING') return ['UNVERIFIED', 'VERIFIED', 'APPROVED', 'PENDING'].includes(s);
+    return s === 'REJECTED';
+  });
+
+  const totals = getTotals(filteredLoansForTotals);
+
   const [loadingStats, setLoadingStats] = useState(true);
   const [loadingTables, setLoadingTables] = useState(true);
   const [chartData, setChartData] = useState([]);
@@ -162,8 +181,11 @@ const ManagerDashboard = () => {
           loansList = loansList.filter(l => validCustomerIds.has(l.user));
           const validLoanIds = new Set(loansList.map(l => l.id));
           
-          // Recalculate stats based on filtered data
-          const issued = loansList.reduce((acc, l) => acc + parseAmount(l.principal_amount), 0);
+          // Recalculate stats based on filtered data (only disbursed/active)
+          const disbursedStatuses = ['DISBURSED', 'ACTIVE', 'OVERDUE', 'CLOSED', 'REPAID'];
+          const issued = loansList
+            .filter(l => disbursedStatuses.includes((l.status || '').toUpperCase()))
+            .reduce((acc, l) => acc + parseAmount(l.principal_amount), 0);
           const filteredRepayments = repaymentsList.filter(r => validLoanIds.has(r.loan));
           const repaid = filteredRepayments.reduce((acc, r) => acc + parseAmount(r.amount_paid), 0);
           
@@ -217,9 +239,10 @@ const ManagerDashboard = () => {
       let loansList = loanData.results || loanData;
       const repaymentsList = repaymentData.results || repaymentData;
 
-      // Apply County Filter (Partial - we need customers for full filtering, so we fetch them in secondary)
-      // For now, calculate global or wait for secondary for county filter
-      const issued = loansList.reduce((acc, l) => acc + parseAmount(l.principal_amount), 0);
+      const disbursedStatuses = ['DISBURSED', 'ACTIVE', 'OVERDUE', 'CLOSED', 'REPAID'];
+      const issued = loansList
+        .filter(l => disbursedStatuses.includes((l.status || '').toUpperCase()))
+        .reduce((acc, l) => acc + parseAmount(l.principal_amount), 0);
       const repaid = repaymentsList.reduce((acc, r) => acc + parseAmount(r.amount_paid), 0);
       const repaymentRate = issued > 0 ? Math.round((repaid / issued) * 100) : 0;
       const unverifiedCount = loansList.filter(l => (l.status || '').toUpperCase() === 'UNVERIFIED').length;
@@ -235,8 +258,13 @@ const ManagerDashboard = () => {
       }
 
       const monthlyData = loansList.reduce((acc, loan) => {
-        const month = new Date(loan.created_at).toLocaleString('default', { month: 'short' });
-        acc[month] = (acc[month] || 0) + parseAmount(loan.principal_amount);
+        const status = (loan.status || '').toUpperCase();
+        const disbursedStatuses = ['DISBURSED', 'ACTIVE', 'OVERDUE', 'CLOSED', 'REPAID'];
+        
+        if (disbursedStatuses.includes(status)) {
+          const month = new Date(loan.created_at).toLocaleString('default', { month: 'short' });
+          acc[month] = (acc[month] || 0) + parseAmount(loan.principal_amount);
+        }
         return acc;
       }, {});
 
@@ -657,11 +685,32 @@ const ManagerDashboard = () => {
 
       {/* Recent Loans */}
       <Card className="p-6">
-        <div className="flex items-center justify-between mb-6">
+        <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 mb-6">
            <h3 className="text-lg font-bold flex items-center gap-2 text-slate-900 dark:text-white">
               <Activity className="w-5 h-5 text-orange-500" />
-              Recent Loan Activity
+              Branchal Loan Pipeline
            </h3>
+
+           <div className="flex bg-slate-100 dark:bg-slate-800 p-1 rounded-lg">
+             {[
+               { id: 'ACTIVE', label: 'Disbursed' },
+               { id: 'PENDING', label: 'Processing' },
+               { id: 'REJECTED', label: 'Rejected' }
+             ].map(tab => (
+               <button
+                 key={tab.id}
+                 onClick={() => setActiveTab(tab.id)}
+                 className={`px-3 py-1.5 rounded-lg text-[10px] font-black transition-all ${
+                   activeTab === tab.id 
+                     ? 'bg-white dark:bg-slate-700 text-orange-600 shadow-sm' 
+                     : 'text-slate-500 hover:text-slate-700'
+                 }`}
+               >
+                 {tab.label.toUpperCase()}
+               </button>
+             ))}
+           </div>
+
            <div className="flex gap-2">
              <Button 
                variant="primary" 
@@ -672,94 +721,107 @@ const ManagerDashboard = () => {
                <MessageSquareShare className="w-4 h-4" />
                Customer Comms
              </Button>
-             <Button variant="secondary" size="sm">View All Loans</Button>
            </div>
         </div>
         
-        <div className="overflow-x-auto max-h-[400px] overflow-y-auto">
+        <div className="overflow-x-auto max-h-[450px] overflow-y-auto scrollbar-thin scrollbar-thumb-slate-200 dark:scrollbar-thumb-slate-800">
           <table className="w-full text-left">
-            <thead>
-              <tr className="text-xs font-bold text-slate-500 uppercase border-b border-slate-100 dark:border-slate-800">
+            <thead className="sticky top-0 z-10">
+              <tr className="text-xs font-black text-slate-500 uppercase border-b border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900">
                 <th className="px-4 py-3">Loan ID</th>
                 <th className="px-4 py-3">Customer</th>
+                <th className="px-4 py-3">Product</th>
+                <th className="px-4 py-3 whitespace-nowrap">Total Repayable</th>
                 <th className="px-4 py-3">Principal</th>
                 <th className="px-4 py-3">Status</th>
-                <th className="px-4 py-3">Date</th>
                 <th className="px-4 py-3 text-right">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-              {loans.slice(0, 6).map((loan) => (
-                <tr key={loan.id} className="text-sm hover:bg-slate-50 dark:hover:bg-slate-800/20">
-                  <td className="px-4 py-4 font-mono text-xs text-slate-500">{loan.id.substring(0, 8)}...</td>
-                  <td className="px-4 py-4 font-medium text-slate-900 dark:text-white">
-                    {customers.find(c => c.id === loan.user)?.full_name || 'Loading Customer...'}
-                  </td>
-                  <td className="px-4 py-4 font-semibold italic text-slate-700 dark:text-slate-300">
-                    KES {Number(loan.principal_amount).toLocaleString()}
-                  </td>
-                  <td className="px-4 py-4">
-                    <Badge variant={getStatusColor(loan.status)}>
-                      {loan.status}
-                    </Badge>
-                  </td>
-                  <td className="px-4 py-4 text-slate-500 text-xs">
-                    {new Date(loan.created_at).toLocaleDateString()}
-                  </td>
-                  <td className="px-4 py-4 text-right">
-                    <div className="flex justify-end gap-2 text-slate-900 dark:text-slate-100 italic">
-                      {loan.status === 'UNVERIFIED' && (
+              {loans.filter(l => {
+                  const s = l.status;
+                  if (activeTab === 'ACTIVE') return ['DISBURSED', 'ACTIVE', 'OVERDUE', 'CLOSED', 'REPAID'].includes(s);
+                  if (activeTab === 'PENDING') return ['UNVERIFIED', 'VERIFIED', 'APPROVED', 'PENDING'].includes(s);
+                  return s === 'REJECTED';
+              }).length > 0 ? (
+                loans.filter(l => {
+                    const s = l.status;
+                    if (activeTab === 'ACTIVE') return ['DISBURSED', 'ACTIVE', 'OVERDUE', 'CLOSED', 'REPAID'].includes(s);
+                    if (activeTab === 'PENDING') return ['UNVERIFIED', 'VERIFIED', 'APPROVED', 'PENDING'].includes(s);
+                    return s === 'REJECTED';
+                }).map((loan) => (
+                  <tr key={loan.id} className="text-sm hover:bg-slate-50 dark:hover:bg-slate-800/20">
+                    <td className="px-4 py-4 font-mono text-xs text-slate-500">{loan.id.substring(0, 8)}...</td>
+                    <td className="px-4 py-4">
+                      <p className="font-bold text-slate-900 dark:text-white">
+                        {loan.customer_name || customers.find(c => c.id === loan.user)?.full_name || 'Loading...'}
+                      </p>
+                    </td>
+                    <td className="px-4 py-4">
+                      <span className="text-[10px] font-bold text-slate-500 uppercase border px-1.5 py-0.5 rounded">{loan.product_name}</span>
+                    </td>
+                    <td className="px-4 py-4 font-black text-emerald-600 dark:text-emerald-400">
+                      KES {Number(loan.total_repayable_amount).toLocaleString()}
+                    </td>
+                    <td className="px-4 py-4 font-semibold italic text-slate-700 dark:text-slate-300">
+                      KES {Number(loan.principal_amount).toLocaleString()}
+                    </td>
+                    <td className="px-4 py-4">
+                      <Badge variant={getStatusColor(loan.status)}>
+                        {loan.status}
+                      </Badge>
+                    </td>
+                    <td className="px-4 py-4 text-right">
+                      <div className="flex justify-end gap-2">
+                        {loan.status === 'UNVERIFIED' && (
+                          <Button 
+                            size="xs" 
+                            className="bg-blue-600 hover:bg-blue-700 text-white font-bold"
+                            onClick={() => {
+                              setSelectedCustomer(customers.find(c => c.id === loan.user));
+                              setSelectedLoan(loan);
+                            }}
+                            disabled={updating}
+                          >
+                            Verify
+                          </Button>
+                        )}
                         <Button 
                           size="xs" 
-                          className="bg-blue-600 hover:bg-blue-700 text-white font-bold"
-                          onClick={() => {
-                            setSelectedCustomer(customers.find(c => c.id === loan.user));
-                            setSelectedLoan(loan);
-                          }}
-                          disabled={updating}
+                          variant="ghost"
+                          onClick={() => setSelectedLoan(loan)}
                         >
-                          Verify
+                          <Eye className="w-4 h-4" />
                         </Button>
-                      )}
-                      {loan.status === 'VERIFIED' && (
-                        <Button 
-                          size="xs" 
-                          className="bg-amber-600 hover:bg-amber-700 text-white"
-                          onClick={() => handleUpdateLoanStatus(loan.id, 'PENDING')}
-                          disabled={updating}
-                        >
-                          To Pending
-                        </Button>
-                      )}
-                      <Button 
-                        size="xs" 
-                        variant="ghost"
-                        onClick={() => setSelectedLoan(loan)}
-                      >
-                        <Eye className="w-4 h-4" />
-                      </Button>
-                      {['ACTIVE', 'OVERDUE'].includes(loan.status) && (
-                        <Button 
-                          size="xs" 
-                          className="bg-emerald-600 hover:bg-emerald-700 text-white"
-                          onClick={() => {
-                            setSelectedLoan(loan);
-                            setShowRepaymentModal(true);
-                          }}
-                        >
-                          Repay
-                        </Button>
-                      )}
-                    </div>
-                  </td>
-                </tr>
-              ))}
-              {loans.length === 0 && (
+                      </div>
+                    </td>
+                  </tr>
+                ))
+              ) : (
                 <tr>
-                   <td colSpan="6" className="px-4 py-10 text-center text-slate-400">No recent loan activity</td>
+                   <td colSpan="7" className="px-4 py-12 text-center text-slate-400 italic">No {activeTab.toLowerCase()} loans found in this branch</td>
                 </tr>
               )}
             </tbody>
+            {loans.filter(l => {
+                  const s = l.status;
+                  if (activeTab === 'ACTIVE') return ['DISBURSED', 'ACTIVE', 'OVERDUE', 'CLOSED', 'REPAID'].includes(s);
+                  if (activeTab === 'PENDING') return ['UNVERIFIED', 'VERIFIED', 'APPROVED', 'PENDING'].includes(s);
+                  return s === 'REJECTED';
+              }).length > 0 && (
+              <tfoot className="sticky bottom-0 z-10 bg-slate-50 dark:bg-slate-900 font-bold border-t-2 border-slate-200 dark:border-slate-800">
+                <tr>
+                   <td colSpan="3" className="px-4 py-3 text-right text-[10px] font-black text-slate-500">BRANCH TOTALS:</td>
+                   <td className="px-4 py-3 text-sm font-black text-emerald-600 dark:text-emerald-400">
+                     KES {totals.repayable.toLocaleString()}
+                   </td>
+                   <td className="px-4 py-3 text-sm font-black text-slate-700 dark:text-slate-300">
+                     KES {totals.principal.toLocaleString()}
+                   </td>
+                   <td colSpan="2"></td>
+                </tr>
+              </tfoot>
+            )}
           </table>
         </div>
       </Card>

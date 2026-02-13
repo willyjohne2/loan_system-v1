@@ -19,16 +19,35 @@ import {
   AlertTriangle,
   Camera,
   Upload,
-  X
+  X,
+  UserPlus
 } from 'lucide-react';
 
-const CustomerRegistrationForm = ({ onSuccess, onApplyLoan }) => {
-  const [step, setStep] = useState(0); // Start at 0 for search
+const CustomerRegistrationForm = ({ onSuccess, onApplyLoan, onCancel, initialCustomer }) => {
+  // Try to load saved draft from sessionStorage
+  const savedDraft = JSON.parse(sessionStorage.getItem('registration_draft') || 'null');
+  
+  const [step, setStep] = useState(() => {
+    if (savedDraft && (!initialCustomer || savedDraft.existingUserId === initialCustomer.id)) {
+      return savedDraft.step;
+    }
+    return initialCustomer ? 1 : 0;
+  });
   const [loading, setLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
-  const [isExistingUser, setIsExistingUser] = useState(false);
+  const [isExistingUser, setIsExistingUser] = useState(() => {
+    if (savedDraft && (!initialCustomer || savedDraft.existingUserId === initialCustomer.id)) {
+      return savedDraft.isExistingUser;
+    }
+    return !!initialCustomer;
+  });
   const [hasOutstanding, setHasOutstanding] = useState(false);
-  const [existingUserId, setExistingUserId] = useState(null);
+  const [existingUserId, setExistingUserId] = useState(() => {
+    if (savedDraft && (!initialCustomer || savedDraft.existingUserId === initialCustomer.id)) {
+      return savedDraft.existingUserId;
+    }
+    return initialCustomer?.id || null;
+  });
   const [error, setError] = useState('');
   const [isFinished, setIsFinished] = useState(false);
   const [registeredUser, setRegisteredUser] = useState(null);
@@ -39,46 +58,154 @@ const CustomerRegistrationForm = ({ onSuccess, onApplyLoan }) => {
     'Kagio', 'Embu', 'Thika', 'Naivasha'
   ];
   
-  const [formData, setFormData] = useState({
-    // Step 1: Basic Info
-    full_name: '',
-    phone: '',
-    email: '',
-    
-    // Step 2: User Details (Profile)
-    national_id: '',
-    date_of_birth: '',
-    branch: 'Kagio',
-    town: '',
-    village: '',
-    address: '',
-    
-    // Step 3: Salary & Income
-    employment_status: 'EMPLOYED',
-    monthly_income: '',
+  const [formData, setFormData] = useState(() => {
+    // 1. If we have a draft and it is relevant (either new registration or same customer)
+    if (savedDraft?.formData && (!initialCustomer || savedDraft.existingUserId === initialCustomer.id)) {
+      return {
+        ...savedDraft.formData,
+        profile_image: null,
+        national_id_image: null
+      };
+    }
 
-    // Step 4: Verification Images
-    profile_image: null,
-    national_id_image: null,
-    agreed_to_terms: false,
+    // 2. Otherwise use initial customer data if provided
+    if (initialCustomer) {
+      return {
+        full_name: initialCustomer.full_name || '',
+        phone: initialCustomer.phone || '',
+        email: initialCustomer.email || '',
+        national_id: initialCustomer.profile?.national_id || '',
+        date_of_birth: initialCustomer.profile?.date_of_birth || '',
+        branch: initialCustomer.profile?.branch || 'Kagio',
+        town: initialCustomer.profile?.town || '',
+        village: initialCustomer.profile?.village || '',
+        address: initialCustomer.profile?.address || '',
+        employment_status: initialCustomer.profile?.employment_status || 'EMPLOYED',
+        monthly_income: initialCustomer.profile?.monthly_income || '',
+        guarantors: initialCustomer.guarantors?.length > 0 ? initialCustomer.guarantors : [{ full_name: '', national_id: '', phone: '' }],
+        profile_image: null,
+        national_id_image: null,
+        agreed_to_terms: true,
+      };
+    }
+    
+    // 3. Fallback to default empty form
+    return {
+      full_name: '',
+      phone: '',
+      email: '',
+      national_id: '',
+      date_of_birth: '',
+      branch: 'Kagio',
+      town: '',
+      village: '',
+      address: '',
+      employment_status: 'EMPLOYED',
+      monthly_income: '',
+      guarantors: [{ full_name: '', national_id: '', phone: '' }],
+      profile_image: null,
+      national_id_image: null,
+      agreed_to_terms: false,
+    };
   });
 
-  const [profilePreview, setProfilePreview] = useState(null);
-  const [idPreview, setIdPreview] = useState(null);
+  // Persist to sessionStorage on changes
+  useEffect(() => {
+    // Only save if not finished
+    if (!isFinished) {
+      const draft = {
+        step,
+        isExistingUser,
+        existingUserId,
+        formData: {
+          ...formData,
+          profile_image: null, // Files can't be saved in sessionStorage
+          national_id_image: null
+        }
+      };
+      sessionStorage.setItem('registration_draft', JSON.stringify(draft));
+    }
+  }, [step, formData, isExistingUser, existingUserId, isFinished]);
+
+  const clearDraft = () => {
+    sessionStorage.removeItem('registration_draft');
+  };
+
+  const handleCancelClick = () => {
+    const hasData = formData.full_name || formData.phone || formData.national_id;
+    if (hasData && !isFinished) {
+      if (window.confirm("You have unsaved changes. Are you sure you want to exit? This will clear your current progress.")) {
+        clearDraft();
+        onCancel?.();
+      }
+    } else {
+      clearDraft();
+      onCancel?.();
+    }
+  };
+
+  const steps = [
+    { id: 0, label: 'Lookup' },
+    { id: 1, label: 'Personal Details' },
+    { id: 2, label: 'Residence Details' },
+    { id: 3, label: 'Income Status' },
+    { id: 4, label: 'Image Uploads' },
+    { id: 5, label: 'Guarantors' },
+    { id: 6, label: 'Review' }
+  ];
+
+  const [profilePreview, setProfilePreview] = useState(initialCustomer?.profile?.profile_image || null);
+  const [idPreview, setIdPreview] = useState(initialCustomer?.profile?.national_id_image || null);
 
   const handleFileChange = (e) => {
     const { name, files } = e.target;
-    if (files && files[0]) {
-      const file = files[0];
+    const file = files && files[0];
+    
+    setError(''); 
+    
+    if (file) {
+      // Basic Validation (5MB)
+      const maxSize = 5 * 1024 * 1024;
+      if (file.size > maxSize) {
+        setError(`File too large: ${file.name} is too big. Max 5MB.`);
+        return;
+      }
+
+      if (!file.type.startsWith('image/')) {
+        setError("Please select an image file (PNG, JPG, etc).");
+        return;
+      }
+
       setFormData(prev => ({ ...prev, [name]: file }));
       
-      // Create preview
       const reader = new FileReader();
       reader.onloadend = () => {
         if (name === 'profile_image') setProfilePreview(reader.result);
         if (name === 'national_id_image') setIdPreview(reader.result);
       };
       reader.readAsDataURL(file);
+    }
+  };
+
+  const handleGuarantorChange = (index, field, value) => {
+    const newGuarantors = [...formData.guarantors];
+    newGuarantors[index][field] = value;
+    setFormData(prev => ({ ...prev, guarantors: newGuarantors }));
+  };
+
+  const addGuarantor = () => {
+    if (formData.guarantors.length < 3) {
+      setFormData(prev => ({
+        ...prev,
+        guarantors: [...prev.guarantors, { full_name: '', national_id: '', phone: '' }]
+      }));
+    }
+  };
+
+  const removeGuarantor = (index) => {
+    if (formData.guarantors.length > 1) {
+      const newGuarantors = formData.guarantors.filter((_, i) => i !== index);
+      setFormData(prev => ({ ...prev, guarantors: newGuarantors }));
     }
   };
 
@@ -95,6 +222,19 @@ const CustomerRegistrationForm = ({ onSuccess, onApplyLoan }) => {
         setExistingUserId(data.user.id);
         setHasOutstanding(data.has_outstanding_loan);
         setOutstandingLoanDetails(data.outstanding_loan);
+        
+        // Update Previews
+        if (data.user.profile?.profile_image) {
+          setProfilePreview(data.user.profile.profile_image);
+        } else {
+          setProfilePreview(null);
+        }
+        
+        if (data.user.profile?.national_id_image) {
+          setIdPreview(data.user.profile.national_id_image);
+        } else {
+          setIdPreview(null);
+        }
         
         // Pre-fill form
         setFormData({
@@ -153,12 +293,27 @@ const CustomerRegistrationForm = ({ onSuccess, onApplyLoan }) => {
   const nextStep = () => {
     // Basic validation for each step
     if (step === 1 && (!formData.full_name || !formData.phone)) {
-      setError('Please fill in name and phone');
+      setError('Required: Please fill in Full Name and Phone Number');
       return;
     }
-    if (step === 2 && (!formData.national_id || !formData.branch || !formData.town)) {
-      setError('Please fill in essential residential details');
+    if (step === 2 && (!formData.national_id || !formData.date_of_birth || !formData.branch || !formData.town)) {
+      setError('Required: National ID, Date of Birth, Branch and Town are mandatory');
       return;
+    }
+    if (step === 3 && (!formData.employment_status || !formData.monthly_income)) {
+      setError('Required: Please provide Employment Status and Monthly Income');
+      return;
+    }
+    if (step === 4 && !isExistingUser && (!formData.profile_image || !formData.national_id_image)) {
+      setError('Required: Please upload both the Profile Image and ID Photo before proceeding.');
+      return;
+    }
+    if (step === 5) {
+      const validGuarantors = formData.guarantors.filter(g => g.full_name && g.phone && g.national_id);
+      if (validGuarantors.length === 0) {
+        setError('Required: Please provide at least one complete guarantor (Name, ID, and Phone)');
+        return;
+      }
     }
     setError('');
     setStep(prev => prev + 1);
@@ -166,6 +321,13 @@ const CustomerRegistrationForm = ({ onSuccess, onApplyLoan }) => {
   const prevStep = () => setStep(prev => prev - 1);
 
   const handleSubmit = async () => {
+    // Safety check for images during fresh registration
+    if (!isExistingUser && (!formData.profile_image || !formData.national_id_image)) {
+        setError('Submission blocked: Profile and ID images are mandatory for new registration.');
+        setStep(4);
+        return;
+    }
+
     setLoading(true);
     setError('');
     try {
@@ -183,6 +345,9 @@ const CustomerRegistrationForm = ({ onSuccess, onApplyLoan }) => {
       data.append('address', formData.address);
       data.append('employment_status', formData.employment_status);
       if (formData.monthly_income) data.append('monthly_income', formData.monthly_income);
+      
+      // Guarantors
+      data.append('guarantors', JSON.stringify(formData.guarantors.filter(g => g.full_name && g.phone)));
 
       if (formData.profile_image instanceof File) {
         data.append('profile_image', formData.profile_image);
@@ -264,7 +429,14 @@ const CustomerRegistrationForm = ({ onSuccess, onApplyLoan }) => {
                 {error}
               </div>
             )}
-            <div className="mt-8 pt-6 border-t border-gray-100 text-center">
+            <div className="mt-8 pt-6 border-t border-gray-100 flex justify-between items-center px-2">
+              <button
+                onClick={handleCancelClick}
+                className="text-slate-500 hover:text-slate-800 font-medium text-sm flex items-center gap-1"
+              >
+                <X className="w-4 h-4" />
+                Cancel
+              </button>
               <button
                 onClick={() => {
                   setError('');
@@ -450,39 +622,83 @@ const CustomerRegistrationForm = ({ onSuccess, onApplyLoan }) => {
         );
       case 4:
         return (
-          <div className="space-y-4 animate-in fade-in slide-in-from-right-4">
-            <h4 className="text-lg font-medium text-slate-900 dark:text-white flex items-center gap-2 border-b pb-2">
-              <Camera className="w-5 h-5 text-primary-600" />
-              Documents & Verification
-            </h4>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div className="space-y-6 animate-in fade-in slide-in-from-right-4">
+            <div className="border-b pb-3">
+              <h4 className="text-lg font-semibold text-slate-800 dark:text-white flex items-center gap-2">
+                <Camera className="w-5 h-5 text-primary-600" />
+                Documents & Verification
+              </h4>
+              <p className="text-sm text-slate-500 mt-1">Please provide clear photos for faster application processing.</p>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
               {/* Profile Image */}
-              <div className="space-y-2">
-                <label className="text-sm font-medium">Profile Image (Passport Size)</label>
+              <div className="space-y-3">
+                <label className="text-sm font-semibold text-slate-700 flex items-center gap-2">
+                  <User className="w-4 h-4 text-slate-400" />
+                  Profile Photo (Passport Size)
+                </label>
                 <div className="relative group">
-                  <div className={`w-full h-40 border-2 border-dashed rounded-lg flex flex-col items-center justify-center transition-colors ${profilePreview ? 'border-emerald-500 bg-emerald-50' : 'border-gray-300 hover:border-blue-400'} ${isExistingUser ? 'cursor-not-allowed opacity-80' : ''}`}>
-                    {profilePreview ? (
-                      <img src={profilePreview} alt="Profile Preview" className="h-full w-full object-cover rounded-lg" />
-                    ) : (
-                      <div className="text-center p-4">
-                        <Upload className="mx-auto h-8 w-8 text-gray-400" />
-                        <span className="mt-2 block text-xs text-gray-600">Click to upload or drag and drop</span>
+                  <label htmlFor="profile_image_input" className="cursor-pointer block transition-transform active:scale-[0.98]">
+                    <div 
+                      className={`w-full h-56 border-2 border-dashed rounded-2xl flex flex-col items-center justify-center transition-all overflow-hidden relative shadow-sm ${
+                        profilePreview ? 'border-emerald-500 bg-emerald-50/30' : 'border-slate-300 hover:border-primary-400 hover:bg-slate-50/80 bg-slate-50'
+                      }`}
+                    >
+                      {profilePreview ? (
+                        <div className="relative w-full h-full">
+                          <img 
+                            src={profilePreview.startsWith('http') || profilePreview.startsWith('data:') ? profilePreview : `${loanService.api.defaults.baseURL.replace('/api', '')}${profilePreview}`} 
+                            alt="Profile Preview" 
+                            className="h-full w-full object-cover" 
+                          />
+                          <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center text-white gap-2">
+                            <Upload className="w-8 h-8" />
+                            <p className="text-xs font-bold uppercase tracking-wider">Change Photo</p>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="text-center p-6 flex flex-col items-center">
+                          <div className="w-16 h-16 bg-white rounded-full shadow-sm flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
+                            <Upload className="h-7 w-7 text-primary-500" />
+                          </div>
+                          <span className="block text-sm font-bold text-slate-700 mb-1">Upload Profile Photo</span>
+                          <span className="text-[11px] text-slate-500">JPG, PNG up to 5MB</span>
+                        </div>
+                      )}
+                    </div>
+                  </label>
+                  <input 
+                    type="file" 
+                    id="profile_image_input"
+                    name="profile_image"
+                    onChange={handleFileChange}
+                    accept="image/*"
+                    className="hidden"
+                    disabled={isExistingUser}
+                  />
+                  
+                  {/* Filename Footer */}
+                  {formData.profile_image instanceof File && (
+                    <div className="mt-2 flex items-center justify-between px-2">
+                      <div className="flex items-center gap-1.5 min-w-0">
+                        <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
+                        <span className="text-[11px] text-slate-600 font-medium truncate">{formData.profile_image.name}</span>
                       </div>
-                    )}
-                    {!isExistingUser && (
-                      <input 
-                        type="file" 
-                        name="profile_image"
-                        onChange={handleFileChange}
-                        accept="image/*"
-                        className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-                      />
-                    )}
-                  </div>
+                      <span className="text-[10px] text-slate-400 shrink-0">{(formData.profile_image.size / (1024 * 1024)).toFixed(1)}MB</span>
+                    </div>
+                  )}
+
                   {profilePreview && !isExistingUser && (
                     <button 
-                      onClick={() => { setFormData(p => ({...p, profile_image: null})); setProfilePreview(null); }}
-                      className="absolute -top-2 -right-2 bg-red-500 text-white p-1 rounded-full shadow-lg"
+                      type="button"
+                      onClick={(e) => { 
+                        e.preventDefault();
+                        e.stopPropagation();
+                        setFormData(p => ({...p, profile_image: null})); 
+                        setProfilePreview(null); 
+                      }}
+                      className="absolute -top-2 -right-2 bg-white text-rose-500 p-1.5 rounded-full shadow-md z-[60] border border-rose-100 hover:bg-rose-50 hover:text-rose-600 active:scale-90 transition-all"
                     >
                       <X className="w-4 h-4" />
                     </button>
@@ -491,32 +707,72 @@ const CustomerRegistrationForm = ({ onSuccess, onApplyLoan }) => {
               </div>
 
               {/* National ID Image */}
-              <div className="space-y-2">
-                <label className="text-sm font-medium">National ID Front View</label>
+              <div className="space-y-3">
+                <label className="text-sm font-semibold text-slate-700 flex items-center gap-2">
+                  <CreditCard className="w-4 h-4 text-slate-400" />
+                  National ID (Front View)
+                </label>
                 <div className="relative group">
-                  <div className={`w-full h-40 border-2 border-dashed rounded-lg flex flex-col items-center justify-center transition-colors ${idPreview ? 'border-emerald-500 bg-emerald-50' : 'border-gray-300 hover:border-blue-400'} ${isExistingUser ? 'cursor-not-allowed opacity-80' : ''}`}>
-                    {idPreview ? (
-                      <img src={idPreview} alt="ID Preview" className="h-full w-full object-cover rounded-lg" />
-                    ) : (
-                      <div className="text-center p-4">
-                        <Camera className="mx-auto h-8 w-8 text-gray-400" />
-                        <span className="mt-2 block text-xs text-gray-600">Upload ID Photo</span>
+                  <label htmlFor="national_id_image_input" className="cursor-pointer block transition-transform active:scale-[0.98]">
+                    <div 
+                      className={`w-full h-56 border-2 border-dashed rounded-2xl flex flex-col items-center justify-center transition-all overflow-hidden relative shadow-sm ${
+                        idPreview ? 'border-emerald-500 bg-emerald-50/30' : 'border-slate-300 hover:border-primary-400 hover:bg-slate-50/80 bg-slate-50'
+                      }`}
+                    >
+                      {idPreview ? (
+                        <div className="relative w-full h-full">
+                          <img 
+                            src={idPreview.startsWith('http') || idPreview.startsWith('data:') ? idPreview : `${loanService.api.defaults.baseURL.replace('/api', '')}${idPreview}`} 
+                            alt="ID Preview" 
+                            className="h-full w-full object-cover" 
+                          />
+                          <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center text-white gap-2">
+                            <Upload className="w-8 h-8" />
+                            <p className="text-xs font-bold uppercase tracking-wider">Change ID Photo</p>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="text-center p-6 flex flex-col items-center">
+                          <div className="w-16 h-16 bg-white rounded-full shadow-sm flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
+                            <Camera className="h-7 w-7 text-primary-500" />
+                          </div>
+                          <span className="block text-sm font-bold text-slate-700 mb-1">Upload ID Side</span>
+                          <span className="text-[11px] text-slate-500">JPG, PNG up to 5MB</span>
+                        </div>
+                      )}
+                    </div>
+                  </label>
+                  <input 
+                    type="file" 
+                    id="national_id_image_input"
+                    name="national_id_image"
+                    onChange={handleFileChange}
+                    accept="image/*"
+                    className="hidden"
+                    disabled={isExistingUser}
+                  />
+
+                  {/* Filename Footer */}
+                  {formData.national_id_image instanceof File && (
+                    <div className="mt-2 flex items-center justify-between px-2">
+                      <div className="flex items-center gap-1.5 min-w-0">
+                        <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
+                        <span className="text-[11px] text-slate-600 font-medium truncate">{formData.national_id_image.name}</span>
                       </div>
-                    )}
-                    {!isExistingUser && (
-                      <input 
-                        type="file" 
-                        name="national_id_image"
-                        onChange={handleFileChange}
-                        accept="image/*"
-                        className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-                      />
-                    )}
-                  </div>
+                      <span className="text-[10px] text-slate-400 shrink-0">{(formData.national_id_image.size / (1024 * 1024)).toFixed(1)}MB</span>
+                    </div>
+                  )}
+
                   {idPreview && !isExistingUser && (
                     <button 
-                      onClick={() => { setFormData(p => ({...p, national_id_image: null})); setIdPreview(null); }}
-                      className="absolute -top-2 -right-2 bg-red-500 text-white p-1 rounded-full shadow-lg"
+                      type="button"
+                      onClick={(e) => { 
+                        e.preventDefault();
+                        e.stopPropagation();
+                        setFormData(p => ({...p, national_id_image: null})); 
+                        setIdPreview(null); 
+                      }}
+                      className="absolute -top-2 -right-2 bg-white text-rose-500 p-1.5 rounded-full shadow-md z-[60] border border-rose-100 hover:bg-rose-50 hover:text-rose-600 active:scale-90 transition-all"
                     >
                       <X className="w-4 h-4" />
                     </button>
@@ -524,7 +780,20 @@ const CustomerRegistrationForm = ({ onSuccess, onApplyLoan }) => {
                 </div>
               </div>
             </div>
-            <p className="text-xs text-gray-500 italic text-center">
+
+            <div className="bg-blue-50/50 border border-blue-100 rounded-xl p-4 flex items-start gap-3">
+              <AlertCircle className="w-5 h-5 text-blue-500 shrink-0 mt-0.5" />
+              <div className="text-xs text-blue-700 leading-relaxed">
+                <p className="font-semibold mb-1">Verification Tips:</p>
+                <ul className="list-disc list-inside space-y-1 opacity-80">
+                  <li>Ensure the text on your ID is clearly visible</li>
+                  <li>Avoid glare or reflections on the ID surface</li>
+                  <li>Profile photo should show your full face clearly</li>
+                </ul>
+              </div>
+            </div>
+            
+            <p className="text-xs text-gray-500 italic text-center mt-4">
               {isExistingUser 
                 ? "Identity documents and profile images are locked for verification security."
                 : "Clear images help in faster verification and loan approval."
@@ -534,55 +803,132 @@ const CustomerRegistrationForm = ({ onSuccess, onApplyLoan }) => {
         );
       case 5:
         return (
-          <div className="text-center py-8 space-y-4">
+          <div className="space-y-4 animate-in fade-in slide-in-from-right-4">
+            <div className="flex justify-between items-center border-b pb-2">
+              <h4 className="text-lg font-medium text-slate-900 dark:text-white flex items-center gap-2">
+                <UserPlus className="w-5 h-5 text-primary-600" />
+                Guarantors Information
+              </h4>
+              <span className="text-xs font-medium text-slate-500 bg-slate-100 px-2 py-1 rounded-full">
+                {formData.guarantors.length}/3
+              </span>
+            </div>
+
+            <p className="text-sm text-slate-600">
+              Please provide details for 1 to 3 guarantors. At least one is mandatory.
+            </p>
+
+            <div className="space-y-6">
+              {formData.guarantors.map((guarantor, index) => (
+                <div key={index} className="p-4 border rounded-xl bg-slate-50 dark:bg-slate-800/50 relative group">
+                  {formData.guarantors.length > 1 && (
+                    <button 
+                      onClick={() => removeGuarantor(index)}
+                      className="absolute top-2 right-2 text-slate-400 hover:text-red-500 transition-colors p-1"
+                      title="Remove Guarantor"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  )}
+                  
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div className="space-y-1">
+                      <label className="text-xs font-bold uppercase tracking-wider text-slate-500">Full Name</label>
+                      <input 
+                        value={guarantor.full_name}
+                        onChange={(e) => handleGuarantorChange(index, 'full_name', e.target.value)}
+                        className="w-full px-3 py-2 border rounded-lg bg-white dark:bg-slate-900"
+                        placeholder="Guarantor Name"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-xs font-bold uppercase tracking-wider text-slate-500">National ID</label>
+                      <input 
+                        value={guarantor.national_id}
+                        onChange={(e) => handleGuarantorChange(index, 'national_id', e.target.value)}
+                        className="w-full px-3 py-2 border rounded-lg bg-white dark:bg-slate-900"
+                        placeholder="ID Number"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-xs font-bold uppercase tracking-wider text-slate-500">Phone Number</label>
+                      <input 
+                        value={guarantor.phone}
+                        onChange={(e) => handleGuarantorChange(index, 'phone', e.target.value)}
+                        className="w-full px-3 py-2 border rounded-lg bg-white dark:bg-slate-900"
+                        placeholder="07..."
+                      />
+                    </div>
+                  </div>
+                </div>
+              ))}
+
+              {formData.guarantors.length < 3 && (
+                <button 
+                  onClick={addGuarantor}
+                  className="w-full py-3 border-2 border-dashed border-slate-300 rounded-xl text-slate-500 hover:border-primary-500 hover:text-primary-600 transition-all flex items-center justify-center gap-2 font-medium bg-white"
+                >
+                  <UserPlus className="w-4 h-4" />
+                  Add Another Guarantor
+                </button>
+              )}
+            </div>
+          </div>
+        );
+      case 6:
+        return (
+          <div className="text-center py-4 space-y-6">
             <div className="w-16 h-16 bg-emerald-100 rounded-full flex items-center justify-center mx-auto text-emerald-600">
               <CheckCircle2 className="w-10 h-10" />
             </div>
-            <h4 className="text-xl font-bold">Review & Complete</h4>
-            <p className="text-slate-500 max-w-xs mx-auto">
-              Please review the registration for <strong>{formData.full_name}</strong>.
-            </p>
-            <div className="bg-slate-50 dark:bg-slate-900 p-4 rounded-lg text-left text-sm space-y-3 max-w-sm mx-auto">
-              <div className="flex justify-between border-b pb-1">
-                <span className="text-gray-500">Phone:</span>
-                <span className="font-medium">{formData.phone}</span>
-              </div>
-              <div className="flex justify-between border-b pb-1">
-                <span className="text-gray-500">ID Number:</span>
-                <span className="font-medium">{formData.national_id}</span>
-              </div>
-              <div className="flex justify-between border-b pb-1">
-                <span className="text-gray-500">Profile Photo:</span>
-                <span className={formData.profile_image ? 'text-emerald-600 font-medium' : 'text-amber-600 font-medium'}>
-                  {formData.profile_image ? '✓ Provided' : '⚠ Missing'}
-                </span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-gray-500">ID Photo:</span>
-                <span className={formData.national_id_image ? 'text-emerald-600 font-medium' : 'text-amber-600 font-medium'}>
-                  {formData.national_id_image ? '✓ Provided' : '⚠ Missing'}
-                </span>
-              </div>
-            </div>
-            
-            <div className="flex items-center gap-3 p-4 bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-slate-100 dark:border-slate-800 mt-6">
-              <input 
-                type="checkbox" 
-                id="agreed_to_terms" 
-                name="agreed_to_terms"
-                checked={formData.agreed_to_terms}
-                onChange={(e) => setFormData(prev => ({...prev, agreed_to_terms: e.target.checked}))}
-                className="w-5 h-5 rounded border-slate-300 text-primary-600 focus:ring-primary-500 cursor-pointer"
-                required
-              />
-              <label htmlFor="agreed_to_terms" className="text-sm font-medium text-slate-700 dark:text-slate-300 cursor-pointer">
-                I confirm that I have verified the original documents and the customer agrees to the <span className="text-primary-600 dark:text-primary-400 font-bold underline">Management Policies</span>.
-              </label>
+            <div className="space-y-1">
+              <h4 className="text-xl font-bold">Review & Complete</h4>
+              <p className="text-slate-500 max-w-xs mx-auto">
+                Final check for <strong>{formData.full_name}</strong>
+              </p>
             </div>
 
-            <p className="text-xs text-gray-400 mt-2">
-              Once registered, you can start a loan application for this customer.
-            </p>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-left text-sm max-w-2xl mx-auto">
+              <div className="bg-slate-50 p-4 rounded-xl space-y-2 border">
+                <h5 className="font-bold text-xs uppercase text-slate-400 mb-2">Personal & Documents</h5>
+                <div className="flex justify-between border-b border-slate-200 pb-1">
+                  <span className="text-gray-500">Phone:</span>
+                  <span className="font-medium">{formData.phone}</span>
+                </div>
+                <div className="flex justify-between border-b border-slate-200 pb-1">
+                  <span className="text-gray-500">ID Number:</span>
+                  <span className="font-medium">{formData.national_id}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-500">Photos:</span>
+                  <span className="text-emerald-600 font-medium">✓ Uploaded</span>
+                </div>
+              </div>
+
+              <div className="bg-slate-50 p-4 rounded-xl space-y-2 border">
+                <h5 className="font-bold text-xs uppercase text-slate-400 mb-2">Guarantors ({formData.guarantors.length})</h5>
+                {formData.guarantors.map((g, i) => (
+                  <div key={i} className="flex justify-between border-b border-slate-200 last:border-0 pb-1">
+                    <span className="text-gray-500 truncate mr-2">{g.full_name || 'Unnamed'}:</span>
+                    <span className="font-medium">{g.phone || 'No phone'}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="max-w-md mx-auto pt-4">
+              <label className="flex items-start gap-3 cursor-pointer group text-left p-3 rounded-lg hover:bg-slate-50 transition-colors border border-transparent hover:border-slate-200">
+                <input 
+                  type="checkbox" 
+                  checked={formData.agreed_to_terms}
+                  onChange={(e) => setFormData(p => ({...p, agreed_to_terms: e.target.checked}))}
+                  className="mt-1 w-4 h-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+                />
+                <span className="text-xs text-slate-600 leading-relaxed">
+                  I certify that all information provided is accurate and all documents are genuine. I understand that false information will lead to automatic rejection.
+                </span>
+              </label>
+            </div>
           </div>
         );
       default:
@@ -591,7 +937,7 @@ const CustomerRegistrationForm = ({ onSuccess, onApplyLoan }) => {
   };
 
   return (
-    <div className="w-full max-w-2xl mx-auto">
+    <div className="w-full max-w-2xl mx-auto py-2">
       {/* Search Result Warning */}
       {step > 0 && hasOutstanding && (
         <div className="mb-6 p-4 bg-amber-50 border border-amber-200 text-amber-800 rounded-lg flex items-start gap-3 animate-in fade-in slide-in-from-top-2">
@@ -622,38 +968,48 @@ const CustomerRegistrationForm = ({ onSuccess, onApplyLoan }) => {
         </div>
       )}
 
-      {/* Progress Bar - Hidden on step 0 */}
-      {step > 0 && (
-        <div className="mb-8">
-          <div className="flex justify-between mb-2">
-            {[1, 2, 3, 4, 5].map((s) => (
-              <div 
-                key={s} 
-                className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold transition-colors ${
-                  step >= s ? 'bg-primary-600 text-white' : 'bg-slate-200 text-slate-500'
-                }`}
-              >
-                {s}
+      {/* Progress Bar & Step Labels */}
+      {!isFinished && (
+        <div className="mb-8 px-2">
+          <div className="flex justify-between mb-4">
+            {steps.map((s) => (
+              <div key={s.id} className="flex flex-col items-center flex-1">
+                <div 
+                  className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold transition-all duration-300 z-10 ${
+                    step === s.id 
+                      ? 'bg-primary-600 text-white ring-4 ring-primary-100 shadow-lg' 
+                      : step > s.id 
+                        ? 'bg-emerald-500 text-white' 
+                        : 'bg-slate-200 text-slate-500'
+                  }`}
+                >
+                  {step > s.id ? <CheckCircle2 className="w-5 h-5" /> : s.id + 1}
+                </div>
+                <span className={`mt-2 text-[10px] font-bold uppercase tracking-tighter text-center hidden sm:block ${
+                  step === s.id ? 'text-primary-600' : 'text-slate-400'
+                }`}>
+                  {s.label}
+                </span>
               </div>
             ))}
           </div>
-          <div className="h-2 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
+          <div className="relative h-1 w-full bg-slate-100 rounded-full overflow-hidden">
             <div 
-              className="h-full bg-primary-600 transition-all duration-300" 
-              style={{ width: `${(step - 1) * 25}%` }}
+              className="absolute h-full bg-primary-500 transition-all duration-500 ease-out"
+              style={{ width: `${(step / (steps.length - 1)) * 100}%` }}
             />
           </div>
         </div>
       )}
 
-      {error && !error.includes('No record') && (
+      {error && !isFinished && !error.includes('No record') && (
         <div className="mb-6 p-4 bg-rose-50 border border-rose-200 text-rose-700 rounded-lg text-sm flex items-center gap-2">
           <AlertCircle className="w-4 h-4" />
           {error}
         </div>
       )}
 
-      <Card className="p-6">
+      <Card className="p-6 overflow-hidden relative">
         {isFinished ? (
           <div className="text-center py-10 space-y-6 animate-in zoom-in-95 duration-300">
             <div className="w-20 h-20 bg-emerald-100 rounded-full flex items-center justify-center mx-auto text-emerald-600 mb-4">
@@ -669,7 +1025,10 @@ const CustomerRegistrationForm = ({ onSuccess, onApplyLoan }) => {
             <div className="flex flex-col sm:flex-row gap-4 justify-center pt-4">
               {(!hasOutstanding || outstandingLoanDetails?.status === 'REJECTED') && (
                 <Button 
-                  onClick={() => onApplyLoan?.(registeredUser)}
+                  onClick={() => {
+                    clearDraft();
+                    onApplyLoan?.(registeredUser);
+                  }}
                   className="bg-primary-600 hover:bg-primary-700 text-white flex items-center justify-center gap-2 px-8"
                 >
                   <CreditCard className="w-4 h-4" />
@@ -678,7 +1037,10 @@ const CustomerRegistrationForm = ({ onSuccess, onApplyLoan }) => {
               )}
               <Button 
                 variant="secondary" 
-                onClick={() => onSuccess?.()}
+                onClick={() => {
+                  clearDraft();
+                  onSuccess?.();
+                }}
                 className="px-8"
               >
                 {hasOutstanding ? 'Close' : 'Finish & Close'}
@@ -693,19 +1055,29 @@ const CustomerRegistrationForm = ({ onSuccess, onApplyLoan }) => {
               <div className="mt-8 flex justify-between items-center border-t pt-6">
                 <Button 
                   variant="secondary" 
-                  onClick={step === 1 ? () => setStep(0) : prevStep}
+                  onClick={() => {
+                    if (step === 1 && (formData.full_name || formData.phone)) {
+                      if (window.confirm("Go back to lookup? Your current progress for this customer will be reset.")) {
+                        setStep(0);
+                      }
+                    } else if (step === 1) {
+                      setStep(0);
+                    } else {
+                      prevStep();
+                    }
+                  }}
                   disabled={loading}
                 >
                   {step === 1 ? 'Back to Lookup' : 'Previous'}
                 </Button>
                 
                 <Button 
-                  onClick={step === 5 ? handleSubmit : nextStep}
-                  disabled={loading || (step === 5 && !formData.agreed_to_terms)}
+                  onClick={step === 6 ? handleSubmit : nextStep}
+                  disabled={loading || (step === 6 && !formData.agreed_to_terms)}
                   className="flex items-center gap-2 bg-primary-600 hover:bg-primary-700 text-white"
                 >
-                  {loading ? 'Submitting...' : step === 5 ? (isExistingUser ? 'Update Information' : 'Register Customer') : 'Next Step'}
-                  {step < 5 && <ChevronRight className="w-4 h-4" />}
+                  {loading ? 'Submitting...' : step === 6 ? (isExistingUser ? 'Update Information' : 'Register Customer') : 'Next Step'}
+                  {step < 6 && <ChevronRight className="w-4 h-4" />}
                 </Button>
               </div>
             )}

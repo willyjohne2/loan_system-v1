@@ -66,8 +66,9 @@ const CustomerHistoryModal = ({ customer, isOpen, onClose, loanToVerify, onVerif
       };
 
       const totalBorrowed = userLoans.reduce((acc, l) => acc + parseVal(l.principal_amount), 0);
+      const totalRepayable = userLoans.reduce((acc, l) => acc + parseVal(l.total_repayable_amount), 0);
       const totalPaid = userRepayments.reduce((acc, r) => acc + parseVal(r.amount_paid), 0);
-      const activeCount = userLoans.filter(l => ['AWARDED', 'APPROVED', 'DISBURSED', 'ACTIVE'].includes(l.status)).length;
+      const activeCount = userLoans.filter(l => ['AWARDED', 'APPROVED', 'DISBURSED', 'ACTIVE', 'OVERDUE'].includes(l.status)).length;
       
       const lastPayment = userRepayments.sort((a, b) => new Date(b.payment_date) - new Date(a.payment_date))[0];
 
@@ -75,6 +76,7 @@ const CustomerHistoryModal = ({ customer, isOpen, onClose, loanToVerify, onVerif
       setRepayments(userRepayments);
       setStats({
         totalBorrowed,
+        totalRepayable,
         totalPaid,
         activeCount,
         lastPaymentDate: lastPayment ? lastPayment.payment_date : null
@@ -136,9 +138,9 @@ const CustomerHistoryModal = ({ customer, isOpen, onClose, loanToVerify, onVerif
                 <div className="p-4 bg-rose-50 dark:bg-rose-900/20 rounded-xl border border-rose-100 dark:border-rose-900/50">
                   <div className="flex items-center gap-3 text-rose-600 dark:text-rose-400 mb-2 font-black text-[10px] uppercase tracking-widest">
                     <TrendingUp className="w-3.5 h-3.5" />
-                    Outstanding
+                    Remaining Debt
                   </div>
-                  <p className="text-xl font-black text-slate-900 dark:text-white">KES {Math.max(0, stats.totalBorrowed - stats.totalPaid).toLocaleString()}</p>
+                  <p className="text-xl font-black text-slate-900 dark:text-white">KES {Math.max(0, stats.totalRepayable - stats.totalPaid).toLocaleString()}</p>
                 </div>
                 
                 {/* Visual Identity */}
@@ -260,17 +262,18 @@ const CustomerHistoryModal = ({ customer, isOpen, onClose, loanToVerify, onVerif
                       </div>
                    ) : (
                     <Table
-                      headers={['Date', 'Amount', 'Interest', 'Status']}
+                      headers={['Date', 'Product', 'Principal', 'Repayable', 'Status']}
                       data={loans}
                       renderRow={(loan) => (
                         <tr key={loan.id} className="text-sm border-b dark:border-slate-800 hover:bg-slate-50/50 dark:hover:bg-slate-800/50 transition-colors">
                           <td className="px-6 py-4 text-slate-600 dark:text-slate-400">{new Date(loan.created_at).toLocaleDateString()}</td>
+                          <td className="px-6 py-4 font-medium uppercase text-[10px] text-slate-500">{loan.product_name}</td>
                           <td className="px-6 py-4 font-bold">KES {Number(loan.principal_amount).toLocaleString()}</td>
-                          <td className="px-6 py-4 text-slate-500">{loan.interest_rate}%</td>
+                          <td className="px-6 py-4 font-black text-indigo-600 dark:text-indigo-400">KES {Number(loan.total_repayable_amount).toLocaleString()}</td>
                           <td className="px-6 py-4">
                             <span className={`px-2.5 py-1 rounded-full text-[9px] font-black uppercase ${
-                              loan.status === 'AWARDED' || loan.status === 'DISBURSED' || loan.status === 'APPROVED' ? 'bg-emerald-100 text-emerald-700' :
-                              loan.status === 'REJECTED' ? 'bg-rose-100 text-rose-700' :
+                              loan.status === 'AWARDED' || loan.status === 'DISBURSED' || loan.status === 'APPROVED' || loan.status === 'ACTIVE' ? 'bg-emerald-100 text-emerald-700' :
+                              loan.status === 'REJECTED' || loan.status === 'OVERDUE' ? 'bg-rose-100 text-rose-700' :
                               'bg-amber-100 text-amber-700'
                             }`}>
                               {loan.status}
