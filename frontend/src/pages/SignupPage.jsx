@@ -9,12 +9,13 @@ const SignupPage = () => {
   const searchParams = new URLSearchParams(location.search);
   const inviteToken = searchParams.get('token');
   const invitedEmail = searchParams.get('email');
+  const invitedRole = searchParams.get('role');
 
   const [formData, setFormData] = useState({
     full_name: '',
     email: invitedEmail || '',
     phone: '',
-    role: inviteToken ? 'ADMIN' : 'FIELD_OFFICER',
+    role: invitedRole || (inviteToken ? 'ADMIN' : 'FIELD_OFFICER'),
     password: '',
     confirmPassword: '',
   });
@@ -193,15 +194,18 @@ const SignupPage = () => {
                 <Briefcase className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
                 <select
                   required
+                  disabled={!!inviteToken}
                   value={formData.role}
                   onChange={(e) => setFormData({...formData, role: e.target.value})}
-                  className="w-full pl-10 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/20 dark:bg-slate-800 dark:border-slate-700 dark:text-white"
+                  className={`w-full pl-10 pr-4 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/20 dark:bg-slate-800 dark:border-slate-700 dark:text-white ${inviteToken ? 'bg-slate-100 cursor-not-allowed' : 'bg-slate-50'}`}
                 >
+                  {formData.role === 'ADMIN' && <option value="ADMIN">Administrator</option>}
                   <option value="MANAGER">Manager</option>
                   <option value="FINANCIAL_OFFICER">Financial Officer</option>
                   <option value="FIELD_OFFICER">Field Officer</option>
                 </select>
               </div>
+              {inviteToken && <p className="text-[10px] text-primary-600 mt-1 font-bold italic">Role locked by invitation</p>}
             </div>
 
             <div>

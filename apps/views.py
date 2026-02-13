@@ -101,7 +101,7 @@ def send_invitation_email_async(email, role, invited_by_name, token):
         from_email = os.getenv("FROM_EMAIL")
         brevo_api_key = os.getenv("BREVO_API_KEY")
         # You would typically have a frontend URL for invitations
-        invite_url = f"{os.getenv('FRONTEND_URL', 'http://localhost:5173')}/signup?token={token}&email={email}"
+        invite_url = f"{os.getenv('FRONTEND_URL', 'http://localhost:5173')}/signup?token={token}&email={email}&role={role}"
 
         url = "https://api.brevo.com/v3/smtp/email"
         headers = {
