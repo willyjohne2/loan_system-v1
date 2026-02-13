@@ -1490,15 +1490,15 @@ class AdminListCreateView(generics.ListCreateAPIView):
 class AdminDetailView(generics.RetrieveUpdateAPIView):
     queryset = Admins.objects.all()
     serializer_class = AdminSerializer
-    permission_classes = [IsSuperAdmin]
+    permission_classes = [IsAdminUser]
 
     def get_object(self):
         # Allow admins to view/edit their own profile
         obj = super().get_object()
         if self.request.user.id == obj.id:
             return obj
-        # Otherwise, check if superadmin
-        if self.request.user.is_super_admin:
+        # Otherwise, check if they have ADMIN role
+        if self.request.user.role == "ADMIN":
             return obj
         from rest_framework.exceptions import PermissionDenied
 
