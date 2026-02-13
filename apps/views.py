@@ -307,7 +307,7 @@ class Login2FAVerifyView(views.APIView):
                 )
 
             totp = pyotp.TOTP(admin.two_factor_secret)
-            if totp.verify(otp_code):
+            if totp.verify(otp_code, valid_window=1):
                 refresh = RefreshToken.for_user(admin)
                 refresh["admin_id"] = str(admin.id)
                 refresh["role"] = admin.role
@@ -374,7 +374,7 @@ class VerifyEnable2FAView(views.APIView):
             )
 
         totp = pyotp.TOTP(admin.two_factor_secret)
-        if totp.verify(otp_code):
+        if totp.verify(otp_code, valid_window=1):
             admin.is_two_factor_enabled = True
             admin.save()
             return Response({"message": "2FA enabled successfully"})
@@ -397,7 +397,7 @@ class Disable2FAView(views.APIView):
             )
 
         totp = pyotp.TOTP(admin.two_factor_secret)
-        if totp.verify(otp_code):
+        if totp.verify(otp_code, valid_window=1):
             admin.is_two_factor_enabled = False
             admin.two_factor_secret = None
             admin.save()
