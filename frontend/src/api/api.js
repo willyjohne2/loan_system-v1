@@ -40,7 +40,7 @@ api.interceptors.response.use(
 
 export const loanService = {
   login: async (credentials) => {
-    const res = await api.post('/login/', credentials);
+    const res = await api.post('/auth/login/', credentials);
     return res.data;
   },
   verify2FA: async (data) => {
@@ -165,10 +165,6 @@ export const loanService = {
   },
   updateSettings: async (settings) => {
     const res = await api.post('/settings/', settings);
-    return res.data;
-  },
-  login: async (email, password) => {
-    const res = await api.post('/auth/login/', { email, password });
     return res.data;
   },
   register: async (full_name, email, phone, role, password, invitation_token = null, branch = null) => {
