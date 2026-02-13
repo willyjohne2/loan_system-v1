@@ -95,13 +95,15 @@ def send_verification_email_async(full_name, email, verification_code):
         pass
 
 
-def send_invitation_email_async(email, role, invited_by_name, token):
+def send_invitation_email_async(email, role, invited_by_name, token, branch=None):
     try:
         sender_name = os.getenv("SENDER_NAME", "Azariah Credit Ltd")
         from_email = os.getenv("FROM_EMAIL")
         brevo_api_key = os.getenv("BREVO_API_KEY")
         # You would typically have a frontend URL for invitations
         invite_url = f"{os.getenv('FRONTEND_URL', 'http://localhost:5173')}/signup?token={token}&email={email}&role={role}"
+        if branch:
+            invite_url += f"&branch={branch}"
 
         url = "https://api.brevo.com/v3/smtp/email"
         headers = {
@@ -1195,6 +1197,9 @@ class RegisterAdminView(views.APIView):
         role = request.data.get("role")
         password = request.data.get("password")
         invitation_token = request.data.get("invitation_token")
+        branch = request.data.get(
+            "branch"
+        )  # Can be passed from frontend or taken from invite
 
         if not all([full_name, email, role, password]):
             return Response(
@@ -1209,12 +1214,15 @@ class RegisterAdminView(views.APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        # Requirement: Non-first admins must have a valid invitation
-        if role == "ADMIN" and Admins.objects.filter(role="ADMIN").exists():
+        # Requirement: Everyone must have an invitation if the system is already initialized
+        # First ADMIN can register without invitation
+        is_initialized = Admins.objects.filter(role="ADMIN").exists()
+
+        if is_initialized:
             if not invitation_token:
                 return Response(
                     {
-                        "error": "Administrative accounts must be created via invitation."
+                        "error": "Account registration is restricted to invited personnel only."
                     },
                     status=status.HTTP_403_FORBIDDEN,
                 )
@@ -1227,11 +1235,17 @@ class RegisterAdminView(views.APIView):
                     expires_at__gt=timezone.now(),
                 )
                 # Ensure the invite role matches requested role
-                if invite.role != "ADMIN":
+                if invite.role != role:
                     return Response(
-                        {"error": "This invitation is not for an Admin role."},
+                        {
+                            "error": f"This invitation is for a {invite.role} role, not {role}."
+                        },
                         status=400,
                     )
+
+                # If branch was pre-assigned in invitation, use it
+                if invite.branch:
+                    branch = invite.branch
 
                 # Mark invite as used after successful registration
                 invite.is_used = True
@@ -1241,6 +1255,12 @@ class RegisterAdminView(views.APIView):
                     {"error": "Invalid or expired invitation token."},
                     status=status.HTTP_400_BAD_REQUEST,
                 )
+
+        elif role != "ADMIN":
+            return Response(
+                {"error": "The first user registered must be an Administrator."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
 
         if Admins.objects.filter(email__iexact=email).exists():
             return Response(
@@ -1266,6 +1286,7 @@ class RegisterAdminView(views.APIView):
             email=email.lower(),
             phone=phone,
             role=role,
+            branch=branch,
             password_hash=password_hash,
             verification_token=verification_code,
             is_verified=False,
@@ -1629,14 +1650,26 @@ class AdminInviteView(views.APIView):
                 {"error": "Only administrators can invite others"}, status=403
             )
 
-        email = request.data.get("email")
+        emails = request.data.get("emails")  # Changed from 'email' to 'emails' (list)
+        email = request.data.get("email")  # Fallback for single email
         role = request.data.get("role")
+        branch = request.data.get("branch")
 
-        if not email or not role:
+        if not emails and email:
+            emails = [email]
+
+        if not emails or not role:
             return Response(
-                {
-                    "error": f"Email and role are required. Got Email: {email}, Role: {role}"
-                },
+                {"error": "Email(s) and role are required."},
+                status=400,
+            )
+
+        if isinstance(emails, str):
+            emails = [e.strip() for e in emails.split(",") if e.strip()]
+
+        if len(emails) > 5:
+            return Response(
+                {"error": "Maximum of 5 invitations can be sent at once."},
                 status=400,
             )
 
@@ -1647,38 +1680,53 @@ class AdminInviteView(views.APIView):
                 status=400,
             )
 
-        # Check if already registered
-        if Admins.objects.filter(email__iexact=email).exists():
-            return Response(
-                {
-                    "error": f"The person with email {email} is already registered in the Admins table."
+        inviter = request.user
+        sent_emails = []
+        errors = []
+
+        for email_addr in emails:
+            email_addr = email_addr.lower().strip()
+
+            # Check if already registered
+            if Admins.objects.filter(email__iexact=email_addr).exists():
+                errors.append(f"{email_addr} is already registered.")
+                continue
+
+            # Update or create invitation
+            token = secrets.token_urlsafe(32)
+            expires_at = timezone.now() + timezone.timedelta(
+                hours=24
+            )  # Changed to 24 hours
+
+            AdminInvitation.objects.update_or_create(
+                email=email_addr,
+                defaults={
+                    "role": role,
+                    "branch": branch,
+                    "token": token,
+                    "invited_by": inviter,
+                    "is_used": False,
+                    "expires_at": expires_at,
                 },
-                status=400,
             )
 
-        # Update or create invitation
-        token = secrets.token_urlsafe(32)
-        expires_at = timezone.now() + timezone.timedelta(days=2)
+            # Send email
+            threading.Thread(
+                target=send_invitation_email_async,
+                args=(email_addr, role, inviter.full_name, token, branch),
+            ).start()
 
-        inviter = request.user
+            sent_emails.append(email_addr)
 
-        invitation, created = AdminInvitation.objects.update_or_create(
-            email=email.lower(),
-            defaults={
-                "role": role,
-                "token": token,
-                "invited_by": inviter,
-                "is_used": False,
-                "expires_at": expires_at,
+        if not sent_emails:
+            return Response(
+                {"error": "No invitations sent.", "details": errors}, status=400
+            )
+
+        return Response(
+            {
+                "message": f"Invitations successfully sent to: {', '.join(sent_emails)}",
+                "errors": errors,
             },
+            status=201,
         )
-
-        # Send email
-        email_thread = threading.Thread(
-            target=send_invitation_email_async,
-            args=(email.lower(), role, inviter.full_name, token),
-        )
-        email_thread.daemon = True
-        email_thread.start()
-
-        return Response({"message": f"Invitation sent to {email}"}, status=201)

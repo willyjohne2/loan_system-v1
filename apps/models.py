@@ -43,6 +43,7 @@ class AdminInvitation(models.Model):
     role = models.CharField(max_length=50)
     token = models.CharField(max_length=100, unique=True)
     invited_by = models.ForeignKey(Admins, on_delete=models.SET_NULL, null=True)
+    branch = models.CharField(max_length=100, blank=True, null=True)
     is_used = models.BooleanField(default=False)
     expires_at = models.DateTimeField()
     created_at = models.DateTimeField(auto_now_add=True)

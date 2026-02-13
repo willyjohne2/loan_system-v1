@@ -23,15 +23,11 @@ const App = () => {
         <Routes>
           {/* Public Routes */}
           <Route element={<PublicRoute />}>
-            <Route path="/login/admin" element={<LoginPage role="ADMIN" />} />
-            <Route path="/login/manager" element={<LoginPage role="MANAGER" />} />
-            <Route path="/login/finance" element={<LoginPage role="FINANCIAL_OFFICER" />} />
-            <Route path="/login/field" element={<LoginPage role="FIELD_OFFICER" />} />
+            <Route path="/login" element={<LoginPage />} />
             <Route path="/signup" element={<SignupPage />} />
             <Route path="/verify-email" element={<VerifyEmailPage />} />
             <Route path="/forgot-password" element={<ForgotPasswordPage />} />
             <Route path="/reset-password" element={<ResetPasswordPage />} />
-            <Route path="/login" element={<Navigate to="/login/admin" replace />} />
           </Route>
 
           {/* Protected Admin Routes */}
@@ -55,7 +51,7 @@ const App = () => {
           </Route>
 
           {/* Fallback */}
-          <Route path="/" element={<Navigate to="/login/admin" replace />} />
+          <Route path="/" element={<Navigate to="/login" replace />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </BrowserRouter>

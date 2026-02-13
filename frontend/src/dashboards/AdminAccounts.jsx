@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { loanService } from '../api/api';
 import { Trash2, AlertCircle, CheckCircle, UserPlus, Mail, Shield, Send } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
+import BulkInviteModal from '../components/forms/BulkInviteModal';
 
 const AdminAccounts = () => {
   const { user } = useAuth();
@@ -12,29 +13,12 @@ const AdminAccounts = () => {
   const [deletingId, setDeletingId] = useState(null);
   const [confirmDelete, setConfirmDelete] = useState(null);
   const [showInviteModal, setShowInviteModal] = useState(false);
-  const [inviteData, setInviteData] = useState({ email: '', role: 'FINANCIAL_OFFICER' });
   const [inviting, setInviting] = useState(false);
 
   useEffect(() => {
     fetchAdmins();
   }, []);
 
-  const handleInvite = async (e) => {
-    e.preventDefault();
-    setInviting(true);
-    setError('');
-    try {
-      await loanService.inviteAdmin(inviteData);
-      setSuccess(`Invitation sent to ${inviteData.email} successfully!`);
-      setShowInviteModal(false);
-      setInviteData({ email: '', role: 'FINANCIAL_OFFICER' });
-      setTimeout(() => setSuccess(''), 4000);
-    } catch (err) {
-      setError(err.response?.data?.error || 'Failed to send invitation');
-    } finally {
-      setInviting(false);
-    }
-  };
   const fetchAdmins = async () => {
     try {
       setLoading(true);
@@ -245,59 +229,14 @@ const AdminAccounts = () => {
         </div>
       )}
 
-      {/* Invitation Modal */}
-      {showInviteModal && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[60] flex items-center justify-center p-4">
-          <div className="bg-white dark:bg-slate-900 rounded-2xl p-8 max-w-md w-full shadow-2xl border border-slate-100 dark:border-slate-800 animate-in fade-in zoom-in duration-200">
-            <div className="text-center mb-8">
-              <div className="w-16 h-16 bg-indigo-100 dark:bg-indigo-900/40 text-indigo-600 dark:text-indigo-400 rounded-full flex items-center justify-center mx-auto mb-4">
-                <Mail className="w-8 h-8" />
-              </div>
-              <h3 className="text-2xl font-bold text-slate-900 dark:text-white">Invite New User</h3>
-              <p className="text-slate-500 text-sm mt-1">Send a registration link to an associate's email</p>
-            </div>
-
-            <form onSubmit={handleInvite} className="space-y-6">
-              <div className="space-y-2">
-                <label className="text-xs font-bold text-slate-400 uppercase tracking-widest pl-1">Email Address</label>
-                <div className="relative">
-                  <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                  <input 
-                    type="email"
-                    required
-                    placeholder="associate@company.com"
-                    className="w-full pl-10 pr-4 py-3 rounded-xl border border-slate-200 dark:bg-slate-800 dark:border-slate-700 outline-none focus:ring-2 focus:ring-indigo-500 transition-all font-medium"
-                    value={inviteData.email}
-                    onChange={(e) => setInviteData({...inviteData, email: e.target.value})}
-                  />
-                </div>
-              </div>
-
-              <div className="space-y-2">
-                <label className="text-xs font-bold text-slate-400 uppercase tracking-widest pl-1">System Role</label>
-                <div className="relative">
-                  <Shield className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                  <select 
-                    className="w-full pl-10 pr-4 py-3 rounded-xl border border-slate-200 dark:bg-slate-800 dark:border-slate-700 outline-none focus:ring-2 focus:ring-indigo-500 appearance-none bg-white font-medium capitalize"
-                    value={inviteData.role}
-                    onChange={(e) => setInviteData({...inviteData, role: e.target.value})}
-                  >
-                    <option value="ADMIN">Administrator</option>
-                    <option value="MANAGER">Regional Manager</option>
-                    <option value="FINANCIAL_OFFICER">Financial Officer</option>
-                    <option value="FIELD_OFFICER">Field Officer</option>
-                  </select>
-                </div>
-              </div>
-
-              <div className="flex gap-4 pt-2">
-                <button
-                  type="button"
-                  onClick={() => setShowInviteModal(false)}
-                  className="flex-1 px-6 py-3 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl font-bold transition-all"
-                >
-                  Cancel
-                </button>
+      {/* Bulk Invitation Modal */}
+      <BulkInviteModal 
+        isOpen={showInviteModal}
+        onClose={() => setShowInviteModal(false)}
+        defaultRole="ADMIN"
+        branches={['Kagio', 'Embu', 'Thika', 'Naivasha']}
+      />
+    </div>
                 <button
                   type="submit"
                   disabled={inviting}

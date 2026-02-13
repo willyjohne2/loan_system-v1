@@ -3,6 +3,7 @@ import { loanService } from '../api/api';
 import { Table, Button, Card, Badge } from '../components/ui/Shared';
 import { UserPlus, Mail, Phone, CheckCircle, Edit, MapPin, XCircle, Save, Loader2, Activity } from 'lucide-react';
 import AdminActivityModal from '../components/ui/AdminActivityModal';
+import BulkInviteModal from '../components/forms/BulkInviteModal';
 
 const AdminManagers = () => {
   const [managers, setManagers] = useState([]);
@@ -14,10 +15,6 @@ const AdminManagers = () => {
   const [selectedAdmin, setSelectedAdmin] = useState(null);
   const [saving, setSaving] = useState(false);
   const [filterBranch, setFilterBranch] = useState('All');
-  const [inviteData, setInviteData] = useState({
-    email: '',
-    role: 'MANAGER'
-  });
   const [formData, setFormData] = useState({
     full_name: '',
     email: '',
@@ -44,21 +41,6 @@ const AdminManagers = () => {
       setError(`Failed to load managers: ${err.response?.data?.error || err.message}`);
     } finally {
       setLoading(false);
-    }
-  };
-
-  const handleInvite = async (e) => {
-    e.preventDefault();
-    setSaving(true);
-    try {
-      await loanService.inviteAdmin(inviteData);
-      setIsInviting(false);
-      setInviteData({ email: '', role: 'MANAGER' });
-      alert('Invitation sent successfully! The manager will receive an email to complete registration.');
-    } catch (err) {
-      alert('Failed to send invitation: ' + (err.response?.data?.error || err.message));
-    } finally {
-      setSaving(false);
     }
   };
 
@@ -281,71 +263,13 @@ const AdminManagers = () => {
         </div>
       )}
 
-      {/* Invite Manager Modal */}
-      {isInviting && (
-        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <Card className="max-w-md w-full p-8 relative animate-in fade-in zoom-in duration-200">
-            <button 
-              onClick={() => setIsInviting(false)}
-              className="absolute top-4 right-4 p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full"
-            >
-              <XCircle className="w-6 h-6 text-slate-400" />
-            </button>
-            
-            <div className="text-center mb-8">
-              <div className="w-16 h-16 bg-primary-100 text-primary-600 rounded-full flex items-center justify-center mx-auto mb-4">
-                <UserPlus className="w-8 h-8" />
-              </div>
-              <h3 className="text-xl font-bold">Invite New Manager</h3>
-              <p className="text-slate-500 text-sm">Send a secure invitation to a new branchal manager</p>
-            </div>
-
-            <form onSubmit={handleInvite} className="space-y-5">
-              <div className="space-y-1">
-                <label className="text-xs font-bold text-slate-400 uppercase">Email Address</label>
-                <input 
-                  type="email"
-                  className="w-full px-4 py-2 rounded-lg border dark:bg-slate-800 dark:border-slate-700 outline-none focus:ring-2 focus:ring-primary-500"
-                  value={inviteData.email}
-                  onChange={(e) => setInviteData({...inviteData, email: e.target.value})}
-                  placeholder="manager@azariacredit.com"
-                  required
-                />
-              </div>
-
-              <div className="space-y-1">
-                <label className="text-xs font-bold text-slate-400 uppercase">Assigned Role</label>
-                <select 
-                  className="w-full px-4 py-2 rounded-lg border dark:bg-slate-800 dark:border-slate-700 outline-none focus:ring-2 focus:ring-primary-500 appearance-none bg-white"
-                  value={inviteData.role}
-                  onChange={(e) => setInviteData({...inviteData, role: e.target.value})}
-                  disabled
-                >
-                  <option value="MANAGER">Branchal Manager</option>
-                </select>
-              </div>
-
-              <div className="pt-4 flex gap-3">
-                <Button 
-                  type="button" 
-                  variant="secondary" 
-                  className="flex-1"
-                  onClick={() => setIsInviting(false)}
-                >
-                  Cancel
-                </Button>
-                <Button 
-                  disabled={saving}
-                  className="flex-1 bg-primary-600 hover:bg-primary-700 text-white flex items-center justify-center gap-2"
-                >
-                  {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Mail className="w-4 h-4" />}
-                  Send Invitation
-                </Button>
-              </div>
-            </form>
-          </Card>
-        </div>
-      )}
+      {/* Bulk Invite Manager Modal */}
+      <BulkInviteModal 
+        isOpen={isInviting}
+        onClose={() => setIsInviting(false)}
+        defaultRole="MANAGER"
+        branches={branches}
+      />
 
       {selectedAdmin && (
           <AdminActivityModal 

@@ -131,14 +131,15 @@ export const loanService = {
     const res = await api.post('/auth/login/', { email, password });
     return res.data;
   },
-  register: async (full_name, email, phone, role, password, invitation_token = null) => {
+  register: async (full_name, email, phone, role, password, invitation_token = null, branch = null) => {
     const res = await api.post('/auth/register/', { 
       full_name, 
       email, 
       phone, 
       role, 
       password,
-      invitation_token
+      invitation_token,
+      branch
     });
     return res.data;
   },

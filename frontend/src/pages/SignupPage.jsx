@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate, Link, useLocation } from 'react-router-dom';
 import { loanService } from '../api/api';
 import { Button, Card } from '../components/ui/Shared';
-import { Lock, Mail, User, ShieldCheck, Phone, Briefcase, Eye, EyeOff } from 'lucide-react';
+import { Lock, Mail, User, ShieldCheck, Phone, Briefcase, Eye, EyeOff, MapPin } from 'lucide-react';
 
 const SignupPage = () => {
   const location = useLocation();
@@ -10,17 +10,25 @@ const SignupPage = () => {
   const inviteToken = searchParams.get('token');
   const invitedEmail = searchParams.get('email');
   const invitedRole = searchParams.get('role');
+  const invitedBranch = searchParams.get('branch');
 
   const [formData, setFormData] = useState({
     full_name: '',
     email: invitedEmail || '',
     phone: '',
     role: invitedRole || (inviteToken ? 'ADMIN' : 'FIELD_OFFICER'),
+    branch: invitedBranch || '',
     password: '',
     confirmPassword: '',
   });
 
   useEffect(() => {
+    if (!inviteToken) {
+      // Check if any admins exist (this is a bit complex for a purely client-side check without a specific endpoint)
+      // but for now, we'll just show an error if no token is present, 
+      // as the backend will block it anyway.
+      setError('Registration is by invitation only. Please use the link provided in your email.');
+    }
     if (inviteToken) {
       // If there's an invite token, default to the invited email
       // and potentially lock the email/role fields
@@ -103,7 +111,8 @@ const SignupPage = () => {
         formData.phone,
         formData.role,
         formData.password,
-        inviteToken
+        inviteToken,
+        formData.branch
       );
       setSuccess('Registration successful! Redirecting to email verification...');
       // Redirect to verification page with email
@@ -207,6 +216,22 @@ const SignupPage = () => {
               </div>
               {inviteToken && <p className="text-[10px] text-primary-600 mt-1 font-bold italic">Role locked by invitation</p>}
             </div>
+
+            {formData.branch && (
+              <div>
+                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">Assigned Branch</label>
+                <div className="relative">
+                  <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                  <input
+                    type="text"
+                    disabled
+                    value={formData.branch}
+                    className="w-full pl-10 pr-4 py-2 bg-slate-100 border border-slate-200 rounded-lg text-sm dark:bg-slate-800 dark:border-slate-700 dark:text-white cursor-not-allowed font-medium text-primary-700"
+                  />
+                </div>
+                <p className="text-[10px] text-primary-600 mt-1 font-bold italic">Branch assigned by administrator</p>
+              </div>
+            )}
 
             <div>
               <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">Password</label>

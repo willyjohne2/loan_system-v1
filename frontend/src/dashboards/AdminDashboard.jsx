@@ -19,7 +19,8 @@ const AdminDashboard = () => {
   
   const getTitle = () => {
     if (location.pathname.includes('/managers')) return 'Manager Management';
-    if (location.pathname.includes('/officers')) return 'Finance Officer Management';
+    if (location.pathname.includes('/finance-officers')) return 'Finance Officer Management';
+    if (location.pathname.includes('/field-officers')) return 'Field Officer Management';
     if (location.pathname.includes('/customers')) return 'Customer Database';
     if (location.pathname.includes('/loans')) return 'Loan Portfolio';
     if (location.pathname.includes('/accounts')) return 'Admin Accounts Management';
@@ -38,7 +39,8 @@ const AdminDashboard = () => {
           {[
             { to: '/admin/dashboard', label: 'Overview' },
             { to: '/admin/managers', label: 'Managers' },
-            { to: '/admin/officers', label: 'Finance Officers' },
+            { to: '/admin/finance-officers', label: 'Finance Officers' },
+            { to: '/admin/field-officers', label: 'Field Officers' },
             { to: '/admin/customers', label: 'Customers' },
             { to: '/admin/loans', label: 'Loans' },
             { to: '/admin/accounts', label: 'Admin Accounts' },
@@ -66,7 +68,8 @@ const AdminDashboard = () => {
           <Route index element={<AdminOverview />} />
           <Route path="dashboard" element={<AdminOverview />} />
           <Route path="managers" element={<AdminManagers />} />
-          <Route path="officers" element={<AdminOfficers />} />
+          <Route path="finance-officers" element={<AdminOfficers role="FINANCIAL_OFFICER" />} />
+          <Route path="field-officers" element={<AdminOfficers role="FIELD_OFFICER" />} />
           <Route path="customers" element={<AdminCustomers />} />
           <Route path="loans" element={<AdminLoans />} />
           <Route path="accounts" element={<AdminAccounts />} />

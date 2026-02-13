@@ -4,6 +4,7 @@ import { Table, Button } from '../components/ui/Shared';
 import { UserPlus, Shield, Activity, ShieldOff } from 'lucide-react';
 import AdminActivityModal from '../components/ui/AdminActivityModal';
 import DeactivationRequestModal from '../components/ui/DeactivationRequestModal';
+import BulkInviteModal from '../components/forms/BulkInviteModal';
 import { useAuth } from '../context/AuthContext';
 
 const AdminOfficers = ({ role = 'FINANCIAL_OFFICER' }) => {
@@ -12,6 +13,7 @@ const AdminOfficers = ({ role = 'FINANCIAL_OFFICER' }) => {
   const [loading, setLoading] = useState(true);
   const [selectedAdmin, setSelectedAdmin] = useState(null);
   const [showActivity, setShowActivity] = useState(false);
+  const [isInviting, setIsInviting] = useState(false);
   const [error, setError] = useState('');
 
   // Deactivation Request State
@@ -79,9 +81,12 @@ const AdminOfficers = ({ role = 'FINANCIAL_OFFICER' }) => {
           <h3 className="text-lg font-semibold">{role === 'FIELD_OFFICER' ? 'Field Officers' : 'Finance Officers'}</h3>
           <p className="text-sm text-slate-500">View and manage all active {role === 'FIELD_OFFICER' ? 'field' : 'finance'} officers.</p>
         </div>
-        <Button className="flex items-center">
+        <Button 
+          className="flex items-center"
+          onClick={() => setIsInviting(true)}
+        >
           <UserPlus className="w-4 h-4 mr-2" />
-          Register Officer
+          Invite {role === 'FIELD_OFFICER' ? 'Field' : 'Finance'} Officers
         </Button>
       </div>
 
@@ -156,6 +161,13 @@ const AdminOfficers = ({ role = 'FINANCIAL_OFFICER' }) => {
         officer={officerToDeactivate}
         onSubmit={handleDeactivationSubmit}
         loading={submittingDeactivation}
+      />
+
+      <BulkInviteModal 
+        isOpen={isInviting}
+        onClose={() => setIsInviting(false)}
+        defaultRole={role}
+        branches={['Kagio', 'Embu', 'Thika', 'Naivasha']}
       />
     </div>
   );
