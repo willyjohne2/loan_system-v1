@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { QRCodeSVG } from 'qrcode.react';
 import { loanService } from '../../api/api';
 import { Button, Card } from './Shared';
-import { ShieldCheck, ShieldAlert, X, Copy, CheckCircle2 } from 'lucide-react';
+import { ShieldCheck, ShieldAlert, X, Copy, CheckCircle2, Smartphone } from 'lucide-react';
 
 const TwoFactorSetupModal = ({ isOpen, onClose, onStatusChange }) => {
   const [step, setStep] = useState(1); // 1: Info, 2: Setup, 3: Verify, 4: Success
