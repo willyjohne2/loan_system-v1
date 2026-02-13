@@ -13,9 +13,17 @@ class CustomJWTAuthentication(JWTAuthentication):
 
             try:
                 user = Admins.objects.get(id=user_id)
-                # Check if account is blocked/deactivated
+                # Check if account is blocked/deactivated or locked
+                from django.utils import timezone
+
                 if getattr(user, "is_blocked", False):
                     raise AuthenticationFailed("This account has been deactivated.")
+
+                if user.lockout_until and user.lockout_until > timezone.now():
+                    raise AuthenticationFailed(
+                        "This account is currently locked due to too many failed login attempts."
+                    )
+
                 return user
             except (Admins.DoesNotExist, ValueError):
                 # ValueError handles cases where id is not a valid UUID string

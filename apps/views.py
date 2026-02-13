@@ -47,6 +47,15 @@ from .serializers import (
 )
 from .utils.mpesa import MpesaHandler
 from .utils.sms import send_sms_async
+from .utils.security import log_action, get_client_ip
+from .permissions import (
+    IsSuperAdmin,
+    IsAdminUser,
+    IsManagerUser,
+    IsFinancialOfficer,
+    IsFieldOfficer,
+    RoleBasedPermission,
+)
 
 
 def create_loan_activity(loan, admin, action, note=""):
@@ -207,12 +216,24 @@ class LoginView(views.APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
+        client_ip = get_client_ip(request)
+
         try:
             admin = Admins.objects.filter(email__iexact=email).first()
             if not admin:
                 return Response(
                     {"error": "Invalid credentials"},
                     status=status.HTTP_401_UNAUTHORIZED,
+                )
+
+            # Check for lockout
+            if admin.lockout_until and admin.lockout_until > timezone.now():
+                minutes_left = int(
+                    (admin.lockout_until - timezone.now()).total_seconds() / 60
+                )
+                return Response(
+                    {"error": f"Account locked. Try again in {minutes_left} minutes."},
+                    status=status.HTTP_403_FORBIDDEN,
                 )
 
             if admin.is_blocked:
@@ -232,7 +253,18 @@ class LoginView(views.APIView):
                 password.encode("utf-8"), admin.password_hash.encode("utf-8")
             ):
                 admin.failed_login_attempts = 0
+                admin.lockout_until = None
+                admin.last_login_ip = client_ip
                 admin.save()
+
+                log_action(
+                    admin,
+                    "User Login",
+                    "admins",
+                    admin.id,
+                    log_type="MANAGEMENT",
+                    ip_address=client_ip,
+                )
 
                 # Check if 2FA is enabled
                 if admin.is_two_factor_enabled:
@@ -273,8 +305,29 @@ class LoginView(views.APIView):
                 )
             else:
                 admin.failed_login_attempts = (admin.failed_login_attempts or 0) + 1
-                if admin.failed_login_attempts >= 5:
-                    admin.is_blocked = True
+
+                # Audit log for failed attempt
+                log_action(
+                    None,
+                    f"Failed Login Attempt: {email}",
+                    "admins",
+                    admin.id,
+                    log_type="SECURITY",
+                    ip_address=client_ip,
+                )
+
+                if admin.failed_login_attempts >= 4:
+                    admin.lockout_until = timezone.now() + timezone.timedelta(
+                        minutes=20
+                    )
+                    admin.save()
+                    return Response(
+                        {
+                            "error": "Too many failed attempts. Account locked for 20 minutes."
+                        },
+                        status=status.HTTP_403_FORBIDDEN,
+                    )
+
                 admin.save()
                 return Response(
                     {"error": "Invalid credentials"},
@@ -695,6 +748,18 @@ class LoanListCreateView(generics.ListCreateAPIView):
 
         loan = serializer.save(interest_rate=interest_rate, created_by=created_by)
 
+        # Security Audit Log
+        ip = get_client_ip(self.request)
+        log_action(
+            self.request.user,
+            f"Created new Loan application for {loan.user.full_name}",
+            "loans",
+            loan.id,
+            new_data=LoanSerializer(loan).data,
+            log_type="GENERAL",
+            ip_address=ip
+        )
+
         create_loan_activity(
             loan,
             created_by,
@@ -1047,6 +1112,10 @@ class MpesaCallbackView(views.APIView):
     permission_classes = [permissions.AllowAny]
 
     def post(self, request):
+        if not (request.user.role == "ADMIN" or request.user.is_super_admin):
+            from rest_framework.exceptions import PermissionDenied
+            raise PermissionDenied("Only Administrators can modify system settings.")
+        
         data = request.data
         print(f"M-Pesa Callback Received: {json.dumps(data)}")
 
@@ -1398,16 +1467,32 @@ class AdminListCreateView(generics.ListCreateAPIView):
         serializer.save(id=uuid.uuid4())
 
 
-class AdminDetailView(generics.RetrieveUpdateDestroyAPIView):
+class AdminDetailView(generics.RetrieveUpdateAPIView):
     queryset = Admins.objects.all()
     serializer_class = AdminSerializer
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [IsSuperAdmin]
+
+    def get_object(self):
+        # Allow admins to view/edit their own profile
+        obj = super().get_object()
+        if self.request.user.id == obj.id:
+            return obj
+        # Otherwise, check if superadmin
+        if self.request.user.is_super_admin:
+            return obj
+        from rest_framework.exceptions import PermissionDenied
+
+        raise PermissionDenied("You do not have permission to view/edit this admin.")
 
 
 class SystemSettingsView(views.APIView):
     permission_classes = [permissions.IsAuthenticated]
+    required_roles = ["ADMIN"]
 
     def get(self, request):
+        if not (request.user.role == "ADMIN" or request.user.is_super_admin):
+            from rest_framework.exceptions import PermissionDenied
+            raise PermissionDenied("Only Administrators can view system settings.")
         settings = SystemSettings.objects.all()
         serializer = SystemSettingsSerializer(settings, many=True)
         data = {s["key"]: s["value"] for s in serializer.data}
@@ -1442,27 +1527,17 @@ class SMSLogListView(generics.ListAPIView):
 
 
 class AdminDeleteView(views.APIView):
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [IsSuperAdmin]
 
     def delete(self, request, admin_id):
         try:
-            # Check if requester is super admin
-            requester_id = request.auth.get("admin_id")
-            try:
-                requester = Admins.objects.get(id=requester_id)
-            except (Admins.DoesNotExist, ValueError):
-                return Response({"error": "Unauthorized"}, status=403)
-
-            if not requester.is_super_admin:
+            admin_to_delete = Admins.objects.get(id=admin_id)
+            
+            if str(request.user.id) == str(admin_id):
                 return Response(
-                    {
-                        "error": "Only the Super Administrator can dismiss other administrative accounts"
-                    },
-                    status=status.HTTP_403_FORBIDDEN,
+                    {"error": "You cannot dismiss your own administrative account"},
+                    status=status.HTTP_400_BAD_REQUEST,
                 )
-
-            if str(requester.id) == str(admin_id):
-                return Response(
                     {"error": "Cannot delete your own account"},
                     status=status.HTTP_400_BAD_REQUEST,
                 )
@@ -1764,7 +1839,7 @@ class UserProfileListCreateView(generics.ListCreateAPIView):
     permission_classes = [permissions.AllowAny]
 
 
-class LoanDetailView(generics.RetrieveUpdateDestroyAPIView):
+class LoanDetailView(generics.RetrieveUpdateAPIView):
     serializer_class = LoanSerializer
     permission_classes = [permissions.IsAuthenticated]
 
@@ -1783,7 +1858,10 @@ class LoanDetailView(generics.RetrieveUpdateDestroyAPIView):
     def perform_update(self, serializer):
         instance = self.get_object()
         data = self.request.data
-        ip = self.request.META.get("REMOTE_ADDR")
+        ip = get_client_ip(self.request)
+
+        # Audit log for change
+        old_data = LoanSerializer(instance).data
 
         # 1. Block manual status change to DISBURSED
         if data.get("status") == "DISBURSED" and instance.status != "DISBURSED":
@@ -1793,27 +1871,56 @@ class LoanDetailView(generics.RetrieveUpdateDestroyAPIView):
                 "Loans cannot be manually marked as DISBURSED. Use the disbursement trigger."
             )
 
-        # 2. Block critical field changes if loan is beyond APPLIED
-        if instance.status in ["VERIFIED", "APPROVED", "DISBURSED", "COMPLETED"]:
-            protected_fields = ["principal_amount", "user", "loan_product"]
-            for field in protected_fields:
-                if field in data:
-                    val = data[field]
-                    orig = getattr(instance, field)
-                    if hasattr(orig, "id"):
-                        if str(val) != str(orig.id):
-                            from rest_framework.exceptions import ValidationError
+        # 2. Block critical field changes if loan is beyond UNVERIFIED
+        if instance.status not in ["UNVERIFIED"]:
+            protected_fields = [
+                "principal_amount",
+                "user",
+                "loan_product",
+                "interest_rate",
+            ]
+            if not self.request.user.is_super_admin:
+                for field in protected_fields:
+                    if field in data:
+                        val = data[field]
+                        orig = getattr(instance, field)
+                        if hasattr(orig, "id"):
+                            if str(val) != str(orig.id):
+                                from rest_framework.exceptions import ValidationError
 
-                            raise ValidationError(
-                                f"Cannot change {field} after loan has been {instance.status}."
-                            )
-                    else:
-                        if str(val) != str(orig):
-                            from rest_framework.exceptions import ValidationError
+                                raise ValidationError(
+                                    f"Security Lock: Cannot change {field} after loan has been {instance.status}."
+                                )
+                        else:
+                            if str(val) != str(orig):
+                                from rest_framework.exceptions import ValidationError
 
-                            raise ValidationError(
-                                f"Cannot change {field} after loan has been {instance.status}."
-                            )
+                                raise ValidationError(
+                                    f"Security Lock: Cannot change {field} after loan has been {instance.status}."
+                                )
+
+        # Add reason for status change if provided
+        status_change_reason = data.get("status_change_reason")
+
+        updated_instance = serializer.save(
+            last_modified_by=self.request.user,
+            status_change_reason=(
+                status_change_reason
+                if status_change_reason
+                else instance.status_change_reason
+            ),
+        )
+
+        log_action(
+            self.request.user,
+            f"Updated Loan status from {instance.status} to {updated_instance.status}",
+            "loans",
+            instance.id,
+            old_data=old_data,
+            new_data=LoanSerializer(updated_instance).data,
+            log_type="STATUS",
+            ip_address=ip,
+        )
 
         old_status = instance.status
         loan = serializer.save()
@@ -2253,7 +2360,7 @@ class FinanceAnalyticsView(views.APIView):
 
 
 class AdminInviteView(views.APIView):
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [IsSuperAdmin]
 
     def post(self, request):
         # request.user is an instance of Admins model via CustomJWTAuthentication

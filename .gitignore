@@ -4,4 +4,7 @@ __pycache__/
 *.pyc
 .env
 .vscode/
+# Private security docs (do not commit)
+SECURITY.md
+SYSTEM_OVERVIEW.md
 # frontend/ removed for v1 deployment

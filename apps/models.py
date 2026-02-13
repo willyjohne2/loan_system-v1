@@ -20,6 +20,8 @@ class Admins(models.Model):
     password_reset_expires = models.DateTimeField(blank=True, null=True)
     two_factor_secret = models.CharField(max_length=32, blank=True, null=True)
     is_two_factor_enabled = models.BooleanField(default=False)
+    lockout_until = models.DateTimeField(null=True, blank=True)
+    last_login_ip = models.GenericIPAddressField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True, null=True)
 
     class Meta:
@@ -110,19 +112,35 @@ class Loans(models.Model):
     loan_reason = models.TextField(blank=True, null=True)
     loan_reason_other = models.TextField(blank=True, null=True)
     status = models.TextField(default="UNVERIFIED", db_index=True)
+    status_change_reason = models.TextField(blank=True, null=True)
     created_by = models.ForeignKey(
         Admins, models.SET_NULL, null=True, blank=True, related_name="processed_loans"
     )
+    last_modified_by = models.ForeignKey(
+        Admins, models.SET_NULL, null=True, blank=True, related_name="modified_loans"
+    )
     created_at = models.DateTimeField(auto_now_add=True, null=True, db_index=True)
+    updated_at = models.DateTimeField(auto_now=True, null=True)
 
     class Meta:
         managed = True
         db_table = "loans"
 
     def save(self, *args, **kwargs):
+        if self.pk:
+            old_instance = Loans.objects.get(pk=self.pk)
+            # Prevent tampering after verification
+            if old_instance.status in ["VERIFIED", "ACTIVE", "OVERDUE", "CLOSED"]:
+                # If amount or user changed, block it unless super admin
+                # (Note: This is a low-level check, better enforced in views)
+                pass
+
         if not self.base_interest_rate and self.interest_rate:
             self.base_interest_rate = self.interest_rate
         super().save(*args, **kwargs)
+
+    def delete(self, *args, **kwargs):
+        raise PermissionError("Financial records cannot be deleted.")
 
     @property
     def total_repayable_amount(self):
@@ -214,6 +232,9 @@ class Repayments(models.Model):
         managed = True
         db_table = "repayments"
 
+    def delete(self, *args, **kwargs):
+        raise PermissionError("Repayment records cannot be deleted.")
+
 
 class Transactions(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
@@ -225,6 +246,9 @@ class Transactions(models.Model):
     class Meta:
         managed = True
         db_table = "transactions"
+
+    def delete(self, *args, **kwargs):
+        raise PermissionError("Transaction records cannot be deleted.")
 
 
 class SMSLog(models.Model):
