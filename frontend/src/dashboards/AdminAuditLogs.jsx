@@ -17,7 +17,7 @@ const AdminAuditLogs = () => {
       
       const [logsData, analyticsData] = await Promise.all([
         loanService.getAuditLogs(params),
-        loanService.api.get('/loan-analytics/')
+        loanService.getAnalytics()
       ]);
 
       setLogs(logsData.results || logsData || []);

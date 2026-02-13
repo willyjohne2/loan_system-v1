@@ -46,10 +46,11 @@ const SignupPage = () => {
       return false;
     }
 
-    // Validate phone format (basic Kenyan format)
-    const phoneRegex = /^\+?254[71]\d{8}$/;
-    if (!phoneRegex.test(formData.phone.replace(/\s/g, ''))) {
-      setError('Please enter a valid phone number (e.g., +254712345678)');
+    // Validate phone format (relaxed for local formats like 07... or 254...)
+    const phoneClean = formData.phone.replace(/\s/g, '');
+    const phoneRegex = /^(?:\+254|254|0)[17]\d{8}$/;
+    if (!phoneRegex.test(phoneClean)) {
+      setError('Please enter a valid phone number (e.g., 0712345678 or +254712345678)');
       return false;
     }
 
