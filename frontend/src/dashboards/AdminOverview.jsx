@@ -102,8 +102,15 @@ const AdminOverview = () => {
         }
 
         const monthlyData = loans.reduce((acc, loan) => {
-          const month = new Date(loan.created_at).toLocaleString('default', { month: 'short' });
-          acc[month] = (acc[month] || 0) + parseAmount(loan.principal_amount);
+          // Only count disbursed, active, repaid, or overdue loans in the volume graph
+          const status = (loan.status || '').toUpperCase();
+          const countedStatuses = ['DISBURSED', 'ACTIVE', 'REPAID', 'OVERDUE', 'DEFAULTED'];
+          
+          if (countedStatuses.includes(status)) {
+            const dateStr = loan.disbursed_at || loan.created_at;
+            const month = new Date(dateStr).toLocaleString('default', { month: 'short' });
+            acc[month] = (acc[month] || 0) + parseAmount(loan.principal_amount);
+          }
           return acc;
         }, {});
 

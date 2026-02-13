@@ -23,6 +23,8 @@ from .views import (
     NotificationUpdateView,
     LoanAnalyticsView,
     MpesaRepaymentView,
+    MpesaDisbursementView,
+    MpesaCallbackView,
     BulkSMSView,
     SMSLogListView,
     AdminInviteView,
@@ -43,6 +45,10 @@ urlpatterns = [
     ),
     path("sms-logs/", SMSLogListView.as_view(), name="sms-logs"),
     path("payments/mpesa/", MpesaRepaymentView.as_view(), name="mpesa-payment"),
+    path(
+        "payments/disburse/", MpesaDisbursementView.as_view(), name="mpesa-disbursement"
+    ),
+    path("payments/callback/", MpesaCallbackView.as_view(), name="mpesa-callback"),
     path("loans/bulk-sms-defaulters/", BulkSMSView.as_view(), name="bulk-sms"),
     path("notifications/", NotificationListView.as_view(), name="notifications"),
     path(

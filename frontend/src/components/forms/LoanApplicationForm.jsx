@@ -37,16 +37,25 @@ const LoanApplicationForm = ({ customer, onSuccess, onCancel }) => {
     const fetchLoanProducts = async () => {
       try {
         const data = await loanService.api.get('/loan-products/');
-        const products = data.data.results || data.data || [];
+        let products = data.data.results || data.data || [];
+        
+        // Sort products so "Inuka" is first
+        products.sort((a, b) => {
+          if (a.name.toLowerCase().includes('inuka')) return -1;
+          if (b.name.toLowerCase().includes('inuka')) return 1;
+          return 0;
+        });
+
         setLoanProducts(products);
         
         // Auto-select first product if available
         if (products.length > 0) {
+          const firstProduct = products[0];
           setFormData(prev => ({ 
             ...prev, 
-            loan_product_id: products[0].id,
-            duration_type: products[0].duration_weeks ? 'WEEKS' : 'MONTHS',
-            duration_value: products[0].duration_weeks || products[0].duration_months || 12
+            loan_product_id: firstProduct.id,
+            duration_type: 'WEEKS', // Default to weeks as per requirement
+            duration_value: firstProduct.duration_weeks || 4 // Default to 4 weeks or product recommendation
           }));
         }
       } catch (err) {
@@ -58,6 +67,21 @@ const LoanApplicationForm = ({ customer, onSuccess, onCancel }) => {
 
   const handleChange = (e) => {
     const { name, value, type, checked } = e.target;
+    
+    // If product changes, auto-update duration to weeks and recommended value
+    if (name === 'loan_product_id') {
+      const selectedProduct = loanProducts.find(p => p.id === value);
+      if (selectedProduct) {
+        setFormData(prev => ({
+          ...prev,
+          loan_product_id: value,
+          duration_type: 'WEEKS',
+          duration_value: selectedProduct.duration_weeks || 4
+        }));
+        return;
+      }
+    }
+
     setFormData(prev => ({ 
       ...prev, 
       [name]: type === 'checkbox' ? checked : value 
@@ -150,7 +174,9 @@ const LoanApplicationForm = ({ customer, onSuccess, onCancel }) => {
             >
               <option value="">Choose Plan...</option>
               {loanProducts.map(p => (
-                <option key={p.id} value={p.id}>{p.name} ({p.interest_rate}%)</option>
+                <option key={p.id} value={p.id}>
+                  {p.name} (KES {Number(p.min_amount).toLocaleString()} - {Number(p.max_amount).toLocaleString()})
+                </option>
               ))}
             </select>
           </div>
@@ -174,22 +200,22 @@ const LoanApplicationForm = ({ customer, onSuccess, onCancel }) => {
               name="duration_type"
               value={formData.duration_type}
               onChange={handleChange}
-              className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-indigo-500 dark:bg-slate-800 dark:border-slate-700 outline-none font-bold"
+              disabled
+              className="w-full px-3 py-2 border rounded-lg bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700 outline-none font-bold text-slate-500"
             >
-              <option value="WEEKS">Weekly (Preferred)</option>
-              <option value="MONTHS">Monthly</option>
+              <option value="WEEKS">Weekly (Company Policy)</option>
             </select>
           </div>
 
           <div className="space-y-1">
-            <label className="text-xs font-black text-slate-500 uppercase tracking-widest">Period ({formData.duration_type.toLowerCase()})</label>
+            <label className="text-xs font-black text-slate-500 uppercase tracking-widest">Period (Weeks)</label>
             <input 
               name="duration_value"
               type="number"
               value={formData.duration_value}
               onChange={handleChange}
               className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-indigo-500 dark:bg-slate-800 dark:border-slate-700 outline-none font-bold" 
-              placeholder={formData.duration_type === 'WEEKS' ? "5-8" : "12"}
+              placeholder="e.g. 4"
             />
           </div>
 

@@ -35,12 +35,9 @@ const CustomerRegistrationForm = ({ onSuccess, onApplyLoan }) => {
   const [loanProducts, setLoanProducts] = useState([]);
   const [outstandingLoanDetails, setOutstandingLoanDetails] = useState(null);
 
-  const regions = [
-    'Mwea East', 'Mwea West', 'Kirinyaga Central', 'Kirinyaga East (Gichugu)', 
-    'Kirinyaga West (Ndiao)', 'Kerugoya Town', 'Sagana', 'Kutus', 'Kagio', 'Wang\'uru'
+  const branches = [
+    'Kagio', 'Embu', 'Thika', 'Naivasha'
   ];
-
-  const counties = ['Kirinyaga'];
   
   const [formData, setFormData] = useState({
     // Step 1: Basic Info
@@ -51,8 +48,7 @@ const CustomerRegistrationForm = ({ onSuccess, onApplyLoan }) => {
     // Step 2: User Details (Profile)
     national_id: '',
     date_of_birth: '',
-    region: '',
-    county: 'Kirinyaga',
+    branch: 'Kagio',
     town: '',
     village: '',
     address: '',
@@ -108,8 +104,8 @@ const CustomerRegistrationForm = ({ onSuccess, onApplyLoan }) => {
           email: data.user.email || '',
           national_id: data.user.profile?.national_id || '',
           date_of_birth: data.user.profile?.date_of_birth || '',
-          region: data.user.profile?.region || '',
-          county: data.user.profile?.county || '',
+          branch: data.user.profile?.branch || '',
+
           town: data.user.profile?.town || '',
           village: data.user.profile?.village || '',
           address: data.user.profile?.address || '',
@@ -160,7 +156,7 @@ const CustomerRegistrationForm = ({ onSuccess, onApplyLoan }) => {
       setError('Please fill in name and phone');
       return;
     }
-    if (step === 2 && (!formData.national_id || !formData.region || !formData.county || !formData.town)) {
+    if (step === 2 && (!formData.national_id || !formData.branch || !formData.town)) {
       setError('Please fill in essential residential details');
       return;
     }
@@ -181,8 +177,7 @@ const CustomerRegistrationForm = ({ onSuccess, onApplyLoan }) => {
       // Profile Details
       data.append('national_id', formData.national_id);
       if (formData.date_of_birth) data.append('date_of_birth', formData.date_of_birth);
-      data.append('region', formData.region);
-      data.append('county', formData.county);
+      data.append('branch', formData.branch);
       data.append('town', formData.town);
       data.append('village', formData.village);
       data.append('address', formData.address);
@@ -372,26 +367,15 @@ const CustomerRegistrationForm = ({ onSuccess, onApplyLoan }) => {
                 />
               </div>
               <div className="space-y-1">
-                <label className="text-sm font-medium">Region/Constituency</label>
+                <label className="text-sm font-medium">Branch</label>
                 <select 
-                  name="region"
-                  value={formData.region}
+                  name="branch"
+                  value={formData.branch}
                   onChange={handleChange}
                   className="w-full px-3 py-2 border rounded-lg dark:bg-slate-800 dark:border-slate-700 bg-white"
                 >
-                  <option value="">Select Region...</option>
-                  {regions.map(r => <option key={r} value={r}>{r}</option>)}
-                </select>
-              </div>
-              <div className="space-y-1">
-                <label className="text-sm font-medium">County</label>
-                <select 
-                  name="county"
-                  value={formData.county}
-                  onChange={handleChange}
-                  className="w-full px-3 py-2 border rounded-lg dark:bg-slate-800 dark:border-slate-700 bg-slate-50 cursor-not-allowed"
-                >
-                  {counties.map(c => <option key={c} value={c}>{c}</option>)}
+                  <option value="">Select Branch...</option>
+                  {branches.map(r => <option key={r} value={r}>{r}</option>)}
                 </select>
               </div>
               <div className="space-y-1">

@@ -34,7 +34,7 @@ class AdminSerializer(serializers.ModelSerializer):
             "email",
             "phone",
             "role",
-            "region",
+            "branch",
             "is_verified",
             "is_blocked",
             "is_super_admin",
@@ -65,10 +65,25 @@ class UserProfileSerializer(serializers.ModelSerializer):
 class UserSerializer(serializers.ModelSerializer):
     profile = UserProfileSerializer(required=False)
     national_id = serializers.CharField(write_only=True, required=False)
+    has_active_loan = serializers.SerializerMethodField()
 
     class Meta:
         model = Users
         fields = "__all__"
+
+    def get_has_active_loan(self, obj):
+        return Loans.objects.filter(
+            user=obj,
+            status__in=[
+                "UNVERIFIED",
+                "VERIFIED",
+                "APPROVED",
+                "DISBURSED",
+                "ACTIVE",
+                "OVERDUE",
+                "DEFAULTED",
+            ],
+        ).exists()
 
     def validate_phone(self, value):
         # Normalize phone: remove spaces, dashes, etc.
@@ -114,8 +129,8 @@ class UserSerializer(serializers.ModelSerializer):
             defaults={
                 "national_id": national_id or profile_data.get("national_id"),
                 "date_of_birth": profile_data.get("date_of_birth") or None,
-                "region": profile_data.get("region"),
-                "county": profile_data.get("county"),
+                "branch": profile_data.get("branch"),
+                "branch": profile_data.get("branch"),
                 "town": profile_data.get("town"),
                 "village": profile_data.get("village"),
                 "address": profile_data.get("address"),
@@ -144,8 +159,8 @@ class UserSerializer(serializers.ModelSerializer):
         # Update profile fields if provided
         profile_fields = [
             "date_of_birth",
-            "region",
-            "county",
+            "branch",
+            "branch",
             "town",
             "village",
             "address",
@@ -198,11 +213,57 @@ class LoanSerializer(serializers.ModelSerializer):
         model = Loans
         fields = "__all__"
 
+    def validate(self, data):
+        user = data.get("user")
+        if user:
+            from .models import Loans
+
+            active_loan = (
+                Loans.objects.filter(
+                    user=user,
+                    status__in=[
+                        "UNVERIFIED",
+                        "VERIFIED",
+                        "APPROVED",
+                        "DISBURSED",
+                        "ACTIVE",
+                        "OVERDUE",
+                        "DEFAULTED",
+                    ],
+                )
+                .order_by("-created_at")
+                .first()
+            )
+
+            if active_loan:
+                balance = active_loan.remaining_balance
+                if balance > 0:
+                    raise serializers.ValidationError(
+                        f"Customer already has an active loan. They must first pay the outstanding loan of KES {float(balance):,.2f} before applying for another one."
+                    )
+        return data
+
 
 class RepaymentSerializer(serializers.ModelSerializer):
+    customer_name = serializers.ReadOnlyField(source="loan.user.full_name")
+    loan_id = serializers.ReadOnlyField(source="loan.id")
+    national_id = serializers.ReadOnlyField(source="loan.user.profile.national_id")
+    mpesa_receipt = serializers.ReadOnlyField(source="reference_code")
+
     class Meta:
         model = Repayments
-        fields = "__all__"
+        fields = [
+            "id",
+            "loan",
+            "loan_id",
+            "customer_name",
+            "national_id",
+            "amount_paid",
+            "payment_method",
+            "payment_date",
+            "reference_code",
+            "mpesa_receipt",
+        ]
 
 
 class TransactionSerializer(serializers.ModelSerializer):

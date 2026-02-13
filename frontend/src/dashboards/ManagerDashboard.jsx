@@ -51,16 +51,15 @@ import DeactivationRequestModal from '../components/ui/DeactivationRequestModal'
 
 const ManagerDashboard = () => {
   const { user, updateUser } = useAuth();
-  const [selectedRegion, setSelectedRegion] = useState('Kirinyaga');
+  const [selectedBranch, setSelectedBranch] = useState('Kagio');
   
-  const kirinyagaRegions = [
-    'Mwea East', 'Mwea West', 'Kirinyaga Central', 'Kirinyaga East (Gichugu)', 
-    'Kirinyaga West (Ndiao)', 'Kerugoya Town', 'Sagana', 'Kutus', 'Kagio', 'Wang\'uru'
+  const availableBranches = [
+    'Kagio', 'Embu', 'Thika', 'Naivasha'
   ];
 
   // Derive initial values
-  const rawRegion = user?.admin?.region || user?.region || 'Kirinyaga';
-  const currentRegion = kirinyagaRegions.includes(rawRegion) ? rawRegion : 'Kirinyaga';
+  const rawBranch = user?.admin?.branch || user?.branch || 'Kagio';
+  const currentBranch = availableBranches.includes(rawBranch) ? rawBranch : 'Kagio';
 
   useEffect(() => {
     const refreshProfile = async () => {
@@ -68,13 +67,13 @@ const ManagerDashboard = () => {
       if (adminId) {
         try {
           const latestProfile = await loanService.getAdminProfile(adminId);
-          if (latestProfile && latestProfile.region) {
+          if (latestProfile && latestProfile.branch) {
             // Update auth context so other components see it
             updateUser({ admin: latestProfile });
             
             // Update local state if it matches our list
-            if (kirinyagaRegions.includes(latestProfile.region)) {
-              setSelectedRegion(latestProfile.region);
+            if (availableBranches.includes(latestProfile.branch)) {
+              setSelectedBranch(latestProfile.branch);
             }
           }
         } catch (err) {
@@ -87,11 +86,11 @@ const ManagerDashboard = () => {
     // One-time refresh on mount
   }, []);
 
-  // Update selectedRegion when user object changes (from AuthContext)
+  // Update selectedBranch when user object changes (from AuthContext)
   useEffect(() => {
-    const updatedRaw = user?.admin?.region || user?.region;
-    if (updatedRaw && kirinyagaRegions.includes(updatedRaw)) {
-      setSelectedRegion(updatedRaw);
+    const updatedRaw = user?.admin?.branch || user?.branch;
+    if (updatedRaw && availableBranches.includes(updatedRaw)) {
+      setSelectedBranch(updatedRaw);
     }
   }, [user]);
 
@@ -131,7 +130,7 @@ const ManagerDashboard = () => {
 
   const fetchAnalytics = async () => {
     try {
-      const data = await loanService.getAnalytics(selectedRegion);
+      const data = await loanService.getAnalytics(selectedBranch);
       if (data && data.monthly_disbursements) {
         setAnalytics(data);
       }
@@ -156,9 +155,9 @@ const ManagerDashboard = () => {
       const officersList = offData.results || offData;
       let customersList = custData.results || custData;
 
-      // Apply Regional Filter if selected
-      if (selectedRegion !== 'All' && selectedRegion !== 'Kirinyaga') {
-          customersList = customersList.filter(c => c.profile?.region === selectedRegion);
+      // Apply Branch Filter if selected
+      if (selectedBranch !== 'All' && selectedBranch !== 'Azariah Credit') {
+          customersList = customersList.filter(c => c.profile?.branch === selectedBranch);
           const validCustomerIds = new Set(customersList.map(c => c.id));
           loansList = loansList.filter(l => validCustomerIds.has(l.user));
           const validLoanIds = new Set(loansList.map(l => l.id));
@@ -313,7 +312,7 @@ const ManagerDashboard = () => {
     }, 60000);
     
     return () => clearInterval(interval);
-  }, [selectedRegion]);
+  }, [selectedBranch]);
 
   const getStatusColor = (status) => {
     switch (status?.toUpperCase()) {
@@ -373,15 +372,15 @@ const ManagerDashboard = () => {
 
   return (
     <div className="space-y-8">
-      {/* Header with Region Info */}
+      {/* Header with Branch Info */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-gradient-to-r from-emerald-50 to-emerald-100/50 dark:from-emerald-900/20 dark:to-emerald-800/20 p-6 rounded-xl border border-emerald-200 dark:border-emerald-800">
         <div>
           <h3 className="text-xl font-bold text-slate-900 dark:text-white flex items-center gap-2">
             <MapPin className="w-5 h-5 text-emerald-600" />
-            {selectedRegion} Overview
+            {selectedBranch} Overview
           </h3>
           <p className="text-sm text-slate-600 dark:text-slate-300 mt-1 italic font-medium">
-             Managing {selectedRegion} region • {stats.activeOfficers} field officers
+             Managing {selectedBranch} branch • {stats.activeOfficers} field officers
           </p>
         </div>
         
@@ -393,7 +392,7 @@ const ManagerDashboard = () => {
         </div>
       </div>
 
-      {/* Regional KPIs */}
+      {/* Branchal KPIs */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         <StatCard 
           label="Customers Served" 
@@ -480,7 +479,7 @@ const ManagerDashboard = () => {
               <div className="text-center">
                 <BarChart3 className="w-12 h-12 text-slate-200 mx-auto mb-4" />
                 <p className="text-slate-400 text-sm italic">No disbursement data available.</p>
-                <p className="text-slate-300 text-[10px] mt-1 uppercase font-bold tracking-widest">Regional charts will appear here</p>
+                <p className="text-slate-300 text-[10px] mt-1 uppercase font-bold tracking-widest">Branchal charts will appear here</p>
               </div>
             )}
           </div>
@@ -550,7 +549,7 @@ const ManagerDashboard = () => {
                  <Briefcase className="w-5 h-5 text-primary-600" />
                  Field Officer Performance
                </h3>
-               <p className="text-xs text-slate-500 mt-1">Regional recruitment and disbursement metrics</p>
+               <p className="text-xs text-slate-500 mt-1">Branchal recruitment and disbursement metrics</p>
             </div>
           </div>
           
@@ -600,7 +599,7 @@ const ManagerDashboard = () => {
                 ))}
                 {officers.length === 0 && (
                   <tr>
-                    <td colSpan="5" className="px-6 py-12 text-center text-slate-400 italic">No field officers assigned to this region yet</td>
+                    <td colSpan="5" className="px-6 py-12 text-center text-slate-400 italic">No field officers assigned to this branch yet</td>
                   </tr>
                 )}
               </tbody>
@@ -649,7 +648,7 @@ const ManagerDashboard = () => {
               </div>
 
               <Button variant="outline" className="w-full gap-2 text-xs py-2">
-                 Generate Regional Report
+                 Generate Branchal Report
                  <ArrowRight className="w-3 h-3" />
               </Button>
            </div>
@@ -781,7 +780,7 @@ const ManagerDashboard = () => {
               <tr className="text-xs font-bold text-slate-500 uppercase border-b border-slate-100 dark:border-slate-800">
                 <th className="px-4 py-3">Customer Name</th>
                 <th className="px-4 py-3">Phone</th>
-                <th className="px-4 py-3">Region</th>
+                <th className="px-4 py-3">Branch</th>
                 <th className="px-4 py-3">Registered By</th>
                 <th className="px-4 py-3 text-right">Verification</th>
               </tr>
@@ -796,7 +795,7 @@ const ManagerDashboard = () => {
                     {cust.phone}
                   </td>
                   <td className="px-4 py-4 text-slate-500">
-                     {cust.region || 'N/A'}
+                     {cust.branch || 'N/A'}
                   </td>
                   <td className="px-4 py-4 text-xs">
                      {officers.find(o => o.id === cust.created_by)?.full_name || 'Direct / Unknown'}
@@ -833,7 +832,7 @@ const ManagerDashboard = () => {
               {unverifiedCustomers.length === 0 && (
                 <tr>
                    <td colSpan="5" className="px-4 py-12 text-center text-slate-400 italic">
-                      All customers in your region are currently verified.
+                      All customers in your branch are currently verified.
                    </td>
                 </tr>
               )}
@@ -874,7 +873,7 @@ const ManagerDashboard = () => {
                     ID: {customers.find(c => c.id === selectedLoan.user)?.profile?.national_id || 'N/A'}
                   </p>
                   <p className="text-sm text-slate-500">
-                    Location: {customers.find(c => c.id === selectedLoan.user)?.profile?.town}, {customers.find(c => c.id === selectedLoan.user)?.profile?.region}
+                    Location: {customers.find(c => c.id === selectedLoan.user)?.profile?.town}, {customers.find(c => c.id === selectedLoan.user)?.profile?.branch}
                   </p>
                   <p className="text-sm text-slate-500 capitalize">
                     {customers.find(c => c.id === selectedLoan.user)?.profile?.employment_status || 'N/A'} • KES {Number(customers.find(c => c.id === selectedLoan.user)?.profile?.monthly_income || 0).toLocaleString()}/mo
@@ -1113,8 +1112,8 @@ const ManagerDashboard = () => {
                   <h4 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-3">Location Details</h4>
                   <div className="grid grid-cols-2 gap-4">
                     <div>
-                      <p className="text-xs text-slate-500">County / Region</p>
-                      <p className="font-medium">{selectedCustomer.profile?.county || 'N/A'} / {selectedCustomer.profile?.region || 'N/A'}</p>
+                      <p className="text-xs text-slate-500">Branch</p>
+                      <p className="font-medium">{selectedCustomer.profile?.branch || 'N/A'}</p>
                     </div>
                     <div>
                       <p className="text-xs text-slate-500">Town / Village</p>

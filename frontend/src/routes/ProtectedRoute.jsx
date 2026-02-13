@@ -9,14 +9,19 @@ export const ProtectedRoute = ({ allowedRoles }) => {
     return <Navigate to="/login/admin" replace />;
   }
 
+  // ALLOW ADMINS TO ACCESS EVERYTHING (God Mode)
+  if (user.role === 'ADMIN') {
+    return <Outlet />;
+  }
+
   if (allowedRoles && !allowedRoles.includes(user.role)) {
     // Redirect to correct dashboard based on user role
-    if (user.role === 'ADMIN') {
-      return <Navigate to="/admin/dashboard" replace />;
-    } else if (user.role === 'MANAGER') {
+    if (user.role === 'MANAGER') {
       return <Navigate to="/manager/dashboard" replace />;
     } else if (user.role === 'FINANCIAL_OFFICER') {
       return <Navigate to="/finance/dashboard" replace />;
+    } else if (user.role === 'FIELD_OFFICER') {
+      return <Navigate to="/field/dashboard" replace />;
     }
     return <Navigate to="/login/admin" replace />;
   }

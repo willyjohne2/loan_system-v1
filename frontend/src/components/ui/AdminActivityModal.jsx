@@ -60,7 +60,7 @@ const AdminActivityModal = ({ admin, isOpen, onClose }) => {
           ) : logs.length > 0 ? (
             <div className="space-y-4">
               {logs.map((log, idx) => (
-                <div key={log.id} className="flex gap-4 p-4 rounded-xl border border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors">
+                <div key={log.id || idx} className="flex gap-4 p-4 rounded-xl border border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors">
                   <div className={`mt-1 p-2 rounded-lg shrink-0 ${
                     log.action?.includes('CREATE') ? 'bg-emerald-100 text-emerald-600' :
                     log.action?.includes('UPDATE') ? 'bg-blue-100 text-blue-600' :

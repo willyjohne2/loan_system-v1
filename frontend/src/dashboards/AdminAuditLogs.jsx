@@ -1,29 +1,36 @@
 import React, { useEffect, useState } from 'react';
 import { loanService } from '../api/api';
 import { Card } from '../components/ui/Shared';
-import { History, Search, Filter } from 'lucide-react';
+import { History, Search, Filter, TrendingUp } from 'lucide-react';
 
 const AdminAuditLogs = () => {
   const [logs, setLogs] = useState([]);
+  const [dailyAudit, setDailyAudit] = useState([]);
   const [loading, setLoading] = useState(true);
   const [filterType, setFilterType] = useState('');
 
-  const fetchLogs = async (type = '') => {
+  const fetchData = async (type = '') => {
     setLoading(true);
     try {
       const params = {};
       if (type) params.type = type;
-      const data = await loanService.getAuditLogs(params);
-      setLogs(data.results || data || []);
+      
+      const [logsData, analyticsData] = await Promise.all([
+        loanService.getAuditLogs(params),
+        loanService.api.get('/loan-analytics/')
+      ]);
+
+      setLogs(logsData.results || logsData || []);
+      setDailyAudit(analyticsData.daily_disbursements || []);
     } catch (err) {
-      console.error("Fetch logs error:", err);
+      console.error("Fetch audit data error:", err);
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    fetchLogs(filterType);
+    fetchData(filterType);
   }, [filterType]);
 
   if (loading && logs.length === 0) return (
@@ -34,12 +41,57 @@ const AdminAuditLogs = () => {
 
   return (
     <div className="space-y-6">
+      {/* Financial Accountability Table */}
+      <Card className="p-0 overflow-hidden border-none shadow-sm">
+        <div className="bg-slate-50 dark:bg-slate-800/50 p-6 border-b border-slate-100 dark:border-slate-700">
+          <h3 className="text-lg font-semibold flex items-center gap-2 text-slate-900 dark:text-white">
+            <TrendingUp className="w-5 h-5 text-emerald-600" />
+            Financial Management Audit (Daily Disbursements)
+          </h3>
+          <p className="text-sm text-slate-500">Summary of total loans disbursed per day for transparency and accountability.</p>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full">
+            <thead>
+              <tr className="bg-white dark:bg-slate-900 border-b border-slate-100 dark:border-slate-800">
+                <th className="text-left p-4 text-xs font-bold text-slate-500 dark:text-slate-400 uppercase">Disbursement Date</th>
+                <th className="text-left p-4 text-xs font-bold text-slate-500 dark:text-slate-400 uppercase">Number of Loans</th>
+                <th className="text-right p-4 text-xs font-bold text-slate-500 dark:text-slate-400 uppercase">Total Amount (KES)</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-50 dark:divide-slate-800">
+              {dailyAudit.length > 0 ? (
+                dailyAudit.map((item, idx) => (
+                  <tr key={idx} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/20 transition-colors">
+                    <td className="p-4 text-sm font-medium text-slate-700 dark:text-slate-300">
+                      {new Date(item.date).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })}
+                    </td>
+                    <td className="p-4 text-sm text-slate-600 dark:text-slate-400">
+                      {item.count} Loan(s)
+                    </td>
+                    <td className="p-4 text-right text-sm font-bold text-emerald-600 dark:text-emerald-400">
+                      {new Intl.NumberFormat('en-KE', { style: 'currency', currency: 'KES' }).format(item.amount)}
+                    </td>
+                  </tr>
+                ))
+              ) : (
+                <tr>
+                  <td colSpan="3" className="p-8 text-center text-slate-400 text-sm italic">
+                    No disbursement records found for the past 30 days.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </Card>
+
       <Card className="p-8">
         <div className="flex flex-col md:flex-row items-start md:items-center justify-between mb-8 gap-4">
           <div>
             <h3 className="text-lg font-semibold flex items-center gap-2 text-slate-900 dark:text-white">
               <History className="w-5 h-5 text-primary-600" />
-              Comprehensive Audit Trail
+              General Audit Trail
             </h3>
             <p className="text-sm text-slate-500">Search and filter every transaction and security event.</p>
           </div>

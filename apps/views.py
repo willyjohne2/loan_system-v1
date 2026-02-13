@@ -3,6 +3,7 @@ import uuid
 import secrets
 import threading
 import os
+import json
 import requests
 from django.core.mail import send_mail
 from django.conf import settings
@@ -57,7 +58,7 @@ def create_notification(user, message):
 
 def send_verification_email_async(full_name, email, verification_code):
     try:
-        sender_name = os.getenv("SENDER_NAME", "Loan System")
+        sender_name = os.getenv("SENDER_NAME", "Azariah Credit Ltd")
         from_email = os.getenv("FROM_EMAIL")
         brevo_api_key = os.getenv("BREVO_API_KEY")
 
@@ -71,13 +72,13 @@ def send_verification_email_async(full_name, email, verification_code):
         payload = {
             "sender": {"name": sender_name, "email": from_email},
             "to": [{"email": email}],
-            "subject": "Your Email Verification Code - Loan System",
+            "subject": f"Your Email Verification Code - {sender_name}",
             "htmlContent": f"""
                 <html>
                 <body style="font-family: Arial, sans-serif;">
                 <h2>Email Verification</h2>
                 <p>Hello {full_name},</p>
-                <p>Welcome to the Loan Management System!</p>
+                <p>Welcome to {sender_name}!</p>
                 <p>Your verification code is:</p>
                 <h1 style="background-color: #f0f0f0; padding: 10px; text-align: center; letter-spacing: 5px;">{verification_code}</h1>
                 <p>This code will expire in 24 hours.</p>
@@ -96,11 +97,11 @@ def send_verification_email_async(full_name, email, verification_code):
 
 def send_invitation_email_async(email, role, invited_by_name, token):
     try:
-        sender_name = os.getenv("SENDER_NAME", "Loan System")
+        sender_name = os.getenv("SENDER_NAME", "Azariah Credit Ltd")
         from_email = os.getenv("FROM_EMAIL")
         brevo_api_key = os.getenv("BREVO_API_KEY")
         # You would typically have a frontend URL for invitations
-        invite_url = f"http://localhost:5173/signup?token={token}&email={email}"
+        invite_url = f"{os.getenv('FRONTEND_URL', 'http://localhost:5173')}/signup?token={token}&email={email}"
 
         url = "https://api.brevo.com/v3/smtp/email"
         headers = {
@@ -112,16 +113,16 @@ def send_invitation_email_async(email, role, invited_by_name, token):
         payload = {
             "sender": {"name": sender_name, "email": from_email},
             "to": [{"email": email}],
-            "subject": f"You've been invited as a {role} - Loan System",
+            "subject": f"You've been invited as a {role} - {sender_name}",
             "htmlContent": f"""
                 <html>
                 <body style="font-family: Arial, sans-serif;">
                 <h2>Administrative Invitation</h2>
                 <p>Hello,</p>
-                <p>{invited_by_name} has invited you to join the Loan Management System as a <strong>{role}</strong>.</p>
-                <p>To accept this invitation and set up your account, please click the link below:</p>
-                <a href="{invite_url}" style="background-color: #4f46e5; color: white; padding: 12px 24px; text-decoration: none; border-radius: 8px; display: inline-block;">Accept Invitation</a>
-                <p>Alternatively, copy and paste this link into your browser:</p>
+                <p>You have been invited by {invited_by_name} to join <strong>{sender_name}</strong> as a <strong>{role}</strong>.</p>
+                <p>Please click the link below to complete your registration:</p>
+                <p><a href="{invite_url}" style="background-color: #4CAF50; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px;">Accept Invitation</a></p>
+                <p>If the button doesn't work, copy and paste this URL into your browser:</p>
                 <p>{invite_url}</p>
                 <p>This invitation will expire in 48 hours.</p>
                 <p>Best regards,<br/>{sender_name} Team</p>
@@ -136,7 +137,7 @@ def send_invitation_email_async(email, role, invited_by_name, token):
 
 def send_password_reset_email_async(full_name, email, reset_code):
     try:
-        sender_name = os.getenv("SENDER_NAME", "Loan System")
+        sender_name = os.getenv("SENDER_NAME", "Azariah Credit Ltd")
         from_email = os.getenv("FROM_EMAIL")
         brevo_api_key = os.getenv("BREVO_API_KEY")
 
@@ -150,17 +151,18 @@ def send_password_reset_email_async(full_name, email, reset_code):
         payload = {
             "sender": {"name": sender_name, "email": from_email},
             "to": [{"email": email}],
-            "subject": "Password Reset Code - Loan System",
+            "subject": f"Password Reset Code - {sender_name}",
             "htmlContent": f"""
                 <html>
                 <body style="font-family: Arial, sans-serif;">
                 <h2>Password Reset</h2>
                 <p>Hello {full_name},</p>
-                <p>You requested to reset your password.</p>
+                <p>You requested to reset your password for <strong>{sender_name}</strong>.</p>
                 <p>Your 6-digit reset code is:</p>
                 <h1 style="background-color: #f8f8f8; padding: 15px; text-align: center; letter-spacing: 5px; border: 1px solid #ddd;">{reset_code}</h1>
                 <p>This code will expire in 1 hour.</p>
                 <p>If you didn't request this, please ignore this email and ensure your account is secure.</p>
+                <p>Best regards,<br/>{sender_name} Team</p>
                 </body>
                 </html>
             """,
@@ -287,9 +289,9 @@ class UserListCreateView(generics.ListCreateAPIView):
             return users.filter(created_by=user).order_by("-created_at")
 
         if user_role == "MANAGER":
-            manager_region = getattr(user, "region", None)
-            if manager_region:
-                return users.filter(profile__region=manager_region).order_by(
+            manager_branch = getattr(user, "branch", None)
+            if manager_branch:
+                return users.filter(profile__branch=manager_branch).order_by(
                     "-created_at"
                 )
             return users.order_by("-created_at")
@@ -313,7 +315,7 @@ class UserDetailView(generics.RetrieveUpdateDestroyAPIView):
             return Users.objects.none()
 
         if hasattr(user, "role") and user.role == "MANAGER":
-            return Users.objects.filter(profile__region=user.region)
+            return Users.objects.filter(profile__branch=user.branch)
         elif hasattr(user, "role") and user.role == "FIELD_OFFICER":
             return Users.objects.filter(created_by=user)
 
@@ -402,7 +404,7 @@ class LoanListCreateView(generics.ListCreateAPIView):
             loans = loans.filter(created_by=user)
 
         elif hasattr(user, "role") and user.role == "MANAGER":
-            loans = loans.filter(user__profile__region=user.region)
+            loans = loans.filter(user__profile__branch=user.branch)
 
         # Optimization: Only update status if it's been more than a day
         # or if the loan is currently in a state that could change
@@ -417,7 +419,21 @@ class LoanListCreateView(generics.ListCreateAPIView):
         created_by = user if (user and user.is_authenticated) else None
 
         interest_rate = self.request.data.get("interest_rate")
+        duration_weeks = self.request.data.get("duration_weeks")
         product_id = self.request.data.get("loan_product")
+
+        # Business Logic for Interest Rates based on duration
+        if duration_weeks:
+            try:
+                weeks = int(duration_weeks)
+                if weeks == 4:
+                    interest_rate = 25.0
+                elif weeks == 5:
+                    interest_rate = 31.25
+                elif weeks == 6:
+                    interest_rate = 36.25
+            except (ValueError, TypeError):
+                pass
 
         if not interest_rate:
             if product_id:
@@ -476,7 +492,7 @@ class RepaymentListCreateView(generics.ListCreateAPIView):
         repayments = Repayments.objects.all()
 
         if hasattr(user, "role") and user.role == "MANAGER":
-            repayments = repayments.filter(loan__user__profile__region=user.region)
+            repayments = repayments.filter(loan__user__profile__branch=user.branch)
 
         elif hasattr(user, "role") and user.role == "FIELD_OFFICER":
             repayments = repayments.filter(loan__created_by=user)
@@ -588,6 +604,231 @@ class MpesaRepaymentView(views.APIView):
             )
 
 
+class MpesaDisbursementView(views.APIView):
+    """
+    Trigger B2C Disbursement.
+    Can handle single loan_id or 'bulk' mode (next 20 approved loans FCFS)
+    """
+
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request):
+        user = request.user
+        role = getattr(user, "role", None)
+
+        if role not in ["ADMIN", "MANAGER", "FINANCIAL_OFFICER"]:
+            return Response(
+                {"error": "Unauthorized to trigger disbursements"},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        mode = request.data.get("mode", "single")  # single or bulk
+
+        if mode == "bulk":
+            # Get next 20 approved loans starting from oldest (First Come First Served)
+            loans_to_disburse = Loans.objects.filter(status="APPROVED").order_by(
+                "created_at"
+            )[:20]
+            count = loans_to_disburse.count()
+
+            if count == 0:
+                return Response(
+                    {"message": "No approved loans found in queue", "results": []},
+                    status=200,
+                )
+
+            results = []
+            handler = MpesaHandler()
+
+            print(f"Starting bulk disbursement for {count} loans...")
+
+            for loan in loans_to_disburse:
+                phone_number = loan.user.phone
+                if not phone_number:
+                    results.append(
+                        {
+                            "loan_id": str(loan.id),
+                            "status": "failed",
+                            "error": "No phone number",
+                        }
+                    )
+                    continue
+
+                amount = loan.principal_amount
+
+                if not handler.consumer_key:
+                    # Mock Success
+                    res = {"ResponseCode": "0", "status": "MOCK_SUCCESS"}
+                else:
+                    res = handler.b2c_disburse(
+                        phone_number=phone_number,
+                        amount=amount,
+                        Remarks=f"Disbursement for Loan {str(loan.id)[:8]}",
+                    )
+
+                if (
+                    res.get("ResponseCode") == "0"
+                    or res.get("status") == "MOCK_SUCCESS"
+                ):
+                    loan.status = "DISBURSED"
+                    loan.save()
+                    results.append({"loan_id": str(loan.id), "status": "success"})
+                else:
+                    results.append(
+                        {
+                            "loan_id": str(loan.id),
+                            "status": "failed",
+                            "error": res.get("ResponseDescription"),
+                        }
+                    )
+
+            return Response({"message": "Bulk processing complete", "results": results})
+
+        # Single loan mode
+        loan_id = request.data.get("loan_id")
+        if not loan_id:
+            return Response(
+                {"error": "loan_id is required"}, status=status.HTTP_400_BAD_REQUEST
+            )
+
+        try:
+            loan = Loans.objects.get(id=loan_id)
+            if loan.status != "APPROVED":
+                return Response(
+                    {
+                        "error": f"Loan must be APPROVED to disburse. Current status: {loan.status}"
+                    },
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            phone_number = loan.user.phone
+            if not phone_number:
+                return Response(
+                    {"error": "Borrower has no phone number"},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            amount = loan.principal_amount
+            handler = MpesaHandler()
+
+            if not handler.consumer_key:
+                result = {"ResponseCode": "0", "status": "MOCK_SUCCESS"}
+            else:
+                result = handler.b2c_disburse(
+                    phone_number=phone_number,
+                    amount=amount,
+                    Remarks=f"Disbursement for Loan {str(loan.id)[:8]}",
+                )
+
+            if (
+                result.get("ResponseCode") == "0"
+                or result.get("status") == "MOCK_SUCCESS"
+            ):
+                loan.status = "DISBURSED"
+                loan.save()
+
+            return Response(result)
+
+        except Loans.DoesNotExist:
+            return Response(
+                {"error": "Loan not found"}, status=status.HTTP_404_NOT_FOUND
+            )
+
+
+class MpesaCallbackView(views.APIView):
+    """
+    Handle M-Pesa Callbacks:
+    1. C2B (Paybill) Verification & Auto-Matching
+    2. B2C Results
+    """
+
+    permission_classes = [permissions.AllowAny]
+
+    def post(self, request):
+        data = request.data
+        print(f"M-Pesa Callback Received: {json.dumps(data)}")
+
+        # 1. Check for B2C Disbursement Result
+        if "Result" in data:
+            result = data.get("Result")
+            result_code = result.get("ResultCode")
+            originator_id = result.get("OriginatorConversationID")
+            trans_id = result.get("TransactionID")
+
+            print(
+                f"B2C Result: Code={result_code}, ID={originator_id}, Trans={trans_id}"
+            )
+
+            # Since we set status to DISBURSED immediately in the triggering view,
+            # we only need to revert if result_code is NOT 0
+            if result_code != 0:
+                # Find loan by remarks or custom tracking logic?
+                # Better approach: We could store the originator_id in a Transaction model.
+                # For now, let's just log it.
+                print(f"⚠️ B2C FALIED for OriginatorID: {originator_id}")
+            return Response({"ResultCode": 0, "ResultDesc": "Accepted"})
+
+        # 2. Check for C2B Paybill Confirmation (Auto-allocate payment)
+        trans_id = data.get("TransID")
+        bill_ref = str(data.get("BillRefNumber", "")).strip().lower()
+        amount = data.get("TransAmount")
+        msisdn = str(data.get("MSISDN", ""))
+
+        if trans_id:
+            try:
+                # Normalize phone (2547... -> 07...)
+                search_phone = msisdn
+                if msisdn.startswith("254") and len(msisdn) > 3:
+                    search_phone = "0" + msisdn[3:]
+                elif not msisdn.startswith("0") and len(msisdn) == 9:
+                    search_phone = "0" + msisdn
+
+                # Search Strategy:
+                # A. Match by BillRefNumber (National ID, Account fragment, or Phone)
+                # B. Match by MSISDN (Phone Number)
+                loan = (
+                    Loans.objects.filter(
+                        models.Q(user__profile__national_id=bill_ref)
+                        | models.Q(user__profile__national_id__icontains=bill_ref)
+                        | models.Q(id__icontains=bill_ref)
+                        | models.Q(user__id__icontains=bill_ref)
+                        | models.Q(user__phone__icontains=search_phone)
+                        | models.Q(user__phone__icontains=msisdn)
+                    )
+                    .filter(status__in=["ACTIVE", "OVERDUE", "DISBURSED"])
+                    .order_by("created_at")
+                    .first()
+                )
+
+                if loan:
+                    # Record the repayment
+                    Repayments.objects.create(
+                        loan=loan,
+                        amount_paid=amount,
+                        payment_method="MPESA_PAYBILL",
+                        reference_code=trans_id,
+                    )
+
+                    # Update status/rates
+                    loan.update_status_and_rates()
+                    print(
+                        f"✅ Auto-allocated KES {amount} to {loan.user.full_name} (National ID: {getattr(loan.user.profile, 'national_id', 'N/A')})"
+                    )
+
+                    create_notification(
+                        loan.user,
+                        f"Your payment of KES {amount} (Ref: {trans_id}) has been successfully processed.",
+                    )
+
+                    return Response({"ResultCode": 0, "ResultDesc": "Success"})
+                else:
+                    return Response({"ResultCode": 0, "ResultDesc": "Success"})
+            except Exception as e:
+                print(f"Fail to auto-allocate C2B: {str(e)}")
+
+        return Response({"ResultCode": 0, "ResultDesc": "Success"})
+
+
 class BulkSMSView(views.APIView):
     permission_classes = [permissions.IsAuthenticated]
 
@@ -614,12 +855,12 @@ class BulkSMSView(views.APIView):
         if sms_type == "DEFAULTERS":
             overdue_loans = Loans.objects.filter(status="OVERDUE")
 
-            # Scope to manager region or financial officer portfolio if applicable
+            # Scope to manager branch or financial officer portfolio if applicable
             if user_role == "MANAGER":
-                manager_region = getattr(user, "region", None)
-                if manager_region:
+                manager_branch = getattr(user, "branch", None)
+                if manager_branch:
                     overdue_loans = overdue_loans.filter(
-                        user__profile__region=manager_region
+                        user__profile__branch=manager_branch
                     )
 
             template = get_template(
@@ -660,10 +901,10 @@ class BulkSMSView(views.APIView):
             # Encourage repeat loans for those who fully repaid
             closed_loans = Loans.objects.filter(status="CLOSED")
             if user_role == "MANAGER":
-                manager_region = getattr(user, "region", None)
-                if manager_region:
+                manager_branch = getattr(user, "branch", None)
+                if manager_branch:
                     closed_loans = closed_loans.filter(
-                        user__profile__region=manager_region
+                        user__profile__branch=manager_branch
                     )
 
             template = get_template(
@@ -708,9 +949,9 @@ class BulkSMSView(views.APIView):
             # Broaden to all users so you can test without verifying them first
             all_users = Users.objects.all()
             if user_role == "MANAGER":
-                manager_region = getattr(user, "region", None)
-                if manager_region:
-                    all_users = all_users.filter(profile__region=manager_region)
+                manager_branch = getattr(user, "branch", None)
+                if manager_branch:
+                    all_users = all_users.filter(profile__branch=manager_branch)
 
             for u in all_users:
                 if u.phone:
@@ -886,12 +1127,12 @@ class SMSLogListView(generics.ListAPIView):
         user_role = getattr(user, "role", None)
 
         if user_role == "MANAGER":
-            manager_region = getattr(user, "region", None)
-            if manager_region:
-                # Filter by logs where the recipient is in the manager's region
+            manager_branch = getattr(user, "branch", None)
+            if manager_branch:
+                # Filter by logs where the recipient is in the manager's branch
                 return SMSLog.objects.filter(
                     recipient_phone__in=Users.objects.filter(
-                        profile__region=manager_region
+                        profile__branch=manager_branch
                     ).values_list("phone", flat=True)
                 ).order_by("-created_at")
 
@@ -1185,7 +1426,7 @@ class LoanDetailView(generics.RetrieveUpdateDestroyAPIView):
             return Loans.objects.none()
 
         if hasattr(user, "role") and user.role == "MANAGER":
-            return Loans.objects.filter(user__profile__region=user.region)
+            return Loans.objects.filter(user__profile__branch=user.branch)
         elif hasattr(user, "role") and user.role == "FIELD_OFFICER":
             return Loans.objects.filter(created_by=user)
 
@@ -1276,9 +1517,9 @@ class LoanDocumentCreateView(generics.CreateAPIView):
 
         loan = Loans.objects.get(id=loan_id)
         if hasattr(user, "role"):
-            if user.role == "MANAGER" and loan.user.profile.region != user.region:
+            if user.role == "MANAGER" and loan.user.profile.branch != user.branch:
                 raise permissions.exceptions.PermissionDenied(
-                    "You don't have access to this loan's region"
+                    "You don't have access to this loan's branch"
                 )
             if user.role == "FIELD_OFFICER" and loan.created_by != user:
                 raise permissions.exceptions.PermissionDenied(
@@ -1319,17 +1560,19 @@ class LoanAnalyticsView(views.APIView):
 
     def get(self, request):
         from django.db.models import Count, Sum
-        from django.db.models.functions import TruncMonth
+        from django.db.models.functions import TruncMonth, TruncDate
 
         user = request.user
-        region = request.query_params.get("region")
+        branch = request.query_params.get("branch") or request.query_params.get(
+            "region"
+        )
 
         if hasattr(user, "role") and user.role == "MANAGER":
-            region = user.region
+            branch = user.branch
 
         loans = Loans.objects.all()
-        if region:
-            loans = loans.filter(user__profile__region=region)
+        if branch:
+            loans = loans.filter(user__profile__branch=branch)
 
         if hasattr(user, "role") and user.role == "FIELD_OFFICER":
             loans = loans.filter(created_by=user)
@@ -1339,6 +1582,14 @@ class LoanAnalyticsView(views.APIView):
             .values("month")
             .annotate(total=Sum("principal_amount"), count=Count("id"))
             .order_by("month")
+        )
+
+        daily_disbursements = (
+            loans.filter(status="DISBURSED")
+            .annotate(date=TruncDate("created_at"))
+            .values("date")
+            .annotate(total=Sum("principal_amount"), count=Count("id"))
+            .order_by("-date")[:30]
         )
 
         status_stats = loans.values("status").annotate(count=Count("id"))
@@ -1351,6 +1602,14 @@ class LoanAnalyticsView(views.APIView):
                     "count": stat["count"],
                 }
                 for stat in monthly_stats
+            ],
+            "daily_disbursements": [
+                {
+                    "date": stat["date"].strftime("%Y-%m-%d"),
+                    "amount": float(stat["total"] or 0),
+                    "count": stat["count"],
+                }
+                for stat in daily_disbursements
             ],
             "status_breakdown": [
                 {"name": stat["status"], "value": stat["count"]}

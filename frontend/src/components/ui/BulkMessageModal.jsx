@@ -56,7 +56,7 @@ const BulkMessageModal = ({ isOpen, onClose }) => {
               placeholder={`Enter the message to send to all field officers via ${type.toUpperCase()}...`}
             />
             <p className="mt-2 text-xs text-slate-500 italic">
-              * This message will be sent to 48 active field officers in your region.
+              * This message will be sent to all active field officers in your branch.
             </p>
           </div>
 

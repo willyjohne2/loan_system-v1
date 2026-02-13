@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { loanService } from '../api/api';
 import { StatCard, Table, Card, Button } from '../components/ui/Shared';
-import { Users, Wallet, UserPlus, TrendingUp, Calendar, ArrowUpRight, DollarSign, CreditCard, AlertCircle, CheckCircle } from 'lucide-react';
+import { Users, Wallet, UserPlus, TrendingUp, Calendar, ArrowUpRight, DollarSign, CreditCard, AlertCircle, CheckCircle, Lock } from 'lucide-react';
 import CustomerRegistrationForm from '../components/forms/CustomerRegistrationForm';
 import LoanApplicationForm from '../components/forms/LoanApplicationForm';
 import RepaymentModal from '../components/ui/RepaymentModal';
@@ -251,14 +251,21 @@ const FieldOfficerDashboard = () => {
                     <td className="px-6 py-4 text-slate-500 text-sm">{customer.created_at ? new Date(customer.created_at).toLocaleDateString() : '-'}</td>
                     <td className="px-6 py-4">
                       <div className="flex items-center gap-3">
-                        <Button 
-                          size="sm" 
-                          className="bg-indigo-50 text-indigo-700 hover:bg-indigo-100 dark:bg-indigo-900/20 dark:text-indigo-400 border border-indigo-100 dark:border-indigo-800 flex items-center gap-2 h-8 px-4 font-black text-[10px] uppercase tracking-wider"
-                          onClick={() => setApplyingForLoan(customer)}
-                        >
-                          <CreditCard className="w-3.5 h-3.5" />
-                          Apply Loan
-                        </Button>
+                        {customer.has_active_loan ? (
+                          <span className="px-3 py-1.5 bg-rose-50 text-rose-600 dark:bg-rose-900/20 dark:text-rose-400 border border-rose-100 dark:border-rose-800 rounded text-[10px] font-black uppercase tracking-wider flex items-center gap-1.5">
+                            <Lock className="w-3 h-3" />
+                            Blocked (Active Loan)
+                          </span>
+                        ) : (
+                          <Button 
+                            size="sm" 
+                            className="bg-indigo-50 text-indigo-700 hover:bg-indigo-100 dark:bg-indigo-900/20 dark:text-indigo-400 border border-indigo-100 dark:border-indigo-800 flex items-center gap-2 h-8 px-4 font-black text-[10px] uppercase tracking-wider"
+                            onClick={() => setApplyingForLoan(customer)}
+                          >
+                            <CreditCard className="w-3.5 h-3.5" />
+                            Apply Loan
+                          </Button>
+                        )}
                       </div>
                     </td>
                   </tr>

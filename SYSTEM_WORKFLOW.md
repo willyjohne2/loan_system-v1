@@ -4,10 +4,10 @@ This document outlines the operational flow and business logic of the Loan Manag
 
 ## 1. User Roles & Access Control (RBAC)
 
-The system uses Role-Based Access Control to ensure data privacy and regional silos.
+The system uses Role-Based Access Control to ensure data privacy and branch-level silos.
 
 - **Super Admin**: Global access to all data, settings, audit logs, and member management.
-- **Manager**: Regional access. Can only view and manage customers, loans, and repayments within their assigned **Region**.
+- **Manager**: Branch-level access. Can only view and manage customers, loans, and repayments within their assigned **Branch**.
 - **Field Officer**: Specific access. Can only view and manage customers they personally registered and loans they initiated.
 - **Financial Officer**: Access to disbursement and repayment processing.
 

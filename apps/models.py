@@ -15,7 +15,7 @@ class Admins(models.Model):
     is_blocked = models.BooleanField(default=False)
     is_super_admin = models.BooleanField(default=False)
     failed_login_attempts = models.IntegerField(default=0)
-    region = models.TextField(blank=True, null=True)
+    branch = models.TextField(blank=True, null=True)
     password_reset_code = models.CharField(max_length=6, blank=True, null=True)
     password_reset_expires = models.DateTimeField(blank=True, null=True)
     created_at = models.DateTimeField(auto_now_add=True, null=True)
@@ -252,8 +252,7 @@ class UserProfiles(models.Model):
         unique=True, max_length=50, blank=True, null=True, db_index=True
     )
     date_of_birth = models.DateField(blank=True, null=True)
-    region = models.TextField(blank=True, null=True)
-    county = models.TextField(blank=True, null=True)
+    branch = models.TextField(blank=True, null=True)
     town = models.TextField(blank=True, null=True)
     village = models.TextField(blank=True, null=True)
     address = models.TextField(blank=True, null=True)

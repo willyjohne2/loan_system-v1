@@ -1,5 +1,5 @@
 import React from 'react';
-import { NavLink } from 'react-router-dom';
+import { NavLink, useNavigate } from 'react-router-dom';
 import { 
   LayoutDashboard, 
   Users, 
@@ -10,7 +10,12 @@ import {
   LogOut,
   Building2,
   Users2,
-  MessageSquare
+  MessageSquare,
+  ChevronDown,
+  ShieldAlert,
+  ShieldCheck,
+  Zap,
+  Briefcase
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { clsx } from 'clsx';
@@ -22,7 +27,18 @@ function cn(...inputs) {
 }
 
 const Sidebar = ({ isOpen, onClose }) => {
-  const { user, logout } = useAuth();
+  const { user, logout, activeRole, switchActiveRole } = useAuth();
+  const navigate = useNavigate();
+
+  const handleRoleSwitch = (role) => {
+    switchActiveRole(role);
+    if (role === 'ADMIN') navigate('/admin/dashboard');
+    else if (role === 'MANAGER') navigate('/manager/dashboard');
+    else if (role === 'FINANCIAL_OFFICER') navigate('/finance/dashboard');
+    else if (role === 'FIELD_OFFICER') navigate('/field/dashboard');
+    
+    if (window.innerWidth < 1024) onClose();
+  };
 
   const adminLinks = [
     { to: '/admin/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
@@ -49,9 +65,9 @@ const Sidebar = ({ isOpen, onClose }) => {
     { to: '/field/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
   ];
 
-  const links = user?.role === 'ADMIN' ? adminLinks : 
-                user?.role === 'MANAGER' ? managerLinks : 
-                user?.role === 'FINANCIAL_OFFICER' ? officerLinks :
+  const links = activeRole === 'ADMIN' ? adminLinks : 
+                activeRole === 'MANAGER' ? managerLinks : 
+                activeRole === 'FINANCIAL_OFFICER' ? officerLinks :
                 fieldLinks;
 
   return (
@@ -68,17 +84,40 @@ const Sidebar = ({ isOpen, onClose }) => {
         "w-64 h-screen bg-white border-r border-slate-200 dark:bg-slate-900 dark:border-slate-800 flex flex-col fixed left-0 top-0 z-50 transition-transform duration-300 lg:translate-x-0",
         isOpen ? "translate-x-0" : "-translate-x-full"
       )}>
-        <div className="p-6 flex items-center justify-between">
-          <h1 className="text-2xl font-black text-primary-600 dark:text-primary-400 tracking-tight">MicroLoan</h1>
-          <button 
-            onClick={onClose}
-            className="lg:hidden p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg"
-          >
-            <X className="w-5 h-5 text-slate-500" />
-          </button>
+        <div className="p-6 flex flex-col gap-4">
+          <div className="flex items-center justify-between">
+            <h1 className="text-xl font-black text-primary-600 dark:text-primary-400 tracking-tighter leading-tight">Azariah Credit Ltd</h1>
+            <button 
+              onClick={onClose}
+              className="lg:hidden p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg"
+            >
+              <X className="w-5 h-5 text-slate-500" />
+            </button>
+          </div>
+
+          {/* Role Switcher - ONLY FOR ADMINS */}
+          {user?.role === 'ADMIN' && (
+            <div className="mt-2 space-y-1">
+              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest px-2 mb-1">Privileged Access</p>
+              <div className="relative group">
+                <select 
+                  value={activeRole}
+                  onChange={(e) => handleRoleSwitch(e.target.value)}
+                  className="w-full pl-9 pr-4 py-2 bg-primary-600 text-white rounded-lg text-xs font-bold appearance-none cursor-pointer focus:outline-none focus:ring-2 focus:ring-primary-500/50 shadow-lg shadow-primary-500/20"
+                >
+                  <option value="ADMIN">God Mode: Admin</option>
+                  <option value="MANAGER">View: Branch Manager</option>
+                  <option value="FINANCIAL_OFFICER">View: Finance Officer</option>
+                  <option value="FIELD_OFFICER">View: Field Officer</option>
+                </select>
+                <ShieldCheck className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-primary-200" />
+                <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-3 h-3 text-primary-200 pointer-events-none" />
+              </div>
+            </div>
+          )}
         </div>
 
-        <nav className="flex-1 px-4 space-y-1 overflow-y-auto">
+        <nav className="flex-1 px-4 space-y-1 overflow-y-auto pt-2">
           {links.map((link) => (
             <NavLink
               key={link.to}

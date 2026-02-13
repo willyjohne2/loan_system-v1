@@ -158,8 +158,8 @@ export const loanService = {
     const res = await api.get('/sms-logs/');
     return res.data;
   },
-  getAnalytics: async (region = '') => {
-    const res = await api.get(`/loans/analytics/?region=${region}`);
+  getAnalytics: async (branch = '') => {
+    const res = await api.get(`/loans/analytics/?branch=${branch}`);
     return res.data;
   },
   api // Export raw axios instance for custom calls

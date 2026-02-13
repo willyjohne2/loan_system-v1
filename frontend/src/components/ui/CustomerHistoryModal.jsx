@@ -222,8 +222,8 @@ const CustomerHistoryModal = ({ customer, isOpen, onClose, loanToVerify, onVerif
                   <div className="space-y-1">
                     <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Location Info</span>
                     <p className="font-bold text-slate-800 dark:text-slate-200">
-                      {customer.profile?.region || 'No Region'} - {customer.profile?.town || 'No Town'}
-                      <span className="block text-[10px] font-medium text-slate-500 italic">Village: {customer.profile?.village || 'N/A'} • {customer.profile?.county || 'Kirinyaga'}</span>
+                      {customer.profile?.branch || 'No Branch'} - {customer.profile?.town || 'No Town'}
+                      <span className="block text-[10px] font-medium text-slate-500 italic">Village: {customer.profile?.village || 'N/A'}</span>
                     </p>
                   </div>
                   <div className="space-y-1">

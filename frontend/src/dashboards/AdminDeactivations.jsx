@@ -55,7 +55,7 @@ const AdminDeactivations = () => {
               <ShieldOff className="w-6 h-6 text-red-600" />
               Account Deactivation Requests
             </h3>
-            <p className="text-sm text-slate-500">Security-sensitive requests submitted by Regional Managers</p>
+            <p className="text-sm text-slate-500">Security-sensitive requests submitted by Branch Managers</p>
           </div>
           <Button variant="outline" size="sm" onClick={fetchRequests}>Refresh List</Button>
         </div>

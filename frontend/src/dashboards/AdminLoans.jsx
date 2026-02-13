@@ -57,6 +57,29 @@ const AdminLoans = () => {
     }
   };
 
+  const handleDisbursement = async (loanId) => {
+    if (!window.confirm("Are you sure you want to trigger M-Pesa disbursement for this loan?")) return;
+    
+    setUpdatingId(loanId);
+    try {
+      // 1. Call the M-Pesa Disbursement API
+      const response = await loanService.api.post('/payments/disburse/', { loan_id: loanId });
+      
+      if (response.data.ResponseCode === '0' || response.data.status === 'MOCK_SUCCESS') {
+        // 2. Update status to DISBURSED
+        await loanService.api.patch(`/loans/${loanId}/`, { status: 'DISBURSED' });
+        alert("Disbursement initiated successfully!");
+        await fetchAllData();
+      } else {
+        alert("M-Pesa Error: " + (response.data.ResponseDescription || "Unknown error"));
+      }
+    } catch (err) {
+      alert("Failed to disburse: " + (err.response?.data?.error || err.message));
+    } finally {
+      setUpdatingId(null);
+    }
+  };
+
   const filteredLoans = loans.filter(loan => {
     const matchesStatus = filterStatus === 'ALL' || loan.status === filterStatus;
     const customer = customers[loan.user] || {};
@@ -85,6 +108,30 @@ const AdminLoans = () => {
     </div>
   );
 
+  const handleBulkDisbursement = async () => {
+    const queueCount = loans.filter(l => l.status === 'APPROVED').length;
+    if (queueCount === 0) {
+      alert("No approved loans in queue to disburse.");
+      return;
+    }
+    
+    if (!window.confirm(`Trigger automated disbursement for the next 20 loans in the queue (First Come First Served)? Current total approved: ${queueCount}`)) return;
+    
+    setLoading(true);
+    try {
+      const response = await loanService.api.post('/payments/disburse/', { mode: 'bulk' });
+      const successCount = response.data.results?.filter(r => r.status === 'success').length || 0;
+      const failCount = (response.data.results?.length || 0) - successCount;
+      
+      alert(`Bulk Disbursement Complete!\nSuccessful: ${successCount}\nFailed: ${failCount}`);
+      await fetchAllData();
+    } catch (err) {
+      alert("Bulk Disbursement Error: " + (err.response?.data?.error || err.message));
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
@@ -93,6 +140,14 @@ const AdminLoans = () => {
           <p className="text-sm text-slate-500">Track lifecycle from verification to disbursement</p>
         </div>
         <div className="flex gap-2">
+           <Button 
+             variant="primary" 
+             className="bg-emerald-600 hover:bg-emerald-700 flex items-center gap-2 shadow-lg shadow-emerald-500/20 px-6 py-2"
+             onClick={handleBulkDisbursement}
+           >
+              <FileCheck className="w-4 h-4" /> 
+              Bulk Disburse (Queue)
+           </Button>
            <Button 
              variant="primary" 
              className="bg-orange-600 hover:bg-orange-700 flex items-center gap-2 shadow-lg shadow-orange-500/20 px-6 py-2"
@@ -136,6 +191,7 @@ const AdminLoans = () => {
           <table className="w-full">
             <thead>
               <tr className="bg-slate-50 dark:bg-slate-800/50 border-b border-slate-100 dark:border-slate-800">
+                <th className="text-left p-4 text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest">Loan ID</th>
                 <th className="text-left p-4 text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest">Customer Profile</th>
                 <th className="text-left p-4 text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest">Principal</th>
                 <th className="text-left p-4 text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest">Duration</th>
@@ -148,8 +204,15 @@ const AdminLoans = () => {
                 filteredLoans.map((loan) => (
                   <tr key={loan.id} className="hover:bg-slate-50/80 dark:hover:bg-slate-800/30 transition-colors group">
                     <td className="p-4">
+                       <span className="font-mono text-[11px] bg-slate-100 dark:bg-slate-800 px-2 py-1 rounded text-primary-600 font-bold uppercase tracking-tighter border border-slate-200 dark:border-slate-700 shadow-sm">
+                          {loan.id.substring(0, 8)}
+                       </span>
+                    </td>
+                    <td className="p-4">
                       <div className="font-bold text-slate-900 dark:text-white">{customers[loan.user]?.full_name || 'Loading...'}</div>
-                      <div className="text-[10px] text-slate-400 font-mono tracking-tighter uppercase">{loan.id.split('-')[0]}... (Ref)</div>
+                      <div className="text-[10px] text-slate-400 font-mono tracking-tighter uppercase">
+                        PH: {customers[loan.user]?.phone} | ACC: {customers[loan.user]?.profile?.national_id || 'N/A'}
+                      </div>
                     </td>
                     <td className="p-4 text-sm font-black text-slate-700 dark:text-slate-200">
                       KES {Number(loan.principal_amount).toLocaleString()}
@@ -190,7 +253,7 @@ const AdminLoans = () => {
                             )}
                              {loan.status === 'APPROVED' && (
                               <button 
-                                onClick={() => handleStatusUpdate(loan.id, 'DISBURSED')}
+                                onClick={() => handleDisbursement(loan.id)}
                                 className="p-1 px-2 text-[10px] font-bold bg-purple-50 text-purple-600 rounded hover:bg-purple-600 hover:text-white transition-colors"
                               >
                                 DISBURSE

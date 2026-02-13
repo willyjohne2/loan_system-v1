@@ -12,17 +12,16 @@ const AdminManagers = () => {
   const [showActivity, setShowActivity] = useState(false);
   const [selectedAdmin, setSelectedAdmin] = useState(null);
   const [saving, setSaving] = useState(false);
-  const [filterRegion, setFilterRegion] = useState('All');
+  const [filterBranch, setFilterBranch] = useState('All');
   const [formData, setFormData] = useState({
     full_name: '',
     email: '',
     phone: '',
-    region: ''
+    branch: ''
   });
 
-  const regions = [
-    'Mwea East', 'Mwea West', 'Kirinyaga Central', 'Kirinyaga East (Gichugu)', 
-    'Kirinyaga West (Ndiao)', 'Kerugoya Town', 'Sagana', 'Kutus', 'Kagio', 'Wang\'uru'
+  const branches = [
+    'Kagio', 'Embu', 'Thika', 'Naivasha'
   ];
 
   useEffect(() => {
@@ -49,7 +48,7 @@ const AdminManagers = () => {
       full_name: manager.full_name || '',
       email: manager.email || '',
       phone: manager.phone || '',
-      region: manager.region || ''
+      branch: manager.branch || ''
     });
   };
 
@@ -81,23 +80,23 @@ const AdminManagers = () => {
     <div className="space-y-6">
       <div className="flex justify-between items-center">
         <div>
-          <h3 className="text-lg font-semibold">Regional Managers</h3>
-          <p className="text-sm text-slate-500">Manage and oversee all regional administrators.</p>
+          <h3 className="text-lg font-semibold">Branchal Managers</h3>
+          <p className="text-sm text-slate-500">Manage and oversee all branchal administrators.</p>
         </div>
         <div className="flex items-center gap-4">
           <div className="flex items-center gap-2">
             <MapPin className="w-4 h-4 text-slate-400" />
             <select 
-              value={filterRegion}
-              onChange={(e) => setFilterRegion(e.target.value)}
+              value={filterBranch}
+              onChange={(e) => setFilterBranch(e.target.value)}
               className="text-sm border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800 py-2 pl-3 pr-8 focus:ring-primary-500 outline-none"
             >
-              <option value="All">All Regions</option>
-              {regions.map(r => (
+              <option value="All">All Branches</option>
+              {branches.map(r => (
                 <option key={r} value={r}>{r}</option>
               ))}
             </select>
-          </div>.filter(m => filterRegion === 'All' || m.region === filterRegion)
+          </div>
           <Button className="flex items-center">
             <UserPlus className="w-4 h-4 mr-2" />
             Register Manager
@@ -111,8 +110,8 @@ const AdminManagers = () => {
         </div>
       ) : (
         <Table
-          headers={['Name', 'Contact', 'Region', 'Status', 'Actions']}
-          data={managers}
+          headers={['Name', 'Contact', 'Branch', 'Status', 'Actions']}
+          data={managers.filter(m => filterBranch === 'All' || m.branch === filterBranch)}
           renderRow={(manager) => (
             <tr key={manager.id} className="hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
               <td className="px-6 py-4">
@@ -135,7 +134,7 @@ const AdminManagers = () => {
               <td className="px-6 py-4">
                 <div className="flex items-center text-slate-600 dark:text-slate-400">
                   <MapPin className="w-3.5 h-3.5 mr-1.5 text-primary-500" />
-                  <span className="text-sm font-medium">{manager.region || 'Unassigned'}</span>
+                  <span className="text-sm font-medium">{manager.branch || 'Unassigned'}</span>
                 </div>
               </td>
               <td className="px-6 py-4">
@@ -200,7 +199,7 @@ const AdminManagers = () => {
                 <Edit className="w-8 h-8" />
               </div>
               <h3 className="text-xl font-bold">Update Manager Profile</h3>
-              <p className="text-slate-500 text-sm">Modify account details and regional assignment</p>
+              <p className="text-slate-500 text-sm">Modify account details and branchal assignment</p>
             </div>
 
             <form onSubmit={handleUpdate} className="space-y-5">
@@ -226,14 +225,14 @@ const AdminManagers = () => {
               </div>
 
               <div className="space-y-1">
-                <label className="text-xs font-bold text-slate-400 uppercase">Regional Assignment</label>
+                <label className="text-xs font-bold text-slate-400 uppercase">Branchal Assignment</label>
                 <select 
                   className="w-full px-4 py-2 rounded-lg border dark:bg-slate-800 dark:border-slate-700 outline-none focus:ring-2 focus:ring-primary-500 appearance-none bg-white"
-                  value={formData.region}
-                  onChange={(e) => setFormData({...formData, region: e.target.value})}
+                  value={formData.branch}
+                  onChange={(e) => setFormData({...formData, branch: e.target.value})}
                 >
-                  <option value="">Select a region...</option>
-                  {regions.map(r => <option key={r} value={r}>{r}</option>)}
+                  <option value="">Select a branch...</option>
+                  {branches.map(r => <option key={r} value={r}>{r}</option>)}
                 </select>
               </div>
 
