@@ -1538,13 +1538,9 @@ class AdminDeleteView(views.APIView):
                     {"error": "You cannot dismiss your own administrative account"},
                     status=status.HTTP_400_BAD_REQUEST,
                 )
-                    {"error": "Cannot delete your own account"},
-                    status=status.HTTP_400_BAD_REQUEST,
-                )
 
-            admin = Admins.objects.get(id=admin_id)
-            admin_email = admin.email
-            admin.delete()
+            admin_email = admin_to_delete.email
+            admin_to_delete.delete()
 
             return Response(
                 {"message": f"Admin account ({admin_email}) deleted successfully"},
