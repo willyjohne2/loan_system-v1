@@ -144,18 +144,26 @@ const LoginPage = () => {
             </form>
           ) : (
             <form onSubmit={handle2FAVerify} className="space-y-6">
+              <div className="p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-100 dark:border-blue-800 rounded-lg">
+                <p className="text-xs text-blue-700 dark:text-blue-300 leading-relaxed font-medium">
+                  <strong>Notice:</strong> Open your authenticator app (like Google Authenticator) on your mobile device to view your 6-digit security code.
+                </p>
+              </div>
+
               <div>
-                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">Verification Code</label>
+                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">Enter 6-digit Code</label>
                 <div className="relative">
-                  <ShieldCheck className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                  <ShieldCheck className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
                   <input
                     type="text"
                     required
                     maxLength="6"
                     autoFocus
+                    autoComplete="off"
+                    inputMode="numeric"
                     value={otpCode}
                     onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, ''))}
-                    className="w-full pl-10 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-lg text-sm font-mono tracking-[0.5em] text-center focus:outline-none focus:ring-2 focus:ring-primary-500/20 dark:bg-slate-800 dark:border-slate-700 dark:text-white"
+                    className="w-full pl-12 pr-4 py-4 bg-white border border-slate-200 rounded-xl text-3xl font-bold tracking-[0.1em] text-center focus:outline-none focus:ring-4 focus:ring-primary-500/10 focus:border-primary-500 dark:bg-slate-800 dark:border-slate-700 dark:text-white transition-all"
                     placeholder="000000"
                   />
                 </div>
