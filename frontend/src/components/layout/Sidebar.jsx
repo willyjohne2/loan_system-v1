@@ -22,7 +22,6 @@ import {
 import { useAuth } from '../../context/AuthContext';
 import { clsx } from 'clsx';
 import { twMerge } from 'tailwind-merge';
-import { X } from 'lucide-react';
 
 function cn(...inputs) {
   return twMerge(clsx(inputs));
