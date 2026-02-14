@@ -6,6 +6,7 @@ import os
 import json
 import requests
 import pyotp
+from django.db.models import Q
 from django.core.mail import send_mail
 from django.conf import settings
 from django.utils import timezone
@@ -160,6 +161,58 @@ def send_invitation_email_async(email, role, invited_by_name, token, branch=None
         requests.post(url, json=payload, headers=headers)
     except Exception as e:
         print(f"Error sending invite: {e}")
+
+
+def send_official_email_async(
+    email, subject, message, recipient_name="Staff Member", template="general"
+):
+    try:
+        sender_name = os.getenv("SENDER_NAME", "Azariah Credit Ltd")
+        from_email = os.getenv("FROM_EMAIL")
+        brevo_api_key = os.getenv("BREVO_API_KEY")
+
+        if not brevo_api_key or not from_email:
+            print(f"[ERROR] Email setup missing for Official Notification")
+            return
+
+        url = "https://api.brevo.com/v3/smtp/email"
+        headers = {
+            "accept": "application/json",
+            "api-key": brevo_api_key,
+            "content-type": "application/json",
+        }
+
+        html_content = f"""
+            <html>
+            <body style="font-family: Arial, sans-serif; color: #333; line-height: 1.6;">
+                <div style="max-width: 600px; margin: 0 auto; border: 1px solid #eee; border-radius: 10px; padding: 30px;">
+                    <div style="text-align: center; margin-bottom: 20px;">
+                        <h1 style="color: #2563eb; margin: 0;">{sender_name}</h1>
+                        <p style="font-size: 12px; color: #666; text-transform: uppercase; letter-spacing: 2px;">Official System Notification</p>
+                    </div>
+                    <hr style="border: none; border-top: 1px solid #eee; margin-bottom: 25px;" />
+                    <p>Hello <strong>{recipient_name}</strong>,</p>
+                    <p>{message}</p>
+                    <div style="margin-top: 40px; padding-top: 20px; border-top: 1px solid #eee; font-size: 12px; color: #888;">
+                        <p>This is an official system notification sent via {sender_name} Internal Relay.</p>
+                        <p>&copy; {timezone.now().year} {sender_name}. All rights reserved.</p>
+                    </div>
+                </div>
+            </body>
+            </html>
+        """
+
+        payload = {
+            "sender": {"name": sender_name, "email": from_email},
+            "to": [{"email": email}],
+            "subject": subject or f"Official Notification from {sender_name}",
+            "htmlContent": html_content,
+        }
+        res = requests.post(url, json=payload, headers=headers)
+        return res.status_code in [200, 201, 202]
+    except Exception as e:
+        print(f"Error sending official email: {e}")
+        return False
 
 
 def send_password_reset_email_async(full_name, email, reset_code):
@@ -2637,3 +2690,164 @@ class DirectSMSView(views.APIView):
             return Response({"message": "Message sent successfully"})
         except Exception as e:
             return Response({"error": str(e)}, status=500)
+
+
+class BulkSMSView(views.APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request):
+        user = request.user
+        if user.role not in ["ADMIN", "MANAGER"]:
+            return Response({"error": "Unauthorized"}, status=403)
+
+        sms_type = request.data.get("type", "DEFAULTERS")
+        message = request.data.get("message")
+
+        if not message:
+            return Response({"error": "Message is required"}, status=400)
+
+        # Logic to get phone numbers based on type
+        phones = []
+        if sms_type == "DEFAULTERS":
+            phones = list(
+                Users.objects.filter(loans__status="DEFAULTED")
+                .values_list("phone_number", flat=True)
+                .distinct()
+            )
+        else:
+            phones = list(Users.objects.values_list("phone_number", flat=True))
+
+        if not phones:
+            return Response({"error": "No recipients found"}, status=404)
+
+        try:
+            send_sms_async(phones, message)
+            SMSLog.objects.create(
+                sender=user,
+                recipient_phone=f"{len(phones)} Numbers",
+                recipient_name=f"Bulk: {sms_type}",
+                message=message,
+                type="BULK",
+                status="SENT",
+            )
+            return Response(
+                {"message": f"Successfully queued SMS to {len(phones)} users"}
+            )
+        except Exception as e:
+            return Response({"error": str(e)}, status=500)
+
+
+class SMSLogListView(generics.ListAPIView):
+    # Fixed typo in class name from previous attempts
+    serializer_class = SMSLogSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_queryset(self):
+        user = self.request.user
+        if user.role not in ["ADMIN", "MANAGER", "FINANCIAL_OFFICER"]:
+            return SMSLog.objects.none()
+
+        queryset = SMSLog.objects.all()
+        search = self.request.query_params.get("search")
+        if search:
+            queryset = queryset.filter(
+                Q(recipient_name__icontains=search)
+                | Q(recipient_phone__icontains=search)
+                | Q(message__icontains=search)
+            )
+        return queryset.order_by("-created_at")
+
+
+class SendEmailNotificationView(views.APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request):
+        admin = request.user
+        if admin.role not in ["ADMIN", "MANAGER"]:
+            return Response({"error": "Unauthorized"}, status=403)
+
+        subject = request.data.get("subject", "Official Notification")
+        message = request.data.get("message")
+        target_group = request.data.get("target_group")  # 'STAFF' or others
+        target_ids = request.data.get("target_ids")  # list of IDs
+
+        if not message:
+            return Response({"error": "Message content is required"}, status=400)
+
+        emails_to_send = []
+
+        if target_group == "STAFF":
+            staff = Admins.objects.all()
+            for s in staff:
+                emails_to_send.append(
+                    {"email": s.email, "name": s.full_name, "id": s.id}
+                )
+        elif target_ids:
+            # We assume target_ids refer to Admins for official communicator
+            staff = Admins.objects.filter(id__in=target_ids)
+            for s in staff:
+                emails_to_send.append(
+                    {"email": s.email, "name": s.full_name, "id": s.id}
+                )
+        else:
+            return Response(
+                {"error": "No valid recipients specified"},
+                status=400,
+            )
+
+        if not emails_to_send:
+            return Response({"error": "No recipients found"}, status=404)
+
+        success_count = 0
+        for item in emails_to_send:
+            # Send Email
+            threading.Thread(
+                target=send_official_email_async,
+                args=(item["email"], subject, message, item["name"]),
+            ).start()
+
+            # Log Email
+            EmailLog.objects.create(
+                sender=admin,
+                recipient_email=item["email"],
+                recipient_name=item["name"],
+                subject=subject,
+                message=message,
+                status="SENT",
+            )
+            success_count += 1
+
+        # Audit log
+        AuditLogs.objects.create(
+            admin=admin,
+            action="SENT_OFFICIAL_EMAIL",
+            log_type="COMMUNICATION",
+            table_name="email_logs",
+            new_data={"count": success_count, "subject": subject},
+            ip_address=request.META.get("REMOTE_ADDR"),
+        )
+
+        return Response(
+            {"message": f"Successfully queued {success_count} emails for processing"}
+        )
+
+
+class ListEmailLogsView(generics.ListAPIView):
+    serializer_class = EmailLogSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_queryset(self):
+        user = self.request.user
+        if user.role not in ["ADMIN", "MANAGER"]:
+            return EmailLog.objects.none()
+
+        queryset = EmailLog.objects.all()
+        search = self.request.query_params.get("search")
+        if search:
+            queryset = queryset.filter(
+                Q(recipient_name__icontains=search)
+                | Q(recipient_email__icontains=search)
+                | Q(subject__icontains=search)
+                | Q(message__icontains=search)
+            )
+        return queryset.order_by("-created_at")
