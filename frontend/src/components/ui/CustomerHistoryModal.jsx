@@ -19,6 +19,7 @@ const CustomerHistoryModal = ({ customer, isOpen, onClose, loanToVerify, onVerif
     activeCount: 0,
     lastPaymentDate: null
   });
+  const [successMessage, setSuccessMessage] = useState('');
 
   useEffect(() => {
     if (isOpen && customer) {
@@ -52,12 +53,18 @@ const CustomerHistoryModal = ({ customer, isOpen, onClose, loanToVerify, onVerif
         status: targetStatus,
         status_change_reason: `Verified by ${user.full_name || 'Staff'} (${userRole})`
       });
+      setSuccessMessage(
+        userRole === 'FIELD_OFFICER'
+          ? 'Loan has been submitted for manager review.'
+          : (userRole === 'MANAGER' || userRole === 'ADMIN')
+            ? 'Loan has been verified and pushed to finance for approval and disbursement.'
+            : 'Loan status updated successfully.'
+      );
       setVerificationSuccess(true);
       onVerified?.();
-      
-      // Keep message visible for 2 seconds before closing
       setTimeout(() => {
         setVerificationSuccess(false);
+        setSuccessMessage('');
         onClose();
       }, 2000);
     } catch (err) {
@@ -412,6 +419,17 @@ const CustomerHistoryModal = ({ customer, isOpen, onClose, loanToVerify, onVerif
             <p className="absolute -bottom-8 left-0 right-0 text-center text-white/60 text-sm font-mono tracking-widest uppercase">
               Click anywhere to close preview
             </p>
+          </div>
+        </div>
+      )}
+      {verificationSuccess && (
+        <div className="fixed inset-0 z-[1001] flex items-center justify-center bg-black/40">
+          <div className="bg-white dark:bg-slate-900 border border-emerald-200 dark:border-emerald-800 rounded-2xl shadow-2xl px-8 py-6 flex flex-col items-center gap-3 animate-in fade-in zoom-in duration-200">
+            <CheckCircle className="w-10 h-10 text-emerald-500" />
+            <div className="text-lg font-bold text-emerald-700 dark:text-emerald-400">Success!</div>
+            <div className="text-sm text-slate-700 dark:text-slate-300 text-center">
+              {successMessage || 'Action completed successfully.'}
+            </div>
           </div>
         </div>
       )}
