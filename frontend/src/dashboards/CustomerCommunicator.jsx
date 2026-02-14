@@ -3,16 +3,14 @@ import { Card, Button, Table } from '../components/ui/Shared';
 import { loanService } from '../api/api';
 import { MessageSquare, Calendar, Phone, User, Tag, Search, Send, Bell } from 'lucide-react';
 import BulkCustomerSMSModal from '../components/ui/BulkCustomerSMSModal';
-import DirectEmailModal from '../components/ui/DirectEmailModal';
 import useDebounce from '../hooks/useDebounce';
 
-const AdminSMSLogs = () => {
+const CustomerCommunicator = () => {
     const [logs, setLogs] = useState([]);
     const [loading, setLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState('');
     const debouncedSearch = useDebounce(searchTerm, 500);
     const [isBulkModalOpen, setIsBulkModalOpen] = useState(false);
-    const [isSystemModalOpen, setIsSystemModalOpen] = useState(false);
     const [page, setPage] = useState(1);
     const [hasMore, setHasMore] = useState(false);
 
@@ -37,7 +35,6 @@ const AdminSMSLogs = () => {
             }
         } catch (err) {
             console.error('Error fetching SMS logs:', err);
-            // setLogs([]); // Don't clear on error if we have data
         } finally {
             setLoading(false);
         }
@@ -57,7 +54,7 @@ const AdminSMSLogs = () => {
         <div className="space-y-6">
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                 <div>
-                    <h2 className="text-2xl font-bold text-slate-900 dark:text-white">Communication Logs</h2>
+                    <h2 className="text-2xl font-bold text-slate-900 dark:text-white">Customer Communication</h2>
                     <p className="text-slate-500 dark:text-slate-400">History of all SMS messages sent to customers</p>
                 </div>
                 <div className="flex flex-wrap gap-3">
@@ -76,15 +73,7 @@ const AdminSMSLogs = () => {
                         className="flex items-center gap-2 bg-primary-600 hover:bg-primary-700 text-xs"
                     >
                         <Send className="w-4 h-4" />
-                        Customer SMS
-                    </Button>
-                    <Button 
-                        variant="secondary"
-                        onClick={() => setIsSystemModalOpen(true)}
-                        className="flex items-center gap-2 text-xs"
-                    >
-                        <Bell className="w-4 h-4" />
-                        System Notification
+                        Send Batch SMS
                     </Button>
                 </div>
             </div>
@@ -155,15 +144,8 @@ const AdminSMSLogs = () => {
                     fetchLogs(1, true); // Refresh logs
                 }} 
             />
-
-            <DirectEmailModal
-                isOpen={isSystemModalOpen}
-                onClose={() => setIsSystemModalOpen(false)}
-                bulk={true}
-                targetGroup="STAFF"
-            />
         </div>
     );
 };
 
-export default AdminSMSLogs;
+export default CustomerCommunicator;

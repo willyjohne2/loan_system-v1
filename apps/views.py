@@ -26,6 +26,7 @@ from .models import (
     LoanActivity,
     LoanDocuments,
     SMSLog,
+    EmailLog,
     AdminInvitation,
     DeactivationRequest,
 )
@@ -43,6 +44,7 @@ from .serializers import (
     LoanActivitySerializer,
     LoanDocumentSerializer,
     SMSLogSerializer,
+    EmailLogSerializer,
     DeactivationRequestSerializer,
 )
 from .utils.mpesa import MpesaHandler
@@ -2108,6 +2110,15 @@ class SendEmailNotificationView(views.APIView):
                 requests.post(url, json=payload, headers=headers)
                 success_count += 1
                 Notifications.objects.create(user=admin, message=f"Email: {subject}")
+
+                # Log the email
+                EmailLog.objects.create(
+                    sender=request.user,
+                    recipient_email=admin.email,
+                    recipient_name=admin.full_name,
+                    subject=subject,
+                    message=message,
+                )
             except Exception:
                 continue
 
@@ -2115,6 +2126,25 @@ class SendEmailNotificationView(views.APIView):
             {"message": f"Successfully sent {success_count} emails."},
             status=status.HTTP_200_OK,
         )
+
+
+class ListEmailLogsView(generics.ListAPIView):
+    permission_classes = [permissions.IsAuthenticated, IsAdminUser]
+    serializer_class = EmailLogSerializer
+
+    def get_queryset(self):
+        from django.db.models import Q
+
+        queryset = EmailLog.objects.all().order_by("-created_at")
+        search = self.request.query_params.get("search")
+        if search:
+            queryset = queryset.filter(
+                Q(recipient_email__icontains=search)
+                | Q(recipient_name__icontains=search)
+                | Q(subject__icontains=search)
+                | Q(message__icontains=search)
+            )
+        return queryset
 
 
 class NotificationListView(generics.ListAPIView):

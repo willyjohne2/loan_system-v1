@@ -331,6 +331,21 @@ class SMSLog(models.Model):
         db_table = "sms_logs"
 
 
+class EmailLog(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    sender = models.ForeignKey(Admins, models.DO_NOTHING, null=True, blank=True)
+    recipient_email = models.EmailField()
+    recipient_name = models.CharField(max_length=255, null=True, blank=True)
+    subject = models.CharField(max_length=255)
+    message = models.TextField()
+    status = models.CharField(max_length=20, default="SENT")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        managed = True
+        db_table = "email_logs"
+
+
 class UserProfiles(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     user = models.OneToOneField("Users", models.DO_NOTHING, related_name="profile")

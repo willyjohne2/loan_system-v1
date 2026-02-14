@@ -15,7 +15,9 @@ import {
   ShieldAlert,
   ShieldCheck,
   Zap,
-  Briefcase
+  Briefcase,
+  Mail,
+  X
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { clsx } from 'clsx';
@@ -45,20 +47,22 @@ const Sidebar = ({ isOpen, onClose }) => {
     { to: '/admin/managers', icon: Building2, label: 'Managers' },
     { to: '/admin/officers', icon: Users2, label: 'Finance Officers' },
     { to: '/admin/customers', icon: Users, label: 'Customers' },
-    { to: '/admin/sms-logs', icon: MessageSquare, label: 'Communicator' },
+    { to: '/admin/customer-communicator', icon: MessageSquare, label: 'Customer Communicator' },
+    { to: '/admin/official-communicator', icon: Mail, label: 'Official Communicator' },
   ];
 
   const managerLinks = [
     { to: '/manager/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
     { to: '/manager/officers', icon: Users2, label: 'Field Officers' },
     { to: '/manager/customers', icon: Users, label: 'Regional Customers' },
-    { to: '/manager/sms-logs', icon: MessageSquare, label: 'Communicator' },
+    { to: '/manager/customer-communicator', icon: MessageSquare, label: 'Customer Communicator' },
+    { to: '/manager/official-communicator', icon: Mail, label: 'Official Communicator' },
   ];
 
   const officerLinks = [
     { to: '/finance/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
     { to: '/finance/reports', icon: FileText, label: 'Loan Reports' },
-    { to: '/finance/sms-logs', icon: MessageSquare, label: 'Communication' },
+    { to: '/finance/customer-communicator', icon: MessageSquare, label: 'Customer Communicator' },
   ];
 
   const fieldLinks = [

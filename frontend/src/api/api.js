@@ -208,8 +208,12 @@ export const loanService = {
     const res = await api.post('/loans/bulk-sms-defaulters/', { type, message });
     return res.data;
   },
-  getSMSLogs: async () => {
-    const res = await api.get('/sms-logs/');
+  getSMSLogs: async (params) => {
+    const res = await api.get('/sms-logs/', { params });
+    return res.data;
+  },
+  getEmailLogs: async (params) => {
+    const res = await api.get('/notifications/email-logs/', { params });
     return res.data;
   },
   getAnalytics: async (branch = '') => {

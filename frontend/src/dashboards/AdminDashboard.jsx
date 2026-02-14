@@ -10,7 +10,8 @@ import AdminAuditLogs from './AdminAuditLogs';
 import AdminDeactivations from './AdminDeactivations';
 import AdminLoans from './AdminLoans';
 import AdminSettings from './AdminSettings';
-import AdminSMSLogs from './AdminSMSLogs';
+import CustomerCommunicator from './CustomerCommunicator';
+import OfficialCommunicator from './OfficialCommunicator';
 import ProfileSettings from '../pages/ProfileSettings';
 import { clsx } from 'clsx';
 
@@ -26,7 +27,8 @@ const AdminDashboard = () => {
     if (location.pathname.includes('/accounts')) return 'Admin Accounts Management';
     if (location.pathname.includes('/deactivations')) return 'Security & Deactivation Requests';
     if (location.pathname.includes('/audit')) return 'System Audit Trail';
-    if (location.pathname.includes('/sms-logs')) return 'Communication Logs';
+    if (location.pathname.includes('/customer-communicator')) return 'Customer Communication';
+    if (location.pathname.includes('/official-communicator')) return 'Official Communication';
     if (location.pathname.includes('/settings')) return 'System Financial Settings';
     if (location.pathname.includes('/profile')) return 'Account Profile';
     return 'Admin Dashboard';
@@ -46,7 +48,8 @@ const AdminDashboard = () => {
             { to: '/admin/accounts', label: 'Admin Accounts' },
             { to: '/admin/deactivations', label: 'Security Requests' },
             { to: '/admin/audit', label: 'Audit Logs' },
-            { to: '/admin/sms-logs', label: 'Communicator' },
+            { to: '/admin/customer-communicator', label: 'Customer Comm' },
+            { to: '/admin/official-communicator', label: 'Official Comm' },
             { to: '/admin/settings', label: 'Interest Settings' }
           ].map(tab => (
             <Link
@@ -75,7 +78,8 @@ const AdminDashboard = () => {
           <Route path="accounts" element={<AdminAccounts />} />
           <Route path="deactivations" element={<AdminDeactivations />} />
           <Route path="audit" element={<AdminAuditLogs />} />
-          <Route path="sms-logs" element={<AdminSMSLogs />} />
+          <Route path="customer-communicator" element={<CustomerCommunicator />} />
+          <Route path="official-communicator" element={<OfficialCommunicator />} />
           <Route path="settings" element={<AdminSettings />} />
           <Route path="profile" element={<ProfileSettings />} />
         </Routes>

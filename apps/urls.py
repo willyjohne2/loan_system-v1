@@ -36,6 +36,7 @@ from .views import (
     SMSLogListView,
     AdminInviteView,
     SendEmailNotificationView,
+    ListEmailLogsView,
     DeactivationRequestListCreateView,
     DeactivationRequestDetailView,
 )
@@ -46,6 +47,7 @@ urlpatterns = [
         SendEmailNotificationView.as_view(),
         name="send-email",
     ),
+    path("notifications/email-logs/", ListEmailLogsView.as_view(), name="email-logs"),
     path("auth/2fa/verify/", Login2FAVerifyView.as_view(), name="2fa-verify"),
     path("auth/2fa/enable/", Enable2FAView.as_view(), name="2fa-enable"),
     path(

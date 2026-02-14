@@ -16,6 +16,7 @@ from .models import (
     SMSLog,
     DeactivationRequest,
     Guarantors,
+    EmailLog,
 )
 
 
@@ -24,6 +25,14 @@ class SMSLogSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = SMSLog
+        fields = "__all__"
+
+
+class EmailLogSerializer(serializers.ModelSerializer):
+    sender_name = serializers.ReadOnlyField(source="sender.full_name")
+
+    class Meta:
+        model = EmailLog
         fields = "__all__"
 
 
