@@ -9,6 +9,7 @@ const CustomerHistoryModal = ({ customer, isOpen, onClose, loanToVerify, onVerif
   const [loans, setLoans] = useState([]);
   const [repayments, setRepayments] = useState([]);
   const [updating, setUpdating] = useState(false);
+  const [verificationSuccess, setVerificationSuccess] = useState(false);
   const [selectedImage, setSelectedImage] = useState(null);
   const [stats, setStats] = useState({
     totalBorrowed: 0,
@@ -28,8 +29,14 @@ const CustomerHistoryModal = ({ customer, isOpen, onClose, loanToVerify, onVerif
     setUpdating(true);
     try {
       await loanService.api.patch(`/loans/${loanToVerify.id}/`, { status: 'VERIFIED' });
+      setVerificationSuccess(true);
       onVerified?.();
-      onClose();
+      
+      // Keep message visible for 2 seconds before closing
+      setTimeout(() => {
+        setVerificationSuccess(false);
+        onClose();
+      }, 2000);
     } catch (err) {
       alert("Verification failed: " + (err.response?.data?.error || err.message));
     } finally {
@@ -332,7 +339,12 @@ const CustomerHistoryModal = ({ customer, isOpen, onClose, loanToVerify, onVerif
 
         <div className="p-4 border-t border-slate-100 dark:border-slate-800 flex justify-between items-center bg-slate-50/30 dark:bg-slate-800/30">
           <div className="flex items-center gap-2">
-            {loanToVerify && (
+            {verificationSuccess ? (
+              <div className="flex items-center gap-2 text-emerald-600 bg-emerald-50 dark:bg-emerald-900/20 px-4 py-2 rounded-lg border border-emerald-100 dark:border-emerald-900/50 animate-in zoom-in duration-300">
+                <CheckCircle className="w-5 h-5" />
+                <span className="font-bold text-sm">Loan Verified Successfully!</span>
+              </div>
+            ) : loanToVerify && (
               <div className="flex items-center gap-3">
                  <div className="hidden sm:block">
                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none">Reviewing Loan</p>
