@@ -86,7 +86,7 @@ const FinanceDashboard = () => {
   const filteredLoansForTotals = (loans || []).filter(l => {
     const s = l.status;
     if (activeTab === 'ACTIVE') return ['DISBURSED', 'ACTIVE', 'OVERDUE', 'CLOSED', 'REPAID'].includes(s);
-    if (activeTab === 'PENDING') return ['UNVERIFIED', 'VERIFIED', 'APPROVED', 'PENDING'].includes(s);
+    if (activeTab === 'PENDING') return ['UNVERIFIED', 'FIELD_VERIFIED', 'VERIFIED', 'APPROVED', 'PENDING'].includes(s);
     return s === 'REJECTED';
   });
 
@@ -549,7 +549,7 @@ const FinanceDashboard = () => {
                 {loans.filter(l => {
                   const s = l.status;
                   if (activeTab === 'ACTIVE') return ['DISBURSED', 'ACTIVE', 'OVERDUE', 'CLOSED', 'REPAID'].includes(s);
-                  if (activeTab === 'PENDING') return ['UNVERIFIED', 'VERIFIED', 'APPROVED', 'PENDING'].includes(s);
+                  if (activeTab === 'PENDING') return ['UNVERIFIED', 'FIELD_VERIFIED', 'VERIFIED', 'APPROVED', 'PENDING'].includes(s);
                   return s === 'REJECTED';
                 }).length} ENTRIES
               </span>
@@ -571,13 +571,13 @@ const FinanceDashboard = () => {
                   {loans.filter(l => {
                     const s = l.status;
                     if (activeTab === 'ACTIVE') return ['DISBURSED', 'ACTIVE', 'OVERDUE', 'CLOSED', 'REPAID'].includes(s);
-                    if (activeTab === 'PENDING') return ['UNVERIFIED', 'VERIFIED', 'APPROVED', 'PENDING'].includes(s);
+                    if (activeTab === 'PENDING') return ['UNVERIFIED', 'FIELD_VERIFIED', 'VERIFIED', 'APPROVED', 'PENDING'].includes(s);
                     return s === 'REJECTED';
                   }).length > 0 ? (
                     loans.filter(l => {
                       const s = l.status;
                       if (activeTab === 'ACTIVE') return ['DISBURSED', 'ACTIVE', 'OVERDUE', 'CLOSED', 'REPAID'].includes(s);
-                      if (activeTab === 'PENDING') return ['UNVERIFIED', 'VERIFIED', 'APPROVED', 'PENDING'].includes(s);
+                      if (activeTab === 'PENDING') return ['UNVERIFIED', 'FIELD_VERIFIED', 'VERIFIED', 'APPROVED', 'PENDING'].includes(s);
                       return s === 'REJECTED';
                     }).map((l) => (
                       <tr key={l.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/20 transition-colors">
@@ -616,7 +616,7 @@ const FinanceDashboard = () => {
                 {loans.filter(l => {
                     const s = l.status;
                     if (activeTab === 'ACTIVE') return ['DISBURSED', 'ACTIVE', 'OVERDUE', 'CLOSED', 'REPAID'].includes(s);
-                    if (activeTab === 'PENDING') return ['UNVERIFIED', 'VERIFIED', 'APPROVED', 'PENDING'].includes(s);
+                    if (activeTab === 'PENDING') return ['UNVERIFIED', 'FIELD_VERIFIED', 'VERIFIED', 'APPROVED', 'PENDING'].includes(s);
                     return s === 'REJECTED';
                   }).length > 0 && (
                   <tfoot className="sticky bottom-0 z-10 bg-slate-50 dark:bg-slate-900 font-bold border-t-2 border-slate-200 dark:border-slate-800">

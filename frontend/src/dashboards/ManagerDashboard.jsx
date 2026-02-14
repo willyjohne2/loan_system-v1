@@ -123,7 +123,8 @@ const ManagerDashboard = () => {
   const filteredLoansForTotals = (loans || []).filter(l => {
     const s = l.status;
     if (activeTab === 'ACTIVE') return ['DISBURSED', 'ACTIVE', 'OVERDUE', 'CLOSED', 'REPAID'].includes(s);
-    if (activeTab === 'PENDING') return ['UNVERIFIED', 'VERIFIED', 'APPROVED', 'PENDING'].includes(s);
+    if (activeTab === 'QUEUE') return ['UNVERIFIED', 'FIELD_VERIFIED', 'PENDING'].includes(s);
+    if (activeTab === 'VERIFIED') return ['VERIFIED', 'APPROVED'].includes(s);
     return s === 'REJECTED';
   });
 
