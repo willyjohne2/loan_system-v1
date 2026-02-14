@@ -143,51 +143,62 @@ const CustomerHistoryModal = ({ customer, isOpen, onClose, loanToVerify, onVerif
                   <p className="text-xl font-black text-slate-900 dark:text-white">KES {Math.max(0, stats.totalRepayable - stats.totalPaid).toLocaleString()}</p>
                 </div>
                 
-                {/* Visual Identity */}
-                <div className="lg:col-span-2 flex gap-3">
-                   {customer.profile?.profile_image ? (
-                     <div 
-                       className="h-full aspect-square rounded-xl overflow-hidden border-2 border-slate-100 dark:border-slate-800 cursor-pointer hover:ring-2 hover:ring-primary-500 transition-all group relative"
-                       onClick={() => setSelectedImage(customer.profile.profile_image.startsWith('http') ? customer.profile.profile_image : `${loanService.api.defaults.baseURL.replace('/api', '')}${customer.profile.profile_image}`)}
-                       title="Click to expand Profile Image"
-                     >
-                        <img 
-                          src={customer.profile.profile_image.startsWith('http') ? customer.profile.profile_image : `${loanService.api.defaults.baseURL.replace('/api', '')}${customer.profile.profile_image}`} 
-                          alt="Profile" 
-                          className="w-full h-full object-cover"
-                        />
-                        <div className="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
-                           <Eye className="w-6 h-6 text-white" />
-                        </div>
-                     </div>
-                   ) : (
-                     <div className="h-full aspect-square rounded-xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-400">
-                        <User className="w-6 h-6" />
-                     </div>
-                   )}
-                   {customer.profile?.national_id_image ? (
-                     <div 
-                       className="flex-1 rounded-xl overflow-hidden border-2 border-slate-100 dark:border-slate-800 relative group cursor-pointer hover:ring-2 hover:ring-primary-500 transition-all"
-                       onClick={() => setSelectedImage(customer.profile.national_id_image.startsWith('http') ? customer.profile.national_id_image : `${loanService.api.defaults.baseURL.replace('/api', '')}${customer.profile.national_id_image}`)}
-                       title="Click to expand National ID"
-                     >
-                        <img 
-                          src={customer.profile.national_id_image.startsWith('http') ? customer.profile.national_id_image : `${loanService.api.defaults.baseURL.replace('/api', '')}${customer.profile.national_id_image}`} 
-                          alt="ID" 
-                          className="w-full h-full object-cover"
-                        />
-                        <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
-                           <div className="flex flex-col items-center gap-1">
-                              <Eye className="w-6 h-6 text-white" />
-                              <span className="text-[10px] text-white font-bold uppercase tracking-wider bg-black/50 px-2 py-1 rounded">View Full ID Scan</span>
-                           </div>
-                        </div>
-                     </div>
-                   ) : (
-                    <div className="flex-1 rounded-xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-400 border-2 border-dashed border-slate-200">
-                       <span className="text-[10px] font-bold">NO ID SCAN</span>
-                    </div>
-                   )}
+                {/* Visual Identity Verification */}
+                <div className="lg:col-span-2 space-y-2">
+                  <span className="text-[10px] font-black text-rose-500 uppercase tracking-widest px-1 flex items-center gap-2">
+                    <User className="w-3 h-3" />
+                    Identity Comparison (Photo vs ID Scan)
+                  </span>
+                  <div className="flex gap-3 h-[180px]">
+                    {customer.profile?.profile_image ? (
+                      <div 
+                        className="h-full aspect-square rounded-xl overflow-hidden border-2 border-slate-100 dark:border-slate-800 cursor-pointer hover:ring-2 hover:ring-primary-500 transition-all group relative bg-white"
+                        onClick={() => setSelectedImage(customer.profile.profile_image.startsWith('http') ? customer.profile.profile_image : `${loanService.api.defaults.baseURL.replace('/api', '')}${customer.profile.profile_image}`)}
+                        title="Click to expand Profile Image"
+                      >
+                          <img 
+                            src={customer.profile.profile_image.startsWith('http') ? customer.profile.profile_image : `${loanService.api.defaults.baseURL.replace('/api', '')}${customer.profile.profile_image}`} 
+                            alt="Profile" 
+                            className="w-full h-full object-cover"
+                          />
+                          <div className="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
+                            <Eye className="w-6 h-6 text-white" />
+                          </div>
+                          <div className="absolute bottom-1 right-1 bg-black/60 text-white text-[8px] px-1.5 py-0.5 rounded uppercase font-bold">Live Photo</div>
+                      </div>
+                    ) : (
+                      <div className="h-full aspect-square rounded-xl bg-slate-100 dark:bg-slate-800 flex flex-col items-center justify-center text-slate-400 border-2 border-dashed">
+                          <User className="w-6 h-6" />
+                          <span className="text-[8px] font-black mt-1">NO PHOTO</span>
+                      </div>
+                    )}
+                    
+                    {customer.profile?.national_id_image ? (
+                      <div 
+                        className="flex-1 h-full rounded-xl overflow-hidden border-2 border-slate-100 dark:border-slate-800 relative group cursor-pointer hover:ring-2 hover:ring-primary-500 transition-all bg-white"
+                        onClick={() => setSelectedImage(customer.profile.national_id_image.startsWith('http') ? customer.profile.national_id_image : `${loanService.api.defaults.baseURL.replace('/api', '')}${customer.profile.national_id_image}`)}
+                        title="Click to expand National ID"
+                      >
+                          <img 
+                            src={customer.profile.national_id_image.startsWith('http') ? customer.profile.national_id_image : `${loanService.api.defaults.baseURL.replace('/api', '')}${customer.profile.national_id_image}`} 
+                            alt="ID" 
+                            className="w-full h-full object-cover"
+                          />
+                          <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
+                            <div className="flex flex-col items-center gap-1">
+                                <Eye className="w-6 h-6 text-white" />
+                                <span className="text-[10px] text-white font-bold uppercase tracking-wider bg-black/50 px-2 py-1 rounded">Compare ID Scan</span>
+                            </div>
+                          </div>
+                          <div className="absolute bottom-1 right-1 bg-primary-600/80 text-white text-[8px] px-1.5 py-0.5 rounded uppercase font-bold">National ID Scan</div>
+                      </div>
+                    ) : (
+                      <div className="flex-1 h-full rounded-xl bg-slate-100 dark:bg-slate-800 flex flex-col items-center justify-center text-slate-400 border-2 border-dashed border-slate-200">
+                        <AlertCircle className="w-6 h-6" />
+                        <span className="text-[10px] font-bold">MISSING ID IMAGE</span>
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
 
