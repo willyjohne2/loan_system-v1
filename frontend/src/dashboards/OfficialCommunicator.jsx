@@ -3,7 +3,7 @@ import { Card, Button, Table } from '../components/ui/Shared';
 import { loanService } from '../api/api';
 import { Mail, Calendar, User, Search, Send, Bell } from 'lucide-react';
 import DirectEmailModal from '../components/ui/DirectEmailModal';
-import { useDebounce } from '../hooks/useDebounce';
+import useDebounce from '../hooks/useDebounce';
 
 const OfficialCommunicator = () => {
     const [logs, setLogs] = useState([]);

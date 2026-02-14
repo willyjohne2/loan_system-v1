@@ -16,7 +16,6 @@ import ManagerDashboardWrapper from './dashboards/ManagerDashboardWrapper';
 import FinanceDashboardWrapper from './dashboards/FinanceDashboardWrapper';
 import FieldOfficerDashboardWrapper from './dashboards/FieldOfficerDashboardWrapper';
 
-import { ActionLogs } from './components/ui/AdminActivityModal'; 
 import { ScrollToTop } from './components/ui/ScrollToTop';
 
 const App = () => {

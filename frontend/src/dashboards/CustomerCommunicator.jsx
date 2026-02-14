@@ -3,7 +3,7 @@ import { Card, Button, Table } from '../components/ui/Shared';
 import { loanService } from '../api/api';
 import { MessageSquare, Calendar, Phone, User, Tag, Search, Send, Bell } from 'lucide-react';
 import BulkCustomerSMSModal from '../components/ui/BulkCustomerSMSModal';
-import { useDebounce } from '../hooks/useDebounce';
+import useDebounce from '../hooks/useDebounce';
 
 const CustomerCommunicator = () => {
     const [logs, setLogs] = useState([]);

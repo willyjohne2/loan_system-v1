@@ -4,7 +4,7 @@ import { Card, Table, Button } from '../components/ui/Shared';
 import { Search, Filter, Download, Eye, CheckCircle, XCircle, Clock, MessageSquareShare, FileCheck } from 'lucide-react';
 import BulkCustomerSMSModal from '../components/ui/BulkCustomerSMSModal';
 import CustomerHistoryModal from '../components/ui/CustomerHistoryModal';
-import { useDebounce } from '../hooks/useDebounce';
+import useDebounce from '../hooks/useDebounce';
 
 const AdminLoans = () => {
   const [loans, setLoans] = useState([]);

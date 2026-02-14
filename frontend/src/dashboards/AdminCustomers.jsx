@@ -4,7 +4,7 @@ import { Table, StatCard, Button, Pagination } from '../components/ui/Shared';
 import { Search, Filter, UserPlus, Trash2, Lock, Unlock, MessageSquare, Send, X } from 'lucide-react';
 import CustomerRegistrationForm from '../components/forms/CustomerRegistrationForm';
 import CustomerHistoryModal from '../components/ui/CustomerHistoryModal';
-import { useDebounce } from '../hooks/useDebounce';
+import useDebounce from '../hooks/useDebounce';
 
 const DirectSMSModal = ({ customer, isOpen, onClose }) => {
   const [message, setMessage] = useState('');
