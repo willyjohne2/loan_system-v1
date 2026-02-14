@@ -45,4 +45,23 @@ body {
   body {
     @apply bg-slate-50 text-slate-900 dark:bg-slate-950 dark:text-slate-50;
   }
+
+  /* Prevent browser autofill yellow background */
+  input:-webkit-autofill,
+  input:-webkit-autofill:hover, 
+  input:-webkit-autofill:focus, 
+  input:-webkit-autofill:active {
+    -webkit-box-shadow: 0 0 0 1000px white inset !important;
+    -webkit-text-fill-color: #0f172a !important;
+    caret-color: #0f172a;
+  }
+
+  .dark input:-webkit-autofill,
+  .dark input:-webkit-autofill:hover, 
+  .dark input:-webkit-autofill:focus, 
+  .dark input:-webkit-autofill:active {
+    -webkit-box-shadow: 0 0 0 1000px #0f172a inset !important;
+    -webkit-text-fill-color: white !important;
+    caret-color: white;
+  }
 }

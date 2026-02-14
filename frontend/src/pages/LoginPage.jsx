@@ -159,11 +159,11 @@ const LoginPage = () => {
                     required
                     maxLength="6"
                     autoFocus
-                    autoComplete="off"
+                    autoComplete="one-time-code"
                     inputMode="numeric"
                     value={otpCode}
                     onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, ''))}
-                    className="w-full pl-12 pr-4 py-4 bg-white border border-slate-200 rounded-xl text-3xl font-bold tracking-[0.1em] text-center focus:outline-none focus:ring-4 focus:ring-primary-500/10 focus:border-primary-500 dark:bg-slate-800 dark:border-slate-700 dark:text-white transition-all"
+                    className="w-full pl-12 pr-4 py-4 bg-white border border-slate-200 rounded-xl text-3xl font-bold tracking-[0.1em] text-center focus:outline-none focus:ring-4 focus:ring-primary-500/10 focus:border-primary-500 dark:bg-slate-800 dark:border-slate-700 dark:text-white transition-all autofill:bg-white dark:autofill:bg-slate-800"
                     placeholder="000000"
                   />
                 </div>

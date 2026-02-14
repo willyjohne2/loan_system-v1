@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { loanService } from '../api/api';
-import { Table, Button } from '../components/ui/Shared';
+import { Table, Button, Card } from '../components/ui/Shared';
 import { UserPlus, Shield, Activity, ShieldOff, Send } from 'lucide-react';
 import AdminActivityModal from '../components/ui/AdminActivityModal';
 import DeactivationRequestModal from '../components/ui/DeactivationRequestModal';
