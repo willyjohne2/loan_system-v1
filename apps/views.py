@@ -822,7 +822,7 @@ class LoanListCreateView(generics.ListCreateAPIView):
 
         loan = serializer.save(interest_rate=interest_rate, created_by=created_by)
 
-        # Use try-except for post-save operations to avoid 500 errors blocking loan creation
+        # Try-catch block to prevent 500 error if audit log, SMS, or notifications fail
         try:
             # Security Audit Log
             ip = get_client_ip(self.request)
@@ -848,7 +848,7 @@ class LoanListCreateView(generics.ListCreateAPIView):
             )
 
             # SMS Notification
-            if loan.user.phone:
+            if hasattr(loan.user, "phone") and loan.user.phone:
                 msg = f"Hello {loan.user.full_name}, your loan application of KES {float(loan.principal_amount):,.2f} has been received and is under review."
                 send_sms_async([loan.user.phone], msg)
                 SMSLog.objects.create(
@@ -859,8 +859,10 @@ class LoanListCreateView(generics.ListCreateAPIView):
                     type="AUTO",
                 )
         except Exception as e:
-            # Log the error internally but don't fail the request since the loan is already saved
-            print(f"[ERROR] Post-loan-creation tasks failed: {str(e)}")
+            # Always print error to console for debugging but return 201 to the user
+            print(
+                f"[DEBUG] Loan created ID {loan.id} but post-save tasks failed: {str(e)}"
+            )
             pass
 
 

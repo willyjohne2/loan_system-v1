@@ -95,17 +95,24 @@ const LoanApplicationForm = ({ customer, onSuccess, onCancel }) => {
 
     if (name === 'principal_amount') {
       const selectedProduct = loanProducts.find(p => p.id === formData.loan_product_id);
+      const val = value.replace(/[^0-9]/g, ''); // Ensure only numbers are entered
+      const amt = parseFloat(val);
+
       if (selectedProduct) {
-        const amt = parseFloat(value);
         const min = parseFloat(selectedProduct.min_amount);
         const max = parseFloat(selectedProduct.max_amount);
         
-        if (value && (amt < min || amt > max)) {
-          setError(`Amount for ${selectedProduct.name} must be between ${min.toLocaleString()} and ${max.toLocaleString()}`);
+        if (val && (amt < min || amt > max)) {
+          setError(`Amount for ${selectedProduct.name} must be between KES ${min.toLocaleString()} and KES ${max.toLocaleString()}`);
+        } else if (val && amt <= 0) {
+          setError('Amount must be a positive number');
         } else {
           setError('');
         }
       }
+      
+      setFormData(prev => ({ ...prev, principal_amount: val }));
+      return;
     }
 
     setFormData(prev => ({ 
