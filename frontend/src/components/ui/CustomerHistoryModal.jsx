@@ -352,6 +352,34 @@ const CustomerHistoryModal = ({ customer, isOpen, onClose, loanToVerify, onVerif
           <Button onClick={onClose} variant="secondary" className="px-8">Close Trail</Button>
         </div>
       </Card>
+
+      {/* Full-screen Image Viewer Overlay */}
+      {selectedImage && (
+        <div 
+          className="fixed inset-0 z-[1000] bg-black/95 flex items-center justify-center p-4 animate-in fade-in duration-200"
+          onClick={() => setSelectedImage(null)}
+        >
+          <div className="relative max-w-full max-h-full">
+            <img 
+              src={selectedImage} 
+              alt="Preview" 
+              className="max-w-full max-h-[90vh] rounded-lg shadow-2xl object-contain border-4 border-white/10"
+            />
+            <button 
+              className="absolute -top-12 right-0 p-2 bg-white/10 hover:bg-white/20 rounded-full text-white transition-colors"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setSelectedImage(null);
+                }}
+            >
+              <X className="w-8 h-8" />
+            </button>
+            <p className="absolute -bottom-8 left-0 right-0 text-center text-white/60 text-sm font-mono tracking-widest uppercase">
+              Click anywhere to close preview
+            </p>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
