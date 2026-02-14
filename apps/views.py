@@ -777,6 +777,19 @@ class LoanListCreateView(generics.ListCreateAPIView):
         if customer_id:
             try:
                 customer = Users.objects.get(id=customer_id)
+                profile = getattr(customer, "profile", None)
+                if not (
+                    customer.full_name
+                    and profile
+                    and profile.profile_image
+                    and profile.national_id_image
+                    and profile.national_id
+                ):
+                    raise serializers.ValidationError(
+                        {
+                            "error": "Customer profile incomplete. Full name, profile photo, and national ID image are required before applying for a loan."
+                        }
+                    )
                 if customer.is_locked:
                     raise serializers.ValidationError(
                         {
