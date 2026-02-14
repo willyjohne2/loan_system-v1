@@ -822,41 +822,46 @@ class LoanListCreateView(generics.ListCreateAPIView):
 
         loan = serializer.save(interest_rate=interest_rate, created_by=created_by)
 
-        # Security Audit Log
-        ip = get_client_ip(self.request)
-        log_action(
-            self.request.user,
-            f"Created new Loan application for {loan.user.full_name}",
-            "loans",
-            loan.id,
-            new_data=LoanSerializer(loan).data,
-            log_type="GENERAL",
-            ip_address=ip,
-        )
-
-        create_loan_activity(
-            loan,
-            created_by,
-            "APPLIED",
-            f"Loan applied for KES {loan.principal_amount}",
-        )
-
-        create_notification(
-            loan.user,
-            f"Your loan application of KES {loan.principal_amount} has been received and is under review.",
-        )
-
-        # SMS Notification
-        if loan.user.phone:
-            msg = f"Hello {loan.user.full_name}, your loan application of KES {loan.principal_amount} has been received and is under review."
-            send_sms_async([loan.user.phone], msg)
-            SMSLog.objects.create(
-                sender=created_by,
-                recipient_phone=loan.user.phone,
-                recipient_name=loan.user.full_name,
-                message=msg,
-                type="AUTO",
+        # Use try-except for post-save operations to avoid 500 errors blocking loan creation
+        try:
+            # Security Audit Log
+            ip = get_client_ip(self.request)
+            log_action(
+                self.request.user,
+                f"Created new Loan application for {loan.user.full_name}",
+                "loans",
+                loan.id,
+                log_type="GENERAL",
+                ip_address=ip,
             )
+
+            create_loan_activity(
+                loan,
+                created_by,
+                "APPLIED",
+                f"Loan applied for KES {float(loan.principal_amount):,.2f}",
+            )
+
+            create_notification(
+                loan.user,
+                f"Your loan application of KES {float(loan.principal_amount):,.2f} has been received and is under review.",
+            )
+
+            # SMS Notification
+            if loan.user.phone:
+                msg = f"Hello {loan.user.full_name}, your loan application of KES {float(loan.principal_amount):,.2f} has been received and is under review."
+                send_sms_async([loan.user.phone], msg)
+                SMSLog.objects.create(
+                    sender=created_by,
+                    recipient_phone=loan.user.phone,
+                    recipient_name=loan.user.full_name,
+                    message=msg,
+                    type="AUTO",
+                )
+        except Exception as e:
+            # Log the error internally but don't fail the request since the loan is already saved
+            print(f"[ERROR] Post-loan-creation tasks failed: {str(e)}")
+            pass
 
 
 class RepaymentListCreateView(generics.ListCreateAPIView):

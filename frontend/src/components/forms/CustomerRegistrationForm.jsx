@@ -127,6 +127,14 @@ const CustomerRegistrationForm = ({ onSuccess, onApplyLoan, onCancel, initialCus
     }
   }, [step, formData, isExistingUser, existingUserId, isFinished]);
 
+  // Automatically clear error messages after 5 seconds
+  useEffect(() => {
+    if (error) {
+      const timer = setTimeout(() => setError(''), 5000);
+      return () => clearTimeout(timer);
+    }
+  }, [error]);
+
   const clearDraft = () => {
     sessionStorage.removeItem('registration_draft');
   };

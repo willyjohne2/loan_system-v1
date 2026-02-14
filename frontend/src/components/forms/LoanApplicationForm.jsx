@@ -29,6 +29,14 @@ const LoanApplicationForm = ({ customer, onSuccess, onCancel }) => {
     agreedToTerms: false
   });
 
+  // Auto-clear error after 5 seconds
+  useEffect(() => {
+    if (error) {
+      const timer = setTimeout(() => setError(''), 5000);
+      return () => clearTimeout(timer);
+    }
+  }, [error]);
+
   const loanReasons = [
     'Business Expansion', 'Medical Expenses', 'Education', 'Personal Use', 'Rent/Housing', 'Agriculture/Farming', 'Emergencies', 'Other'
   ];
@@ -52,22 +60,6 @@ const LoanApplicationForm = ({ customer, onSuccess, onCancel }) => {
         });
 
         setLoanProducts(products);
-        
-        // Auto-select first product if available
-        if (products.length > 0) {
-          const firstProduct = products[0];
-          const name = firstProduct.name.toLowerCase();
-          let duration = 4;
-          if (name.includes('jijenge')) duration = 5;
-          if (name.includes('fadhili')) duration = 6;
-
-          setFormData(prev => ({ 
-            ...prev, 
-            loan_product_id: firstProduct.id,
-            duration_type: 'WEEKS',
-            duration_value: duration
-          }));
-        }
       } catch (err) {
         console.error('Failed to fetch loan products:', err);
       }
@@ -90,10 +82,29 @@ const LoanApplicationForm = ({ customer, onSuccess, onCancel }) => {
         setFormData(prev => ({
           ...prev,
           loan_product_id: value,
+          principal_amount: '', // Reset amount on product change
           duration_type: 'WEEKS',
           duration_value: duration
         }));
+        setError('');
         return;
+      } else {
+        setFormData(prev => ({ ...prev, loan_product_id: '', principal_amount: '' }));
+      }
+    }
+
+    if (name === 'principal_amount') {
+      const selectedProduct = loanProducts.find(p => p.id === formData.loan_product_id);
+      if (selectedProduct) {
+        const amt = parseFloat(value);
+        const min = parseFloat(selectedProduct.min_amount);
+        const max = parseFloat(selectedProduct.max_amount);
+        
+        if (value && (amt < min || amt > max)) {
+          setError(`Amount for ${selectedProduct.name} must be between ${min.toLocaleString()} and ${max.toLocaleString()}`);
+        } else {
+          setError('');
+        }
       }
     }
 
@@ -106,6 +117,21 @@ const LoanApplicationForm = ({ customer, onSuccess, onCancel }) => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     
+    const selectedProduct = loanProducts.find(p => p.id === formData.loan_product_id);
+    if (!selectedProduct) {
+      setError('Please select a loan product');
+      return;
+    }
+
+    const amt = parseFloat(formData.principal_amount);
+    const min = parseFloat(selectedProduct.min_amount);
+    const max = parseFloat(selectedProduct.max_amount);
+
+    if (isNaN(amt) || amt < min || amt > max) {
+      setError(`Invalid amount. For ${selectedProduct.name}, enter between KES ${min.toLocaleString()} and ${max.toLocaleString()}`);
+      return;
+    }
+
     // Strict Validation: Ensure all fields are filled
     if (!formData.loan_product_id) {
       setError('Please select a loan product');
@@ -151,7 +177,7 @@ const LoanApplicationForm = ({ customer, onSuccess, onCancel }) => {
       setSuccess(true);
       setTimeout(() => {
         onSuccess?.();
-      }, 2000);
+      }, 3000);
     } catch (err) {
       setError(err?.response?.data?.error || err.message || 'Failed to apply for loan');
     } finally {
@@ -220,10 +246,18 @@ const LoanApplicationForm = ({ customer, onSuccess, onCancel }) => {
               type="number"
               value={formData.principal_amount}
               onChange={handleChange}
-              className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-indigo-500 dark:bg-slate-800 dark:border-slate-700 outline-none font-black text-lg text-indigo-600" 
-              placeholder="0.00"
+              disabled={!formData.loan_product_id}
+              className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-indigo-500 dark:bg-slate-800 dark:border-slate-700 outline-none font-black text-lg ${
+                !formData.loan_product_id ? 'bg-slate-50 cursor-not-allowed text-slate-400' : 'text-indigo-600'
+              }`} 
+              placeholder={formData.loan_product_id ? "Enter amount..." : "Select product first"}
               required
             />
+            {formData.loan_product_id && (
+              <p className="text-[10px] text-slate-400 mt-1 uppercase font-bold tracking-tighter">
+                Range: KES {Number(loanProducts.find(p => p.id === formData.loan_product_id)?.min_amount).toLocaleString()} - {Number(loanProducts.find(p => p.id === formData.loan_product_id)?.max_amount).toLocaleString()}
+              </p>
+            )}
           </div>
 
           <div className="space-y-1">

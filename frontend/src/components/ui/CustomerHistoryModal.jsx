@@ -149,6 +149,7 @@ const CustomerHistoryModal = ({ customer, isOpen, onClose, loanToVerify, onVerif
                      <div 
                        className="h-full aspect-square rounded-xl overflow-hidden border-2 border-slate-100 dark:border-slate-800 cursor-pointer hover:ring-2 hover:ring-primary-500 transition-all group relative"
                        onClick={() => setSelectedImage(customer.profile.profile_image.startsWith('http') ? customer.profile.profile_image : `${loanService.api.defaults.baseURL.replace('/api', '')}${customer.profile.profile_image}`)}
+                       title="Click to expand Profile Image"
                      >
                         <img 
                           src={customer.profile.profile_image.startsWith('http') ? customer.profile.profile_image : `${loanService.api.defaults.baseURL.replace('/api', '')}${customer.profile.profile_image}`} 
@@ -156,7 +157,7 @@ const CustomerHistoryModal = ({ customer, isOpen, onClose, loanToVerify, onVerif
                           className="w-full h-full object-cover"
                         />
                         <div className="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
-                           <TrendingUp className="w-4 h-4 text-white rotate-45" />
+                           <Eye className="w-6 h-6 text-white" />
                         </div>
                      </div>
                    ) : (
@@ -168,6 +169,7 @@ const CustomerHistoryModal = ({ customer, isOpen, onClose, loanToVerify, onVerif
                      <div 
                        className="flex-1 rounded-xl overflow-hidden border-2 border-slate-100 dark:border-slate-800 relative group cursor-pointer hover:ring-2 hover:ring-primary-500 transition-all"
                        onClick={() => setSelectedImage(customer.profile.national_id_image.startsWith('http') ? customer.profile.national_id_image : `${loanService.api.defaults.baseURL.replace('/api', '')}${customer.profile.national_id_image}`)}
+                       title="Click to expand National ID"
                      >
                         <img 
                           src={customer.profile.national_id_image.startsWith('http') ? customer.profile.national_id_image : `${loanService.api.defaults.baseURL.replace('/api', '')}${customer.profile.national_id_image}`} 
@@ -175,7 +177,10 @@ const CustomerHistoryModal = ({ customer, isOpen, onClose, loanToVerify, onVerif
                           className="w-full h-full object-cover"
                         />
                         <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
-                           <span className="text-[10px] text-white font-bold uppercase tracking-wider bg-black/50 px-2 py-1 rounded">Click to Enlarge ID</span>
+                           <div className="flex flex-col items-center gap-1">
+                              <Eye className="w-6 h-6 text-white" />
+                              <span className="text-[10px] text-white font-bold uppercase tracking-wider bg-black/50 px-2 py-1 rounded">View Full ID Scan</span>
+                           </div>
                         </div>
                      </div>
                    ) : (
