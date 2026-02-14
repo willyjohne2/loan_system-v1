@@ -2002,7 +2002,7 @@ class LoanDetailView(generics.RetrieveUpdateAPIView):
         )
 
         old_status = instance.status
-        loan = serializer.save()
+        loan = updated_instance
         new_status = loan.status
 
         if new_status != old_status:
@@ -2028,8 +2028,7 @@ class LoanDetailView(generics.RetrieveUpdateAPIView):
 
             create_notification(
                 loan.user,
-                f"Loan {loan.loan_id} Update",
-                f"The status of your loan has been updated to {new_status}.",
+                f"Loan Update: The status of your loan has been updated to {new_status}.",
             )
 
 
