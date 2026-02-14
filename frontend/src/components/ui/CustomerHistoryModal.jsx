@@ -380,14 +380,18 @@ const CustomerHistoryModal = ({ customer, isOpen, onClose, loanToVerify, onVerif
                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none">Reviewing Loan</p>
                    <p className="text-sm font-bold text-indigo-600">KES {Number(loanToVerify.principal_amount).toLocaleString()}</p>
                  </div>
-                 <Button 
-                   onClick={handleVerify} 
-                   disabled={updating}
-                   className="bg-blue-600 hover:bg-blue-700 text-white px-6 font-bold flex items-center gap-2"
-                 >
-                   {updating ? <div className="animate-spin w-4 h-4 border-2 border-white border-t-transparent rounded-full" /> : <CheckCircle className="w-4 h-4" />}
-                   {(user?.role?.toUpperCase() || user?.admin?.role?.toUpperCase()) === 'FIELD_OFFICER' ? 'SUBMIT FOR REVIEW' : 'VERIFY & PUSH TO FINANCE'}
-                 </Button>
+                 <Button
+                  onClick={handleVerify}
+                  disabled={updating}
+                  className="w-full flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-3 rounded-xl mt-4"
+                >
+                  {updating ? (
+                    <div className="animate-spin w-4 h-4 border-2 border-white border-t-transparent rounded-full" />
+                  ) : (
+                    <CheckCircle className="w-4 h-4" />
+                  )}
+                  {getVerifyButtonLabel()}
+                </Button>
               </div>
             )}
           </div>
@@ -438,4 +442,14 @@ const CustomerHistoryModal = ({ customer, isOpen, onClose, loanToVerify, onVerif
 };
 
 export default CustomerHistoryModal;
+
+function getVerifyButtonLabel() {
+  const userRole = user?.role?.toUpperCase() || user?.admin?.role?.toUpperCase();
+  if (userRole === 'FIELD_OFFICER') {
+    return 'SUBMIT FOR REVIEW';
+  } else if (userRole === 'MANAGER' || userRole === 'ADMIN') {
+    return 'VERIFY & PUSH TO FINANCE';
+  }
+  return 'VERIFY';
+}
 
