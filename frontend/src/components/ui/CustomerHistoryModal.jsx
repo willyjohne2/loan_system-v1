@@ -443,13 +443,3 @@ const CustomerHistoryModal = ({ customer, isOpen, onClose, loanToVerify, onVerif
 
 export default CustomerHistoryModal;
 
-function getVerifyButtonLabel() {
-  const userRole = user?.role?.toUpperCase() || user?.admin?.role?.toUpperCase();
-  if (userRole === 'FIELD_OFFICER') {
-    return 'SUBMIT FOR REVIEW';
-  } else if (userRole === 'MANAGER' || userRole === 'ADMIN') {
-    return 'VERIFY & PUSH TO FINANCE';
-  }
-  return 'VERIFY';
-}
-
