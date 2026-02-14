@@ -397,45 +397,6 @@ const AdminLoans = () => {
             </Button>
           </div>
         )}
-      </Card> 
-                          onClick={() => {
-                            setSelectedCustomer(customers[loan.user]);
-                            setIsHistoryOpen(true);
-                          }}
-                          className="p-2 text-slate-400 hover:text-primary-600 hover:bg-primary-50 dark:hover:bg-primary-900/20 rounded-lg transition-all"
-                        >
-                          <Eye className="w-4 h-4" />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))
-              ) : (
-                <tr>
-                  <td colSpan="8" className="px-6 py-12 text-center text-slate-500">
-                    No {activeTab.toLowerCase()} loans found matching your criteria.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-            {filteredLoans.length > 0 && (
-              <tfoot className="sticky bottom-0 z-10 bg-slate-50 dark:bg-slate-800 font-bold border-t-2 border-slate-200 dark:border-slate-700 shadow-[0_-2px_10px_rgba(0,0,0,0.05)]">
-                <tr>
-                  <td colSpan="3" className="p-4 text-right text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest">
-                    Portfolio Subtotals:
-                  </td>
-                  <td className="p-4 text-sm font-black text-primary-600 dark:text-primary-400">
-                    KES {totals.principal.toLocaleString()}
-                  </td>
-                  <td className="p-4 text-sm font-black text-emerald-600 dark:text-emerald-400">
-                    KES {totals.repayable.toLocaleString()}
-                  </td>
-                  <td colSpan="3"></td>
-                </tr>
-              </tfoot>
-            )}
-          </table>
-        </div>
       </Card>
 
       <BulkCustomerSMSModal 
