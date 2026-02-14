@@ -86,7 +86,7 @@ const FinanceDashboard = () => {
   const filteredLoansForTotals = (loans || []).filter(l => {
     const s = l.status;
     if (activeTab === 'ACTIVE') return ['DISBURSED', 'ACTIVE', 'OVERDUE', 'CLOSED', 'REPAID'].includes(s);
-    if (activeTab === 'PENDING') return ['UNVERIFIED', 'FIELD_VERIFIED', 'VERIFIED', 'APPROVED', 'PENDING'].includes(s);
+    if (activeTab === 'PENDING') return ['VERIFIED', 'APPROVED', 'PENDING'].includes(s);
     return s === 'REJECTED';
   });
 
@@ -549,7 +549,7 @@ const FinanceDashboard = () => {
                 {loans.filter(l => {
                   const s = l.status;
                   if (activeTab === 'ACTIVE') return ['DISBURSED', 'ACTIVE', 'OVERDUE', 'CLOSED', 'REPAID'].includes(s);
-                  if (activeTab === 'PENDING') return ['UNVERIFIED', 'FIELD_VERIFIED', 'VERIFIED', 'APPROVED', 'PENDING'].includes(s);
+                  if (activeTab === 'PENDING') return ['VERIFIED', 'APPROVED', 'PENDING'].includes(s);
                   return s === 'REJECTED';
                 }).length} ENTRIES
               </span>
@@ -571,13 +571,13 @@ const FinanceDashboard = () => {
                   {loans.filter(l => {
                     const s = l.status;
                     if (activeTab === 'ACTIVE') return ['DISBURSED', 'ACTIVE', 'OVERDUE', 'CLOSED', 'REPAID'].includes(s);
-                    if (activeTab === 'PENDING') return ['UNVERIFIED', 'FIELD_VERIFIED', 'VERIFIED', 'APPROVED', 'PENDING'].includes(s);
+                    if (activeTab === 'PENDING') return ['VERIFIED', 'APPROVED', 'PENDING'].includes(s);
                     return s === 'REJECTED';
                   }).length > 0 ? (
                     loans.filter(l => {
                       const s = l.status;
                       if (activeTab === 'ACTIVE') return ['DISBURSED', 'ACTIVE', 'OVERDUE', 'CLOSED', 'REPAID'].includes(s);
-                      if (activeTab === 'PENDING') return ['UNVERIFIED', 'FIELD_VERIFIED', 'VERIFIED', 'APPROVED', 'PENDING'].includes(s);
+                      if (activeTab === 'PENDING') return ['VERIFIED', 'APPROVED', 'PENDING'].includes(s);
                       return s === 'REJECTED';
                     }).map((l) => (
                       <tr key={l.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/20 transition-colors">
@@ -616,7 +616,7 @@ const FinanceDashboard = () => {
                 {loans.filter(l => {
                     const s = l.status;
                     if (activeTab === 'ACTIVE') return ['DISBURSED', 'ACTIVE', 'OVERDUE', 'CLOSED', 'REPAID'].includes(s);
-                    if (activeTab === 'PENDING') return ['UNVERIFIED', 'FIELD_VERIFIED', 'VERIFIED', 'APPROVED', 'PENDING'].includes(s);
+                    if (activeTab === 'PENDING') return ['VERIFIED', 'APPROVED', 'PENDING'].includes(s);
                     return s === 'REJECTED';
                   }).length > 0 && (
                   <tfoot className="sticky bottom-0 z-10 bg-slate-50 dark:bg-slate-900 font-bold border-t-2 border-slate-200 dark:border-slate-800">
@@ -641,7 +641,7 @@ const FinanceDashboard = () => {
           <div className="flex items-center justify-between mb-6">
             <h3 className="text-lg font-semibold text-slate-900 dark:text-white flex items-center gap-2">
               <Briefcase className="w-5 h-5 text-indigo-600" />
-              Awaiting Approval
+              Awaiting Final Approval
             </h3>
             <span className="text-xs bg-indigo-100 text-indigo-700 px-2 py-1 rounded-full font-bold">
               {stats.pendingApprovalsCount} NEW
@@ -651,7 +651,7 @@ const FinanceDashboard = () => {
           <div className="space-y-4 flex-1">
             {loans.filter(l => l.status === 'VERIFIED' || l.status === 'PENDING').length === 0 ? (
               <div className="text-center py-12 text-slate-400 italic bg-slate-50 dark:bg-slate-800/50 rounded-xl border-2 border-dashed">
-                Queue is empty. No loans pending verification or approval.
+                Queue is empty. No loans verified by managers awaiting approval.
               </div>
             ) : (
               loans.filter(l => l.status === 'VERIFIED' || l.status === 'PENDING').slice(0, 4).map((loan) => (

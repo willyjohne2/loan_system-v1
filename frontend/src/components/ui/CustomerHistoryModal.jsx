@@ -379,7 +379,7 @@ const CustomerHistoryModal = ({ customer, isOpen, onClose, loanToVerify, onVerif
                    className="bg-blue-600 hover:bg-blue-700 text-white px-6 font-bold flex items-center gap-2"
                  >
                    {updating ? <div className="animate-spin w-4 h-4 border-2 border-white border-t-transparent rounded-full" /> : <CheckCircle className="w-4 h-4" />}
-                   VERIFY DOCUMENTS
+                   {(user?.role?.toUpperCase() || user?.admin?.role?.toUpperCase()) === 'FIELD_OFFICER' ? 'SUBMIT FOR REVIEW' : 'VERIFY & PUSH TO FINANCE'}
                  </Button>
               </div>
             )}

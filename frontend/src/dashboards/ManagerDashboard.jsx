@@ -715,8 +715,8 @@ const ManagerDashboard = () => {
 
            <div className="flex bg-slate-100 dark:bg-slate-800 p-1 rounded-lg">
              {[
-               { id: 'QUEUE', label: 'Queue' },
-               { id: 'VERIFIED', label: 'Verified' },
+               { id: 'QUEUE', label: 'Review Queue' },
+               { id: 'VERIFIED', label: 'Pushed to Finance' },
                { id: 'ACTIVE', label: 'Disbursed' },
                { id: 'REJECTED', label: 'Rejected' }
              ].map(tab => (
@@ -808,7 +808,7 @@ const ManagerDashboard = () => {
                             }}
                             disabled={updating}
                           >
-                            {loan.status === 'VERIFIED' ? 'Re-Verify' : 'Verify'}
+                            {loan.status === 'FIELD_VERIFIED' ? 'Verify & Push' : (loan.status === 'VERIFIED' ? 'Re-Verify' : 'Verify')}
                           </Button>
                         )}
                         <Button 
