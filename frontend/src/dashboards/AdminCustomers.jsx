@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { loanService } from '../api/api';
-import { Table, StatCard, Button, Pagination } from '../components/ui/Shared';
+import { Table, StatCard, Button, Pagination, Card } from '../components/ui/Shared';
 import { Search, Filter, UserPlus, Trash2, Lock, Unlock, MessageSquare, Send, X } from 'lucide-react';
 import CustomerRegistrationForm from '../components/forms/CustomerRegistrationForm';
 import CustomerHistoryModal from '../components/ui/CustomerHistoryModal';

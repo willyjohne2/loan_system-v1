@@ -179,15 +179,15 @@ const AdminOverview = () => {
         setStatusBreakdown(statusCounts);
         setLoading(false); // Core UI is ready!
 
-        // Now fetch secondary data without blocking
-        fetchSecondaryData();
+        // Now fetch secondary data without blocking, pass customers along
+        fetchSecondaryData(customers);
       } catch (err) {
         console.error("Fetch core stats error:", err);
         setLoading(false);
       }
     };
 
-    const fetchSecondaryData = async () => {
+    const fetchSecondaryData = async (customers = []) => {
       try {
         const [auditData, adminsData] = await Promise.all([
           loanService.getAuditLogs({ limit: 10 }),
@@ -284,7 +284,7 @@ const AdminOverview = () => {
                 </span>
               )}
            </div>
-           <div className="h-72 w-full min-w-0" style={{ minHeight: '300px' }}>
+           <div className="h-[350px] w-full min-w-0 relative" style={{ minHeight: '350px' }}>
             {chartData.length > 0 ? (
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={chartData} margin={{ top: 20, right: 30, left: 20, bottom: 20 }}>
@@ -359,8 +359,8 @@ const AdminOverview = () => {
              </h3>
              <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Popularity by volume</span>
           </div>
-          <div className="h-[300px] w-full flex flex-col md:flex-row items-center justify-center">
-             <div className="w-full h-full">
+          <div className="h-[300px] w-full flex flex-col md:flex-row items-center justify-center relative">
+             <div className="w-full h-full min-h-[300px]">
                 <ResponsiveContainer width="100%" height="100%">
                   <RePieChart>
                     <Pie
