@@ -27,6 +27,14 @@ api.interceptors.request.use((config) => {
 api.interceptors.response.use(
   (response) => response,
   (error) => {
+    if (error.code === 'ECONNABORTED' || error.message.includes('timeout')) {
+      return Promise.reject({
+        ...error,
+        response: {
+          data: { error: 'Request timed out. The server might be waking up, please try again in a few seconds.' }
+        }
+      });
+    }
     if (error.response && error.response.status === 401) {
       console.warn('Unauthorized request! Clearing local storage and redirecting to login...');
       localStorage.removeItem('loan_user');
