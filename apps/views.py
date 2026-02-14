@@ -2040,6 +2040,83 @@ class LoanDocumentCreateView(generics.CreateAPIView):
         )
 
 
+class SendEmailNotificationView(views.APIView):
+    permission_classes = [permissions.IsAuthenticated, IsAdminUser]
+
+    def post(self, request):
+        target_ids = request.data.get("target_ids", [])
+        target_group = request.data.get("target_group")
+        subject = request.data.get("subject", "Notification from Azariah Credit")
+        message = request.data.get("message")
+
+        if not message:
+            return Response(
+                {"error": "Message is required."}, status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Resolve target emails
+        if target_group == "STAFF":
+            targets = Admins.objects.filter(is_active=True)
+        else:
+            targets = Admins.objects.filter(id__in=target_ids)
+
+        if not targets.exists():
+            return Response(
+                {"error": "No valid targets found."}, status=status.HTTP_400_BAD_REQUEST
+            )
+
+        from_email = os.getenv("FROM_EMAIL")
+        brevo_api_key = os.getenv("BREVO_API_KEY")
+        sender_name = os.getenv("SENDER_NAME", "Azariah Credit Ltd")
+
+        if not brevo_api_key or not from_email:
+            return Response(
+                {"error": "Email service not configured."},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+
+        success_count = 0
+        for admin in targets:
+            try:
+                url = "https://api.brevo.com/v3/smtp/email"
+                headers = {
+                    "accept": "application/json",
+                    "api-key": brevo_api_key,
+                    "content-type": "application/json",
+                }
+                payload = {
+                    "sender": {"name": sender_name, "email": from_email},
+                    "to": [{"email": admin.email}],
+                    "subject": subject,
+                    "htmlContent": f"""
+                        <html>
+                        <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
+                        <div style="background-color: #f8fafc; padding: 20px; border-radius: 10px;">
+                            <h2 style="color: #2563eb;">Notification</h2>
+                            <p>Hello {admin.full_name},</p>
+                            <div style="background-color: #ffffff; padding: 20px; border-radius: 8px; border: 1px solid #e2e8f0;">
+                                {message.replace('\n', '<br>')}
+                            </div>
+                            <p style="font-size: 12px; color: #64748b; margin-top: 20px;">
+                                This is an official notification from the Azariah Credit Ltd system.
+                            </p>
+                        </div>
+                        </body>
+                        </html>
+                    """,
+                }
+                requests.post(url, json=payload, headers=headers)
+                success_count += 1
+                Notifications.objects.create(user=admin, message=f"Email: {subject}")
+            except Exception:
+                continue
+
+        return Response(
+            {"message": f"Successfully sent {success_count} emails."},
+            status=status.HTTP_200_OK,
+        )
+
+
 class NotificationListView(generics.ListAPIView):
     serializer_class = NotificationSerializer
     permission_classes = [permissions.IsAuthenticated]
@@ -2383,7 +2460,8 @@ class AdminInviteView(views.APIView):
         # request.user is an instance of Admins model via CustomJWTAuthentication
         if not request.user or request.user.role != "ADMIN":
             return Response(
-                {"error": "Only administrators can invite others"}, status=status.HTTP_403_FORBIDDEN
+                {"error": "Only administrators can invite others"},
+                status=status.HTTP_403_FORBIDDEN,
             )
 
         emails = request.data.get("emails")  # Changed from 'email' to 'emails' (list)

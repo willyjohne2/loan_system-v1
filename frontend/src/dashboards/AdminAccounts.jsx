@@ -3,6 +3,8 @@ import { loanService } from '../api/api';
 import { Trash2, AlertCircle, CheckCircle, UserPlus, Mail, Shield, Send } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import BulkInviteModal from '../components/forms/BulkInviteModal';
+import DirectEmailModal from '../components/ui/DirectEmailModal';
+import { Button, Card, Table } from '../components/ui/Shared';
 
 const AdminAccounts = () => {
   const { user } = useAuth();
@@ -14,21 +16,33 @@ const AdminAccounts = () => {
   const [confirmDelete, setConfirmDelete] = useState(null);
   const [showInviteModal, setShowInviteModal] = useState(false);
   const [inviting, setInviting] = useState(false);
+  const [showEmail, setShowEmail] = useState(false);
+  const [emailTargets, setEmailTargets] = useState(null);
+  const [bulkEmail, setBulkEmail] = useState(false);
+  const [page, setPage] = useState(1);
+  const [hasMore, setHasMore] = useState(false);
 
   useEffect(() => {
-    fetchAdmins();
+    fetchAdmins(1, true);
   }, []);
 
-  const fetchAdmins = async () => {
+  const fetchAdmins = async (pageNum = 1, isReset = false) => {
     try {
       setLoading(true);
-      const data = await loanService.getAllAdmins();
+      const data = await loanService.getAllAdmins({ page: pageNum, page_size: 10 });
       console.log('Admin accounts loaded:', data);
-      setAdmins(data.results || data);
+      
+      const adminList = data.results || data || [];
+      setHasMore(!!data.next);
+
+      if (isReset) {
+        setAdmins(adminList);
+      } else {
+        setAdmins(prev => [...prev, ...adminList]);
+      }
       setError('');
     } catch (err) {
       console.error('Error fetching admins:', err);
-      console.error('Error details:', err.response?.data || err.message);
       setError(`Failed to load admin accounts: ${err.response?.data?.error || err.message}`);
     } finally {
       setLoading(false);
@@ -88,13 +102,27 @@ const AdminAccounts = () => {
           <h3 className="text-xl font-bold">Administrative Accounts</h3>
           <p className="text-sm text-slate-500">System access control and user management</p>
         </div>
-        <button 
-          onClick={() => setShowInviteModal(true)}
-          className="flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg font-medium transition-all shadow-md active:scale-95"
-        >
-          <UserPlus className="w-4 h-4" />
-          Invite Associate
-        </button>
+        <div className="flex gap-3">
+          <Button 
+            variant="secondary"
+            className="flex items-center"
+            onClick={() => {
+              setEmailTargets(admins);
+              setBulkEmail(true);
+              setShowEmail(true);
+            }}
+          >
+            <Send className="w-4 h-4 mr-2" />
+            Bulk Email
+          </Button>
+          <Button 
+            onClick={() => setShowInviteModal(true)}
+            className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg font-medium transition-all shadow-md active:scale-95"
+          >
+            <UserPlus className="w-4 h-4" />
+            Invite Associate
+          </Button>
+        </div>
       </div>
 
       {error && (
@@ -151,77 +179,110 @@ const AdminAccounts = () => {
         </div>
       )}
 
-      {loading ? (
+      {loading && admins.length === 0 ? (
         <div className="flex items-center justify-center h-64">
           <div className="text-slate-500 dark:text-slate-400">Loading admin accounts...</div>
         </div>
       ) : (
-        <div className="bg-white dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-800 overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead className="bg-slate-50 dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700">
-                <tr>
-                  <th className="px-6 py-3 text-left font-semibold text-slate-900 dark:text-white">Name</th>
-                  <th className="px-6 py-3 text-left font-semibold text-slate-900 dark:text-white">Email</th>
-                  <th className="px-6 py-3 text-left font-semibold text-slate-900 dark:text-white">Role</th>
-                  <th className="px-6 py-3 text-left font-semibold text-slate-900 dark:text-white">Status</th>
-                  <th className="px-6 py-3 text-left font-semibold text-slate-900 dark:text-white">Phone</th>
-                  <th className="px-6 py-3 text-right font-semibold text-slate-900 dark:text-white">Action</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-200 dark:divide-slate-700">
-                {admins.length === 0 ? (
-                  <tr>
-                    <td colSpan="6" className="px-6 py-8 text-center text-slate-500 dark:text-slate-400">
-                      No admin accounts found
-                    </td>
-                  </tr>
-                ) : (
-                  admins.map((admin) => (
-                    <tr key={admin.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
-                      <td className="px-6 py-4">
-                        <div className="flex items-center gap-2">
-                          <div className="font-medium text-slate-900 dark:text-white">{admin.full_name}</div>
-                          {admin.is_super_admin && (
-                            <span className="flex items-center gap-1 text-[10px] bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded font-bold uppercase tracking-tight">
-                              <Shield className="w-2.5 h-2.5" /> Super
-                            </span>
-                          )}
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 text-slate-600 dark:text-slate-300">{admin.email}</td>
-                      <td className="px-6 py-4">
-                        <span className={`inline-block px-3 py-1 rounded-full text-xs font-semibold ${getRoleColor(admin.role)}`}>
-                          {admin.role.replace(/_/g, ' ')}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4">
-                        {getVerificationStatus(admin.is_verified)}
-                      </td>
-                      <td className="px-6 py-4 text-slate-600 dark:text-slate-300">{admin.phone || '-'}</td>
-                      <td className="px-6 py-4 text-right">
-                        {user?.admin?.is_super_admin && admin.id !== user?.admin?.id && (
-                          <button
-                            onClick={() => handleDeleteClick(admin)}
-                            disabled={deletingId === admin.id}
-                            className="inline-flex items-center gap-2 px-3 py-2 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors disabled:opacity-50"
-                            title="Delete admin"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                            Dismiss
-                          </button>
-                        )}
-                        {!user?.admin?.is_super_admin && <span className="text-xs text-slate-400 italic">Restricted</span>}
-                        {user?.admin?.is_super_admin && admin.id === user?.admin?.id && <span className="text-xs text-primary-500 font-medium">You</span>}
-                      </td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
-        </div>
+        <Card className="p-0 overflow-hidden border-none shadow-sm">
+          <Table
+            headers={['Name', 'Email/Phone', 'Role', 'Status', 'Actions']}
+            data={admins}
+            maxHeight="max-h-[500px]"
+            renderRow={(admin) => (
+              <tr key={admin.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
+                <td className="px-6 py-4">
+                  <div className="flex items-center gap-2">
+                    <div className="font-medium text-slate-900 dark:text-white uppercase tracking-tight">{admin.full_name}</div>
+                    {admin.is_super_admin && (
+                      <span className="flex items-center gap-1 text-[10px] bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded font-black uppercase tracking-widest">
+                        <Shield className="w-2.5 h-2.5" /> Super
+                      </span>
+                    )}
+                  </div>
+                </td>
+                <td className="px-6 py-4">
+                  <div className="text-sm text-slate-900 dark:text-white font-medium">{admin.email}</div>
+                  <div className="text-[10px] text-slate-400 font-bold tracking-tighter">{admin.phone || 'No phone'}</div>
+                </td>
+                <td className="px-6 py-4">
+                  <span className={`inline-block px-3 py-1 rounded-full text-[10px] font-black tracking-widest ${getRoleColor(admin.role)}`}>
+                    {admin.role.replace(/_/g, ' ')}
+                  </span>
+                </td>
+                <td className="px-6 py-4">
+                  {getVerificationStatus(admin.is_verified)}
+                </td>
+                <td className="px-6 py-4 text-right">
+                  <div className="flex items-center justify-end gap-2">
+                    <button 
+                      onClick={() => {
+                        setEmailTargets(admin);
+                        setBulkEmail(false);
+                        setShowEmail(true);
+                      }}
+                      className="p-2 text-slate-400 hover:text-primary-600 transition-colors"
+                      title="Send Official Email"
+                    >
+                      <Send className="w-4 h-4" />
+                    </button>
+                    {user?.admin?.is_super_admin && admin.id !== user?.admin?.id && (
+                      <button
+                        onClick={() => handleDeleteClick(admin)}
+                        disabled={deletingId === admin.id}
+                        className="p-2 text-slate-400 hover:text-red-600 transition-colors disabled:opacity-50"
+                        title="Dismiss Admin"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    )}
+                    {!user?.admin?.is_super_admin && <span className="text-xs text-slate-400 italic">Restricted</span>}
+                    {user?.admin?.is_super_admin && admin.id === user?.admin?.id && <span className="text-xs text-primary-500 font-bold uppercase">Self</span>}
+                  </div>
+                </td>
+              </tr>
+            )}
+          />
+          {hasMore && (
+            <div className="p-4 border-t border-slate-100 dark:border-slate-800 flex justify-center">
+              <Button 
+                variant="secondary" 
+                onClick={() => {
+                  const nextPage = page + 1;
+                  setPage(nextPage);
+                  fetchAdmins(nextPage);
+                }}
+                disabled={loading}
+                className="px-8 font-black uppercase tracking-widest text-xs"
+              >
+                {loading ? 'Processing...' : 'Load More Accounts'}
+              </Button>
+            </div>
+          )}
+        </Card>
       )}
+
+      {/* Email Modal */}
+      <DirectEmailModal 
+        isOpen={showEmail}
+        targets={emailTargets}
+        bulk={bulkEmail}
+        onClose={() => {
+          setShowEmail(false);
+          setEmailTargets(null);
+        }}
+      />
+
+      <BulkInviteModal 
+        isOpen={showInviteModal}
+        onClose={() => setShowInviteModal(false)}
+        branches={['Kagio', 'Embu', 'Thika', 'Naivasha']}
+      />
+    </div>
+  );
+};
+
+export default AdminAccounts;
 
       {admins.length > 0 && (
         <div className="text-sm text-slate-500 dark:text-slate-400">

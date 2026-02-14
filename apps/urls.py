@@ -35,11 +35,17 @@ from .views import (
     DirectSMSView,
     SMSLogListView,
     AdminInviteView,
+    SendEmailNotificationView,
     DeactivationRequestListCreateView,
     DeactivationRequestDetailView,
 )
 
 urlpatterns = [
+    path(
+        "notifications/send-email/",
+        SendEmailNotificationView.as_view(),
+        name="send-email",
+    ),
     path("auth/2fa/verify/", Login2FAVerifyView.as_view(), name="2fa-verify"),
     path("auth/2fa/enable/", Enable2FAView.as_view(), name="2fa-enable"),
     path(

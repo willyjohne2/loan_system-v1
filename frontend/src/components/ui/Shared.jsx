@@ -50,18 +50,28 @@ export const Card = ({ className, children }) => (
 /**
  * Table Component
  */
-export const Table = ({ headers, data, renderRow, className }) => (
-  <div className={cn("w-full overflow-x-auto rounded-lg border border-slate-200 dark:border-slate-800", className)}>
-    <table className="w-full text-sm md:text-base text-left min-w-[600px]">
-      <thead className="bg-slate-50 text-slate-600 dark:bg-slate-800/50 dark:text-slate-400 font-medium">
-        <tr>
-          {headers.map((h, i) => <th key={i} className="px-4 md:px-6 py-3 md:py-4">{h}</th>)}
-        </tr>
-      </thead>
-      <tbody className="divide-y divide-slate-200 dark:divide-slate-800">
-        {data.map((item, i) => renderRow(item, i))}
-      </tbody>
-    </table>
+export const Table = ({ headers, data, renderRow, className, maxHeight = "max-h-[600px]" }) => (
+  <div className={cn("w-full overflow-hidden rounded-lg border border-slate-200 dark:border-slate-800", className)}>
+    <div className={cn("overflow-x-auto overflow-y-auto", maxHeight)}>
+      <table className="w-full text-sm md:text-base text-left min-w-[600px] border-collapse">
+        <thead className="bg-slate-50 text-slate-600 dark:bg-slate-800/50 dark:text-slate-400 font-medium sticky top-0 z-10">
+          <tr>
+            {headers.map((h, i) => <th key={i} className="px-4 md:px-6 py-3 md:py-4 bg-slate-50 dark:bg-slate-800/90">{h}</th>)}
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-slate-200 dark:divide-slate-800">
+          {data && data.length > 0 ? (
+            data.map((item, i) => renderRow(item, i))
+          ) : (
+            <tr>
+              <td colSpan={headers.length} className="px-6 py-8 text-center text-slate-500">
+                No data available
+              </td>
+            </tr>
+          )}
+        </tbody>
+      </table>
+    </div>
   </div>
 );
 

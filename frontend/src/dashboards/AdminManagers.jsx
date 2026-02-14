@@ -1,9 +1,10 @@
 import React, { useEffect, useState } from 'react';
 import { loanService } from '../api/api';
 import { Table, Button, Card, Badge } from '../components/ui/Shared';
-import { UserPlus, Mail, Phone, CheckCircle, Edit, MapPin, XCircle, Save, Loader2, Activity } from 'lucide-react';
+import { UserPlus, Mail, Phone, CheckCircle, Edit, MapPin, XCircle, Save, Loader2, Activity, Send } from 'lucide-react';
 import AdminActivityModal from '../components/ui/AdminActivityModal';
 import BulkInviteModal from '../components/forms/BulkInviteModal';
+import DirectEmailModal from '../components/ui/DirectEmailModal';
 
 const AdminManagers = () => {
   const [managers, setManagers] = useState([]);
@@ -12,29 +13,36 @@ const AdminManagers = () => {
   const [editingManager, setEditingManager] = useState(null);
   const [isInviting, setIsInviting] = useState(false);
   const [showActivity, setShowActivity] = useState(false);
+  const [showEmail, setShowEmail] = useState(false);
+  const [emailTargets, setEmailTargets] = useState(null);
+  const [bulkEmail, setBulkEmail] = useState(false);
   const [selectedAdmin, setSelectedAdmin] = useState(null);
   const [saving, setSaving] = useState(false);
   const [filterBranch, setFilterBranch] = useState('All');
-  const [formData, setFormData] = useState({
-    full_name: '',
-    email: '',
-    phone: '',
-    branch: ''
-  });
+  
+  const [page, setPage] = useState(1);
+  const [hasMore, setHasMore] = useState(false);
 
   const branches = [
     'Kagio', 'Embu', 'Thika', 'Naivasha'
   ];
 
   useEffect(() => {
-    fetchManagers();
+    fetchManagers(1, true);
   }, []);
 
-  const fetchManagers = async () => {
+  const fetchManagers = async (pageNum = 1, isReset = false) => {
     try {
-      const data = await loanService.getManagers();
+      setLoading(true);
+      const data = await loanService.getManagers({ page: pageNum, page_size: 10 });
       const managersList = data.results || data || [];
-      setManagers(managersList);
+      setHasMore(!!data.next);
+
+      if (isReset) {
+        setManagers(managersList);
+      } else {
+        setManagers(prev => [...prev, ...managersList]);
+      }
       setError('');
     } catch (err) {
       console.error('[AdminManagers] Error fetching managers:', err);
@@ -86,6 +94,18 @@ const AdminManagers = () => {
           <p className="text-sm text-slate-500">Manage and oversee all branchal administrators.</p>
         </div>
         <div className="flex items-center gap-4">
+          <Button 
+            variant="secondary"
+            className="flex items-center"
+            onClick={() => {
+              setEmailTargets(managers);
+              setBulkEmail(true);
+              setShowEmail(true);
+            }}
+          >
+            <Send className="w-4 h-4 mr-2" />
+            Bulk Email
+          </Button>
           <div className="flex items-center gap-2">
             <MapPin className="w-4 h-4 text-slate-400" />
             <select 
@@ -109,84 +129,115 @@ const AdminManagers = () => {
         </div>
       </div>
 
-      {managers.length === 0 ? (
+      {managers.length === 0 && !loading ? (
         <div className="p-8 text-center text-slate-500 bg-slate-50 rounded-lg border border-slate-200 dark:bg-slate-900 dark:border-slate-800">
           <p>No managers registered yet</p>
         </div>
       ) : (
-        <Table
-          headers={['Name', 'Contact', 'Branch', 'Status', 'Actions']}
-          data={managers.filter(m => filterBranch === 'All' || m.branch === filterBranch)}
-          renderRow={(manager) => (
-            <tr key={manager.id} className="hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
-              <td className="px-6 py-4">
-                <div className="flex items-center">
-                  <div className="w-8 h-8 rounded-full bg-primary-100 flex items-center justify-center text-primary-600 font-bold mr-3">
-                    {manager.full_name?.[0] || 'M'}
+        <Card className="overflow-hidden">
+          <Table
+            headers={['Name', 'Contact', 'Branch', 'Status', 'Actions']}
+            data={managers.filter(m => filterBranch === 'All' || m.branch === filterBranch)}
+            maxHeight="max-h-[500px]"
+            renderRow={(manager) => (
+              <tr key={manager.id} className="hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors border-b">
+                <td className="px-6 py-4">
+                  <div className="flex items-center">
+                    <div className="w-8 h-8 rounded-full bg-primary-100 flex items-center justify-center text-primary-600 font-bold mr-3">
+                      {manager.full_name?.[0] || 'M'}
+                    </div>
+                    <div>
+                      <p className="text-sm font-bold text-slate-900 dark:text-white uppercase tracking-tight">{manager.full_name}</p>
+                      <p className="text-[10px] text-slate-400 font-medium">Emp ID: {manager.id.slice(0, 8)}</p>
+                    </div>
                   </div>
-                  <div>
-                    <p className="font-medium text-slate-900 dark:text-white">{manager.full_name}</p>
-                    <p className="text-xs text-slate-500">{manager.email}</p>
+                </td>
+                <td className="px-6 py-4">
+                  <div className="flex flex-col space-y-1">
+                    <span className="flex items-center text-xs text-slate-600 font-medium"><Mail className="w-3 h-3 mr-1" /> {manager.email}</span>
+                    <span className="flex items-center text-xs text-slate-600 font-medium"><Phone className="w-3 h-3 mr-1" /> {manager.phone || '-'}</span>
                   </div>
-                </div>
-              </td>
-              <td className="px-6 py-4">
-                <div className="flex flex-col space-y-1 text-xs text-slate-500">
-                  <span className="flex items-center"><Mail className="w-3 h-3 mr-1" /> {manager.email}</span>
-                  <span className="flex items-center"><Phone className="w-3 h-3 mr-1" /> {manager.phone || '-'}</span>
-                </div>
-              </td>
-              <td className="px-6 py-4">
-                <div className="flex items-center text-slate-600 dark:text-slate-400">
-                  <MapPin className="w-3.5 h-3.5 mr-1.5 text-primary-500" />
-                  <span className="text-sm font-medium">{manager.branch || 'Unassigned'}</span>
-                </div>
-              </td>
-              <td className="px-6 py-4">
-                <Badge variant={manager.is_verified ? 'success' : 'warning'}>
-                  {manager.is_verified ? 'Verified' : 'Pending'}
-                </Badge>
-              </td>
-              <td className="px-6 py-4 text-right">
-                <div className="flex justify-end gap-2">
-                  <Button 
-                    variant="secondary" 
-                    size="sm" 
-                    className="flex items-center p-2"
-                    title="View Activity"
-                    onClick={() => {
-                        setSelectedAdmin({...manager, role: 'MANAGER'});
-                        setShowActivity(true);
-                    }}
-                  >
-                    <Activity className="w-4 h-4" />
-                  </Button>
-                  <Button 
-                    variant="secondary" 
-                    size="sm" 
-                    className="flex items-center p-2"
-                    onClick={() => startEdit(manager)}
-                  >
-                    <Edit className="w-4 h-4" />
-                  </Button>
-                  <Button 
-                    variant="danger" 
-                    size="sm" 
-                    className="flex items-center p-2"
-                    onClick={() => {
-                        if(confirm('Are you sure you want to delete this manager?')) {
-                            loanService.deleteAdmin(manager.id).then(() => fetchManagers());
-                        }
-                    }}
-                  >
-                    <XCircle className="w-4 h-4" />
-                  </Button>
-                </div>
-              </td>
-            </tr>
+                </td>
+                <td className="px-6 py-4">
+                  <div className="flex items-center text-slate-600 dark:text-slate-400">
+                    <MapPin className="w-3.5 h-3.5 mr-1.5 text-primary-500" />
+                    <span className="text-sm font-bold tracking-tight">{manager.branch || 'Unassigned'}</span>
+                  </div>
+                </td>
+                <td className="px-6 py-4">
+                  <Badge variant={manager.is_verified ? 'success' : 'warning'}>
+                    {manager.is_verified ? 'VERIFIED' : 'PENDING'}
+                  </Badge>
+                </td>
+                <td className="px-6 py-4 text-right">
+                  <div className="flex justify-end gap-2">
+                    <Button 
+                      variant="secondary" 
+                      size="sm" 
+                      className="flex items-center p-2"
+                      title="Send Official Email"
+                      onClick={() => {
+                        setEmailTargets(manager);
+                        setBulkEmail(false);
+                        setShowEmail(true);
+                      }}
+                    >
+                      <Send className="w-4 h-4" />
+                    </Button>
+                    <Button 
+                      variant="secondary" 
+                      size="sm" 
+                      className="flex items-center p-2"
+                      title="View Activity"
+                      onClick={() => {
+                          setSelectedAdmin({...manager, role: 'MANAGER'});
+                          setShowActivity(true);
+                      }}
+                    >
+                      <Activity className="w-4 h-4" />
+                    </Button>
+                    <Button 
+                      variant="secondary" 
+                      size="sm" 
+                      className="flex items-center p-2"
+                      onClick={() => startEdit(manager)}
+                    >
+                      <Edit className="w-4 h-4" />
+                    </Button>
+                  </div>
+                </td>
+              </tr>
+            )}
+          />
+          {hasMore && (
+            <div className="p-4 flex justify-center bg-slate-50 dark:bg-slate-800/50">
+              <Button 
+                variant="secondary" 
+                size="sm" 
+                onClick={() => {
+                  const nextPage = page + 1;
+                  setPage(nextPage);
+                  fetchManagers(nextPage);
+                }}
+                loading={loading}
+              >
+                Load More Managers
+              </Button>
+            </div>
           )}
-        />
+        </Card>
       )}
+
+      {/* Email Modal */}
+      <DirectEmailModal 
+        isOpen={showEmail}
+        targets={emailTargets}
+        bulk={bulkEmail}
+        onClose={() => {
+          setShowEmail(false);
+          setEmailTargets(null);
+        }}
+      />
 
       {/* Edit Manager Modal */}
       {editingManager && (

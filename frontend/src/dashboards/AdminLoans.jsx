@@ -20,24 +20,40 @@ const AdminLoans = () => {
   const [selectedLoan, setSelectedLoan] = useState(null);
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
   const [updatingId, setUpdatingId] = useState(null);
+  
+  const [page, setPage] = useState(1);
+  const [hasMore, setHasMore] = useState(false);
 
-  const fetchAllData = async () => {
+  const fetchAllData = async (pageNum = 1, isReset = false) => {
     try {
+      setLoading(true);
       const [loansData, customersData] = await Promise.all([
-        loanService.getLoans(),
-        loanService.getCustomers()
+        loanService.getLoans({ 
+          page: pageNum, 
+          page_size: 10,
+          search: debouncedSearch,
+          status: filterStatus !== 'ALL' ? filterStatus : undefined
+        }),
+        loanService.getCustomers({ page_size: 1000 })
       ]);
 
       const loansList = loansData.results || loansData || [];
       const customersList = customersData.results || customersData || [];
+      
+      setHasMore(!!loansData.next);
 
       const customerMap = customersList.reduce((acc, c) => {
         acc[c.id] = c;
         return acc;
       }, {});
 
-      setLoans(loansList);
       setCustomers(customerMap);
+      
+      if (isReset) {
+        setLoans(loansList);
+      } else {
+        setLoans(prev => [...prev, ...loansList]);
+      }
     } catch (err) {
       console.error("Error fetching loans:", err);
     } finally {
@@ -46,8 +62,9 @@ const AdminLoans = () => {
   };
 
   useEffect(() => {
-    fetchAllData();
-  }, []);
+    setPage(1);
+    fetchAllData(1, true);
+  }, [debouncedSearch, filterStatus, activeTab]);
 
   const handleStatusUpdate = async (loanId, newStatus) => {
     setUpdatingId(loanId);
@@ -268,99 +285,119 @@ const AdminLoans = () => {
           </div>
         </div>
 
-        <div className="overflow-x-auto -mx-6 md:mx-0 px-6 md:px-0 max-h-[550px] overflow-y-auto scrollbar-thin scrollbar-thumb-slate-200 dark:scrollbar-thumb-slate-800">
-          <table className="w-full sticky-header min-w-[1000px]">
-            <thead>
-              <tr className="bg-slate-50 dark:bg-slate-800/50 border-b border-slate-100 dark:border-slate-800 sticky top-0 z-10 shadow-sm">
-                <th className="text-left p-4 text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest">Loan ID</th>
-                <th className="text-left p-4 text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest">Customer Profile</th>
-                <th className="text-left p-4 text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest">Product</th>
-                <th className="text-left p-4 text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest whitespace-nowrap">Principal</th>
-                <th className="text-left p-4 text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest whitespace-nowrap">Repayable</th>
-                <th className="text-left p-4 text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest whitespace-nowrap text-rose-600">Overdue By</th>
-                <th className="text-left p-4 text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest whitespace-nowrap">Status</th>
-                <th className="text-right p-4 text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest whitespace-nowrap">Workflow Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-              {filteredLoans.length > 0 ? (
-                filteredLoans.map((loan) => (
-                  <tr key={loan.id} className="hover:bg-slate-50/80 dark:hover:bg-slate-800/30 transition-colors group">
-                    <td className="p-4">
-                       <span className="font-mono text-[11px] bg-slate-100 dark:bg-slate-800 px-2 py-1 rounded text-primary-600 font-bold uppercase tracking-tighter border border-slate-200 dark:border-slate-700 shadow-sm">
-                          {loan.id.substring(0, 8)}
-                       </span>
-                    </td>
-                    <td className="p-4">
-                      <div className="font-bold text-slate-900 dark:text-white">{customers[loan.user]?.full_name || 'Loading...'}</div>
-                      <div className="text-[10px] text-slate-400 font-mono tracking-tighter uppercase">
-                        PH: {customers[loan.user]?.phone} | ACC: {customers[loan.user]?.profile?.national_id || 'N/A'}
-                      </div>
-                    </td>
-                    <td className="p-4">
-                      <span className="px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-[10px] font-bold text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-700 uppercase">
-                        {loan.product_name}
-                      </span>
-                    </td>
-                    <td className="p-4 text-sm font-black text-slate-700 dark:text-slate-200">
-                      KES {Number(loan.principal_amount).toLocaleString()}
-                    </td>
-                    <td className="p-4 text-sm font-bold text-emerald-600 dark:text-emerald-400">
-                      KES {Number(loan.total_repayable_amount).toLocaleString()}
-                    </td>
-                    <td className="p-4 text-xs font-black text-rose-600">
-                      {loan.overdue_duration || '-'}
-                    </td>
-                    <td className="p-4">
-                      <span className={`px-2.5 py-1 rounded-full text-[9px] font-black uppercase tracking-tight ${getStatusColor(loan.status)}`}>
-                        {loan.status}
-                      </span>
-                    </td>
-                    <td className="p-4 text-right">
-                      <div className="flex items-center justify-end gap-2">
-                        {updatingId === loan.id ? (
-                           <div className="animate-spin w-4 h-4 border-2 border-primary-600 border-t-transparent rounded-full mr-2" />
-                        ) : (
-                          <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                            {loan.status === 'UNVERIFIED' && (
-                              <button 
-                                onClick={() => {
-                                  setSelectedCustomer(customers[loan.user]);
-                                  setSelectedLoan(loan);
-                                  setIsHistoryOpen(true);
-                                }}
-                                className="p-1 px-3 text-[10px] font-black bg-blue-600 text-white rounded hover:bg-blue-700 transition-all shadow-md shadow-blue-500/20"
-                              >
-                                REVIEW & VERIFY
-                              </button>
-                            )}
-                            {loan.status === 'VERIFIED' && (
-                              <button 
-                                onClick={() => handleStatusUpdate(loan.id, 'APPROVED')}
-                                className="p-1 px-2 text-[10px] font-bold bg-emerald-50 text-emerald-600 rounded hover:bg-emerald-600 hover:text-white transition-colors"
-                              >
-                                APPROVE
-                              </button>
-                            )}
-                             {loan.status === 'APPROVED' && (
-                              <button 
-                                onClick={() => handleDisbursement(loan.id)}
-                                className="p-1 px-2 text-[10px] font-bold bg-purple-50 text-purple-600 rounded hover:bg-purple-600 hover:text-white transition-colors"
-                              >
-                                DISBURSE
-                              </button>
-                            )}
-                            {['UNVERIFIED', 'VERIFIED'].includes(loan.status) && (
-                              <button 
-                                onClick={() => handleStatusUpdate(loan.id, 'REJECTED')}
-                                className="p-1 px-2 text-[10px] font-bold bg-rose-50 text-rose-600 rounded hover:bg-rose-600 hover:text-white transition-colors"
-                              >
-                                REJECT
-                              </button>
-                            )}
-                          </div>
-                        )}
+      <Card className="p-0 overflow-hidden">
+        <Table
+          headers={['Loan ID', 'Customer Profile', 'Product', 'Principal', 'Repayable', 'Overdue By', 'Status', 'Actions']}
+          data={filteredLoans}
+          maxHeight="max-h-[500px]"
+          renderRow={(loan) => (
+            <tr key={loan.id} className="hover:bg-slate-50/80 dark:hover:bg-slate-800/30 transition-colors group">
+              <td className="px-6 py-4">
+                 <span className="font-mono text-[11px] bg-slate-100 dark:bg-slate-800 px-2 py-1 rounded text-primary-600 font-bold uppercase tracking-tighter border border-slate-200 dark:border-slate-700 shadow-sm">
+                    {loan.id.substring(0, 8)}
+                 </span>
+              </td>
+              <td className="px-6 py-4">
+                <div className="font-bold text-slate-900 dark:text-white uppercase tracking-tight">{customers[loan.user]?.full_name || 'Loading...'}</div>
+                <div className="text-[10px] text-slate-400 font-mono tracking-tighter uppercase">
+                  PH: {customers[loan.user]?.phone} | NAT: {customers[loan.user]?.profile?.national_id || 'N/A'}
+                </div>
+              </td>
+              <td className="px-6 py-4">
+                <span className="px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-[10px] font-bold text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-700 uppercase">
+                  {loan.product_name}
+                </span>
+              </td>
+              <td className="px-6 py-4 text-sm font-black text-slate-700 dark:text-slate-200">
+                KES {Number(loan.principal_amount).toLocaleString()}
+              </td>
+              <td className="px-6 py-4 text-sm font-bold text-emerald-600 dark:text-emerald-400">
+                KES {Number(loan.total_repayable_amount).toLocaleString()}
+              </td>
+              <td className="px-6 py-4 text-xs font-black text-rose-600">
+                {loan.overdue_duration || '-'}
+              </td>
+              <td className="px-6 py-4">
+                <span className={`px-2.5 py-1 rounded-full text-[9px] font-black uppercase tracking-tight ${getStatusColor(loan.status)}`}>
+                  {loan.status}
+                </span>
+              </td>
+              <td className="px-6 py-4 text-right">
+                <div className="flex items-center justify-end gap-2">
+                  {updatingId === loan.id ? (
+                      <div className="animate-spin w-4 h-4 border-2 border-primary-600 border-t-transparent rounded-full mr-2" />
+                  ) : (
+                    <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                      {loan.status === 'UNVERIFIED' && (
                         <button 
+                          onClick={() => {
+                            setSelectedCustomer(customers[loan.user]);
+                            setSelectedLoan(loan);
+                            setIsHistoryOpen(true);
+                          }}
+                          className="p-1 px-3 text-[10px] font-black bg-blue-600 text-white rounded hover:bg-blue-700 transition-all shadow-md shadow-blue-500/20"
+                        >
+                          REVIEW
+                        </button>
+                      )}
+                      {loan.status === 'VERIFIED' && (
+                        <button 
+                          onClick={() => handleStatusUpdate(loan.id, 'APPROVED')}
+                          className="p-1 px-2 text-[10px] font-bold bg-emerald-50 text-emerald-600 rounded hover:bg-emerald-600 hover:text-white transition-colors border border-emerald-200"
+                        >
+                          APPROVE
+                        </button>
+                      )}
+                        {loan.status === 'APPROVED' && (
+                        <button 
+                          onClick={() => handleDisbursement(loan.id)}
+                          className="p-1 px-2 text-[10px] font-bold bg-purple-50 text-purple-600 rounded hover:bg-purple-600 hover:text-white transition-colors border border-purple-200"
+                        >
+                          DISBURSE
+                        </button>
+                      )}
+                      {['UNVERIFIED', 'VERIFIED'].includes(loan.status) && (
+                        <button 
+                          onClick={() => handleStatusUpdate(loan.id, 'REJECTED')}
+                          className="p-1 px-2 text-[10px] font-bold bg-rose-50 text-rose-600 rounded hover:bg-rose-600 hover:text-white transition-colors border border-rose-200"
+                        >
+                          REJECT
+                        </button>
+                      )}
+                    </div>
+                  )}
+                  <button 
+                    onClick={() => {
+                      setSelectedCustomer(customers[loan.user]);
+                      setSelectedLoan(loan);
+                      setIsHistoryOpen(true);
+                    }}
+                    className="p-2 text-slate-400 hover:text-primary-600 rounded-lg transition-colors"
+                  >
+                    <Eye className="w-4 h-4" />
+                  </button>
+                </div>
+              </td>
+            </tr>
+          )}
+        />
+        {hasMore && (
+          <div className="p-4 border-t border-slate-100 dark:border-slate-800 flex justify-center">
+            <Button 
+              variant="secondary" 
+              onClick={() => {
+                const nextPage = page + 1;
+                setPage(nextPage);
+                fetchAllData(nextPage);
+              }}
+              disabled={loading}
+              className="px-8 font-black uppercase tracking-widest text-xs"
+            >
+              {loading ? 'Processing...' : 'Load More Applications'}
+            </Button>
+          </div>
+        )}
+      </Card> 
                           onClick={() => {
                             setSelectedCustomer(customers[loan.user]);
                             setIsHistoryOpen(true);

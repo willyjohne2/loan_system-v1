@@ -1,10 +1,11 @@
 import React, { useEffect, useState } from 'react';
 import { loanService } from '../api/api';
 import { Table, Button } from '../components/ui/Shared';
-import { UserPlus, Shield, Activity, ShieldOff } from 'lucide-react';
+import { UserPlus, Shield, Activity, ShieldOff, Send } from 'lucide-react';
 import AdminActivityModal from '../components/ui/AdminActivityModal';
 import DeactivationRequestModal from '../components/ui/DeactivationRequestModal';
 import BulkInviteModal from '../components/forms/BulkInviteModal';
+import DirectEmailModal from '../components/ui/DirectEmailModal';
 import { useAuth } from '../context/AuthContext';
 
 const AdminOfficers = ({ role = 'FINANCIAL_OFFICER' }) => {
@@ -13,8 +14,14 @@ const AdminOfficers = ({ role = 'FINANCIAL_OFFICER' }) => {
   const [loading, setLoading] = useState(true);
   const [selectedAdmin, setSelectedAdmin] = useState(null);
   const [showActivity, setShowActivity] = useState(false);
+  const [showEmail, setShowEmail] = useState(false);
+  const [emailTargets, setEmailTargets] = useState(null);
+  const [bulkEmail, setBulkEmail] = useState(false);
   const [isInviting, setIsInviting] = useState(false);
   const [error, setError] = useState('');
+  
+  const [page, setPage] = useState(1);
+  const [hasMore, setHasMore] = useState(false);
 
   // Deactivation Request State
   const [isDeactivateModalOpen, setIsDeactivateModalOpen] = useState(false);
@@ -24,27 +31,33 @@ const AdminOfficers = ({ role = 'FINANCIAL_OFFICER' }) => {
   const userRole = user?.role || user?.admin?.role;
 
   useEffect(() => {
-    const fetchOfficers = async () => {
-      try {
-        console.log(`[AdminOfficers] Fetching ${role} officers...`);
-        const fetch = role === 'FIELD_OFFICER' ? loanService.getFieldOfficers : loanService.getFinanceOfficers;
-        const data = await fetch();
-        console.log(`[AdminOfficers] Data for ${role}:`, data);
-        const officersList = data.results || data || [];
-        console.log(`[AdminOfficers] Processed list for ${role}:`, officersList);
-        setOfficers(officersList);
-        setError('');
-      } catch (err) {
-        console.error(`[AdminOfficers] Error fetching ${role} officers:`, err);
-        console.error('[AdminOfficers] Error details:', err.response?.data || err.message);
-        setError(`Failed to load ${role === 'FIELD_OFFICER' ? 'field' : 'finance'} officers: ${err.response?.data?.error || err.message}`);
-        setOfficers([]);
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchOfficers();
+    fetchOfficers(1, true);
   }, [role]);
+
+  const fetchOfficers = async (pageNum = 1, isReset = false) => {
+    try {
+      setLoading(true);
+      console.log(`[AdminOfficers] Fetching ${role} officers, page ${pageNum}...`);
+      const fetchFunc = role === 'FIELD_OFFICER' ? loanService.getFieldOfficers : loanService.getFinanceOfficers;
+      const data = await fetchFunc({ page: pageNum, page_size: 10 });
+      
+      const officersList = data.results || data || [];
+      setHasMore(!!data.next);
+
+      if (isReset) {
+        setOfficers(officersList);
+      } else {
+        setOfficers(prev => [...prev, ...officersList]);
+      }
+      setError('');
+    } catch (err) {
+      console.error(`[AdminOfficers] Error fetching ${role} officers:`, err);
+      setError(`Failed to load ${role === 'FIELD_OFFICER' ? 'field' : 'finance'} officers`);
+      setOfficers([]);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleDeactivationSubmit = async (officerId, reason) => {
     setSubmittingDeactivation(true);
@@ -81,16 +94,30 @@ const AdminOfficers = ({ role = 'FINANCIAL_OFFICER' }) => {
           <h3 className="text-lg font-semibold">{role === 'FIELD_OFFICER' ? 'Field Officers' : 'Finance Officers'}</h3>
           <p className="text-sm text-slate-500">View and manage all active {role === 'FIELD_OFFICER' ? 'field' : 'finance'} officers.</p>
         </div>
-        <Button 
-          className="flex items-center"
-          onClick={() => {
-            console.log('Opening invitation modal for:', role);
-            setIsInviting(true);
-          }}
-        >
-          <UserPlus className="w-4 h-4 mr-2" />
-          Register {role === 'FIELD_OFFICER' ? 'Field Officer' : 'Financial Officer'}
-        </Button>
+        <div className="flex items-center gap-4">
+          <Button 
+            variant="secondary"
+            className="flex items-center"
+            onClick={() => {
+              setEmailTargets(officers);
+              setBulkEmail(true);
+              setShowEmail(true);
+            }}
+          >
+            <Send className="w-4 h-4 mr-2" />
+            Bulk Email
+          </Button>
+          <Button 
+            className="flex items-center"
+            onClick={() => {
+              console.log('Opening invitation modal for:', role);
+              setIsInviting(true);
+            }}
+          >
+            <UserPlus className="w-4 h-4 mr-2" />
+            Register {role === 'FIELD_OFFICER' ? 'Field Officer' : 'Financial Officer'}
+          </Button>
+        </div>
       </div>
 
       {officers.length === 0 ? (
@@ -98,54 +125,95 @@ const AdminOfficers = ({ role = 'FINANCIAL_OFFICER' }) => {
           <p>No {role === 'FIELD_OFFICER' ? 'field' : 'finance'} officers registered yet</p>
         </div>
       ) : (
-        <Table
-          headers={['Name', 'Email', 'Phone', 'Status', 'Actions']}
-          data={officers}
-          renderRow={(officer) => (
-            <tr key={officer.id} className="hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
-              <td className="px-6 py-4 font-medium text-slate-900 dark:text-white">{officer.full_name}</td>
-              <td className="px-6 py-4 text-slate-600 dark:text-slate-400">{officer.email}</td>
-              <td className="px-6 py-4 text-slate-600 dark:text-slate-400">{officer.phone || '-'}</td>
-              <td className="px-6 py-4">
-                <div className="flex items-center text-xs text-indigo-600 font-medium">
-                  <Shield className="w-3 h-3 mr-1" />
-                  {officer.is_verified ? 'Verified' : 'Pending'}
-                </div>
-              </td>
-              <td className="px-6 py-4 text-right flex items-center justify-end gap-3">
-                <button 
+        <Card className="p-0 overflow-hidden">
+          <Table
+            headers={['Name', 'Email', 'Phone', 'Status', 'Actions']}
+            data={officers}
+            maxHeight="max-h-[500px]"
+            renderRow={(officer) => (
+              <tr key={officer.id} className="hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
+                <td className="px-6 py-4 font-medium text-slate-900 dark:text-white">{officer.full_name}</td>
+                <td className="px-6 py-4 text-slate-600 dark:text-slate-400">{officer.email}</td>
+                <td className="px-6 py-4 text-slate-600 dark:text-slate-400">{officer.phone || '-'}</td>
+                <td className="px-6 py-4">
+                  <div className="flex items-center text-xs text-indigo-600 font-medium">
+                    <Shield className="w-3 h-3 mr-1" />
+                    {officer.is_verified ? 'Verified' : 'Pending'}
+                  </div>
+                </td>
+                <td className="px-6 py-4 text-right flex items-center justify-end gap-3">
+                  <button 
+                      onClick={() => {
+                          setEmailTargets(officer);
+                          setBulkEmail(false);
+                          setShowEmail(true);
+                      }}
+                      className="p-2 text-slate-400 hover:text-primary-600 transition-colors"
+                      title="Send Official Email"
+                  >
+                      <Send className="w-4 h-4" />
+                  </button>
+                  <button 
+                      onClick={() => {
+                          setSelectedAdmin({...officer, role});
+                          setShowActivity(true);
+                      }}
+                      className="flex items-center gap-1 text-slate-500 hover:text-primary-600 transition-colors"
+                      title="View Activity"
+                  >
+                      <Activity className="w-4 h-4" />
+                  </button>
+                  <button 
                     onClick={() => {
-                        setSelectedAdmin({...officer, role});
-                        setShowActivity(true);
+                      if (userRole === 'MANAGER') {
+                        setOfficerToDeactivate(officer);
+                        setIsDeactivateModalOpen(true);
+                      } else if (window.confirm(`Are you sure you want to deactivate ${officer.full_name}? They will be immediately logged out.`)) {
+                        loanService.updateAdmin(officer.id, { is_blocked: true })
+                          .then(() => {
+                            alert("Officer deactivated successfully.");
+                            window.location.reload();
+                          })
+                          .catch(err => alert("Error: " + (err.response?.data?.error || err.message)));
+                      }
                     }}
-                    className="flex items-center gap-1 text-slate-500 hover:text-primary-600 transition-colors"
-                >
-                    <Activity className="w-4 h-4" />
-                    <span className="text-sm font-medium">Activity</span>
-                </button>
-                <button 
-                  onClick={() => {
-                    if (userRole === 'MANAGER') {
-                      setOfficerToDeactivate(officer);
-                      setIsDeactivateModalOpen(true);
-                    } else if (window.confirm(`Are you sure you want to deactivate ${officer.full_name}? They will be immediately logged out.`)) {
-                      loanService.updateAdmin(officer.id, { is_blocked: true })
-                        .then(() => {
-                          alert("Officer deactivated successfully.");
-                          window.location.reload();
-                        })
-                        .catch(err => alert("Error: " + (err.response?.data?.error || err.message)));
-                    }
-                  }}
-                  className="text-rose-600 hover:text-rose-700 text-sm font-medium"
-                >
-                  {userRole === 'MANAGER' ? 'Request Suspension' : 'Deactivate'}
-                </button>
-              </td>
-            </tr>
+                    className="text-rose-600 hover:text-rose-700 text-sm font-medium"
+                  >
+                    {userRole === 'MANAGER' ? 'Request Suspension' : 'Deactivate'}
+                  </button>
+                </td>
+              </tr>
+            )}
+          />
+          {hasMore && (
+            <div className="p-4 border-t border-slate-100 dark:border-slate-800 flex justify-center">
+              <Button 
+                variant="secondary" 
+                onClick={() => {
+                  const nextPage = page + 1;
+                  setPage(nextPage);
+                  fetchOfficers(nextPage);
+                }}
+                disabled={loading}
+                className="px-8 font-black uppercase tracking-widest text-xs"
+              >
+                {loading ? 'Processing...' : `Load More ${role === 'FIELD_OFFICER' ? 'Field' : 'Finance'} Officers`}
+              </Button>
+            </div>
           )}
-        />
+        </Card>
       )}
+
+      {/* Email Modal */}
+      <DirectEmailModal 
+        isOpen={showEmail}
+        targets={emailTargets}
+        bulk={bulkEmail}
+        onClose={() => {
+          setShowEmail(false);
+          setEmailTargets(null);
+        }}
+      />
 
       {selectedAdmin && (
           <AdminActivityModal 

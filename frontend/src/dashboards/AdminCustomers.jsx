@@ -82,13 +82,16 @@ const AdminCustomers = () => {
   const debouncedSearch = useDebounce(searchTerm, 500);
   
   const [page, setPage] = useState(1);
-  const [totalPages, setTotalPages] = useState(1);
+  const [hasMore, setHasMore] = useState(false);
 
   useEffect(() => {
-    fetchData(page, debouncedSearch);
-  }, [page, debouncedSearch]);
+    // Reset when search changes
+    setCustomers([]);
+    setPage(1);
+    fetchData(1, debouncedSearch, true);
+  }, [debouncedSearch]);
 
-  const fetchData = async (pageNum = 1, search = '') => {
+  const fetchData = async (pageNum = 1, search = '', isReset = false) => {
     setLoading(true);
     const parseAmount = (val) => {
       const num = Number(val);
@@ -98,18 +101,16 @@ const AdminCustomers = () => {
     try {
       console.log(`[AdminCustomers] Fetching customers page ${pageNum}...`);
       const [usersData, loansData, repaymentsData] = await Promise.all([
-        loanService.getCustomers({ page: pageNum, search }),
-        loanService.getLoans({ limit: 1000 }), // Keep for stats calculation or adjust
+        loanService.getCustomers({ page: pageNum, search, page_size: 10 }),
+        loanService.getLoans({ limit: 1000 }), 
         loanService.getRepayments({ limit: 1000 })
       ]);
 
-      const users = usersData.results || usersData;
-      if (usersData.total_pages) setTotalPages(usersData.total_pages);
+      const users = usersData.results || usersData || [];
+      setHasMore(!!usersData.next);
       
-      const loans = loansData.results || loansData;
-      const repayments = repaymentsData.results || repaymentsData;
-      const loans = loansData.results || loansData;
-      const repayments = repaymentsData.results || repaymentsData;
+      const loans = loansData.results || loansData || [];
+      const repayments = repaymentsData.results || repaymentsData || [];
 
       const repaidByLoanId = repayments.reduce((acc, r) => {
         const loanId = r.loan;
@@ -141,7 +142,11 @@ const AdminCustomers = () => {
         };
       });
 
-      setCustomers(customersWithTotals);
+      if (isReset) {
+        setCustomers(customersWithTotals);
+      } else {
+        setCustomers(prev => [...prev, ...customersWithTotals]);
+      }
       setError('');
     } catch (err) {
       console.error('[AdminCustomers] Failed to load customers:', err);
@@ -227,75 +232,94 @@ const AdminCustomers = () => {
         </div>
       </div>
 
-      {filteredCustomers.length === 0 ? (
+      {customers.length === 0 ? (
         <div className="p-8 text-center text-slate-500 bg-slate-50 rounded-lg border border-slate-200 dark:bg-slate-900 dark:border-slate-800">
           <p>{searchTerm ? 'No results matching your search' : 'No customers registered yet'}</p>
         </div>
       ) : (
-        <Table
-          headers={['Customer', 'Borrowed', 'Paid', 'Balance', 'Status', 'Actions']}
-          data={filteredCustomers}
-          renderRow={(customer) => {
-            const balance = customer.totalBorrowed - customer.totalRepaid;
-            return (
-              <tr key={customer.id} className={`hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors ${customer.is_locked ? 'opacity-60 bg-red-50/50 dark:bg-red-950/10' : ''}`}>
-                <td className="px-6 py-4">
-                  <div className="flex items-center gap-2">
-                    {customer.is_locked && <Lock className="w-3 h-3 text-red-500" />}
-                    <p className="font-medium text-slate-900 dark:text-white truncate max-w-[150px]">{customer.full_name}</p>
-                  </div>
-                  <p className="text-[10px] text-slate-500 uppercase">ID: {customer.id.slice(0, 8)}</p>
-                </td>
-                <td className="px-6 py-4 text-slate-900 dark:text-white font-medium">KES {customer.totalBorrowed.toLocaleString()}</td>
-                <td className="px-6 py-4 text-emerald-600 font-medium">KES {customer.totalRepaid.toLocaleString()}</td>
-                <td className="px-6 py-4 text-rose-600 font-semibold">KES {balance.toLocaleString()}</td>
-                <td className="px-6 py-4">
-                  {customer.is_locked ? (
-                    <span className="px-2 py-1 text-[10px] font-black rounded uppercase bg-red-100 text-red-700 dark:bg-red-900/30">
-                      Locked/Archived
-                    </span>
-                  ) : (
-                    <span className={`px-2 py-1 text-[10px] font-black rounded uppercase ${balance <= 0 ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'}`}>
-                      {balance <= 0 ? 'Cleared' : 'Active'}
-                    </span>
-                  )}
-                </td>
-                <td className="px-6 py-4 text-right">
-                  <div className="flex items-center justify-end gap-3">
-                    <button 
-                      onClick={() => {
-                          setSelectedCustomer(customer);
-                          setShowSMS(true);
-                      }}
-                      className="p-2 text-slate-400 hover:text-primary-600 hover:bg-primary-50 dark:hover:bg-primary-900/20 rounded-lg transition-colors"
-                      title="Send Individual SMS"
-                    >
-                      <MessageSquare className="w-4 h-4" />
-                    </button>
-                    <button 
-                      onClick={() => {
-                          setSelectedCustomer(customer);
-                          setShowHistory(true);
-                      }}
-                      className="text-primary-600 font-medium hover:underline text-sm"
-                    >
-                      View History
-                    </button>
-                    {!customer.is_locked && (
-                      <button 
-                        onClick={() => handleDelete(customer)}
-                        className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
-                        title="Lock/Delete Customer"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
+        <Card className="overflow-hidden">
+          <Table
+            headers={['Customer', 'Borrowed', 'Paid', 'Balance', 'Status', 'Actions']}
+            data={customers}
+            maxHeight="max-h-[500px]"
+            renderRow={(customer) => {
+              const balance = customer.totalBorrowed - customer.totalRepaid;
+              return (
+                <tr key={customer.id} className={`hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors ${customer.is_locked ? 'opacity-60 bg-red-50/50 dark:bg-red-950/10' : ''}`}>
+                  <td className="px-6 py-4">
+                    <div className="flex items-center gap-2">
+                      {customer.is_locked && <Lock className="w-3 h-3 text-red-500" />}
+                      <p className="font-medium text-slate-900 dark:text-white truncate max-w-[150px]">{customer.full_name}</p>
+                    </div>
+                    <p className="text-[10px] text-slate-500 uppercase">ID: {customer.id.slice(0, 8)}</p>
+                  </td>
+                  <td className="px-6 py-4 text-slate-900 dark:text-white font-medium">KES {customer.totalBorrowed.toLocaleString()}</td>
+                  <td className="px-6 py-4 text-emerald-600 font-medium">KES {customer.totalRepaid.toLocaleString()}</td>
+                  <td className="px-6 py-4 text-rose-600 font-semibold">KES {balance.toLocaleString()}</td>
+                  <td className="px-6 py-4">
+                    {customer.is_locked ? (
+                      <span className="px-2 py-1 text-[10px] font-black rounded uppercase bg-red-100 text-red-700 dark:bg-red-900/30">
+                        Locked/Archived
+                      </span>
+                    ) : (
+                      <span className={`px-2 py-1 text-[10px] font-black rounded uppercase ${balance <= 0 ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'}`}>
+                        {balance <= 0 ? 'Cleared' : 'Active'}
+                      </span>
                     )}
-                  </div>
-                </td>
-              </tr>
-            );
-          }}
-        />
+                  </td>
+                  <td className="px-6 py-4 text-right">
+                    <div className="flex items-center justify-end gap-3">
+                      <button 
+                        onClick={() => {
+                            setSelectedCustomer(customer);
+                            setShowSMS(true);
+                        }}
+                        className="p-2 text-slate-400 hover:text-primary-600 hover:bg-primary-50 dark:hover:bg-primary-900/20 rounded-lg transition-colors"
+                        title="Send Individual SMS"
+                      >
+                        <MessageSquare className="w-4 h-4" />
+                      </button>
+                      <button 
+                        onClick={() => {
+                            setSelectedCustomer(customer);
+                            setShowHistory(true);
+                        }}
+                        className="text-primary-600 font-medium hover:underline text-sm"
+                      >
+                        View History
+                      </button>
+                      {!customer.is_locked && (
+                        <button 
+                          onClick={() => handleDelete(customer)}
+                          className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
+                          title="Lock/Delete Customer"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      )}
+                    </div>
+                  </td>
+                </tr>
+              );
+            }}
+          />
+          {hasMore && (
+            <div className="p-4 border-t border-slate-100 dark:border-slate-800 flex justify-center">
+              <Button 
+                variant="secondary" 
+                onClick={() => {
+                  const nextPage = page + 1;
+                  setPage(nextPage);
+                  fetchData(nextPage, debouncedSearch);
+                }}
+                disabled={loading}
+                className="px-8 font-bold uppercase tracking-widest text-xs"
+              >
+                {loading ? 'Processing...' : 'Load More Customers'}
+              </Button>
+            </div>
+          )}
+        </Card>
       )}
 
       {selectedCustomer && (

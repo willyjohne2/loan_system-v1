@@ -144,6 +144,10 @@ export const loanService = {
     const res = await api.post('/loans/direct-sms/', data);
     return res.data;
   },
+  sendEmailNotification: async (data) => {
+    const res = await api.post('/notifications/send-email/', data);
+    return res.data;
+  },
   getDeactivationRequests: async () => {
     const res = await api.get('/deactivation-requests/');
     return res.data;

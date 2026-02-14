@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { loanService } from '../api/api';
-import { Card } from '../components/ui/Shared';
+import { Card, Table, Button } from '../components/ui/Shared';
 import { History, Search, Filter, TrendingUp } from 'lucide-react';
 
 const AdminAuditLogs = () => {
@@ -8,19 +8,28 @@ const AdminAuditLogs = () => {
   const [dailyAudit, setDailyAudit] = useState([]);
   const [loading, setLoading] = useState(true);
   const [filterType, setFilterType] = useState('');
+  
+  const [page, setPage] = useState(1);
+  const [hasMore, setHasMore] = useState(false);
 
-  const fetchData = async (type = '') => {
+  const fetchData = async (pageNum = 1, isReset = false) => {
     setLoading(true);
     try {
-      const params = {};
-      if (type) params.type = type;
+      const params = { page: pageNum, page_size: 10 };
+      if (filterType) params.type = filterType;
       
       const [logsData, analyticsData] = await Promise.all([
         loanService.getAuditLogs(params),
-        loanService.getAnalytics()
+        loanService.getFinancialAnalytics()
       ]);
 
-      setLogs(logsData.results || logsData || []);
+      setHasMore(!!logsData.next);
+
+      if (isReset) {
+        setLogs(logsData.results || logsData || []);
+      } else {
+        setLogs(prev => [...prev, ...(logsData.results || logsData || [])]);
+      }
       setDailyAudit(analyticsData.daily_disbursements || []);
     } catch (err) {
       console.error("Fetch audit data error:", err);
@@ -30,7 +39,8 @@ const AdminAuditLogs = () => {
   };
 
   useEffect(() => {
-    fetchData(filterType);
+    setPage(1);
+    fetchData(1, true);
   }, [filterType]);
 
   if (loading && logs.length === 0) return (
@@ -120,53 +130,53 @@ const AdminAuditLogs = () => {
           </div>
         </div>
 
-        <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead>
-              <tr className="bg-slate-50 dark:bg-slate-800/50 border-b border-slate-100 dark:border-slate-700">
-                <th className="text-left p-4 text-xs font-bold text-slate-500 dark:text-slate-400 uppercase">Timestamp</th>
-                <th className="text-left p-4 text-xs font-bold text-slate-500 dark:text-slate-400 uppercase">Category</th>
-                <th className="text-left p-4 text-xs font-bold text-slate-500 dark:text-slate-400 uppercase">Action</th>
-                <th className="text-left p-4 text-xs font-bold text-slate-500 dark:text-slate-400 uppercase">Entity</th>
-                <th className="text-left p-4 text-xs font-bold text-slate-500 dark:text-slate-400 uppercase">Details</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-              {logs.length > 0 ? (
-                logs.map((log) => (
-                  <tr key={log.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/30 transition-colors">
-                    <td className="p-4 text-xs text-slate-500 dark:text-slate-400 whitespace-nowrap">
-                      {new Date(log.created_at).toLocaleString()}
-                    </td>
-                    <td className="p-4">
-                      <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
-                        log.log_type === 'STATUS' ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400' :
-                        log.log_type === 'COMMUNICATION' ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400' :
-                        log.log_type === 'MANAGEMENT' ? 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400' :
-                        'bg-slate-100 text-slate-700 dark:bg-slate-900/30 dark:text-slate-400'
-                      }`}>
-                        {log.log_type}
-                      </span>
-                    </td>
-                    <td className="p-4">
-                      <p className="text-sm font-medium text-slate-700 dark:text-slate-200">{log.action}</p>
-                    </td>
-                    <td className="p-4 text-xs font-mono text-slate-500 dark:text-slate-400">{log.table_name || 'N/A'}</td>
-                    <td className="p-4 text-xs text-slate-600 dark:text-slate-400 max-w-xs truncate">
-                      {log.new_data ? JSON.stringify(log.new_data) : 'No extra data'}
-                    </td>
-                  </tr>
-                ))
-              ) : (
-                <tr>
-                  <td colSpan="5" className="p-12 text-center text-slate-400 italic text-sm">
-                    {loading ? 'Refreshing...' : 'No logs found for this criteria.'}
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
+        <Table
+          headers={['Timestamp', 'Category', 'Action', 'Entity', 'Details']}
+          data={logs}
+          maxHeight="max-h-[500px]"
+          renderRow={(log) => (
+            <tr key={log.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/30 transition-colors">
+              <td className="px-6 py-4 text-xs text-slate-500 dark:text-slate-400 whitespace-nowrap">
+                {new Date(log.created_at).toLocaleString()}
+              </td>
+              <td className="px-6 py-4">
+                <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                  log.log_type === 'STATUS' ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400' :
+                  log.log_type === 'COMMUNICATION' ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400' :
+                  log.log_type === 'MANAGEMENT' ? 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400' :
+                  'bg-slate-100 text-slate-700 dark:bg-slate-900/30 dark:text-slate-400'
+                }`}>
+                  {log.log_type}
+                </span>
+              </td>
+              <td className="px-6 py-4">
+                <p className="text-sm font-medium text-slate-700 dark:text-slate-200">{log.action}</p>
+              </td>
+              <td className="px-6 py-4 text-xs font-mono text-slate-500 dark:text-slate-400">{log.table_name || 'N/A'}</td>
+              <td className="px-6 py-4 text-xs text-slate-600 dark:text-slate-400 max-w-xs truncate">
+                {log.new_data ? JSON.stringify(log.new_data) : 'No extra data'}
+              </td>
+            </tr>
+          )}
+        />
+        
+        {hasMore && (
+          <div className="p-4 border-t border-slate-100 dark:border-slate-800 flex justify-center mt-4">
+            <Button 
+              variant="secondary" 
+              onClick={() => {
+                const nextPage = page + 1;
+                setPage(nextPage);
+                fetchData(nextPage);
+              }}
+              disabled={loading}
+              className="px-8 font-black uppercase tracking-widest text-xs"
+            >
+              {loading ? 'Processing...' : 'Load More Logs'}
+            </Button>
+          </div>
+        )}
+      </Card>
       </Card>
     </div>
   );

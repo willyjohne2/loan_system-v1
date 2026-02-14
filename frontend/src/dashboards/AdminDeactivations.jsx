@@ -1,22 +1,30 @@
 import React, { useState, useEffect } from 'react';
 import { loanService } from '../api/api';
 import { ShieldOff, CheckCircle, XCircle, Clock, Search, AlertTriangle, UserMinus } from 'lucide-react';
-import { Card, Button, Badge } from '../components/ui/Shared';
+import { Card, Button, Badge, Table } from '../components/ui/Shared';
 
 const AdminDeactivations = () => {
   const [requests, setRequests] = useState([]);
   const [loading, setLoading] = useState(true);
   const [processingId, setProcessingId] = useState(null);
+  const [page, setPage] = useState(1);
+  const [hasMore, setHasMore] = useState(false);
 
   useEffect(() => {
-    fetchRequests();
+    fetchRequests(1, true);
   }, []);
 
-  const fetchRequests = async () => {
+  const fetchRequests = async (pageNum = 1, isReset = false) => {
     try {
       setLoading(true);
-      const data = await loanService.getDeactivationRequests();
-      setRequests(data.results || data);
+      const data = await loanService.getDeactivationRequests({ page: pageNum, page_size: 10 });
+      
+      setHasMore(!!data.next);
+      if (isReset) {
+        setRequests(data.results || []);
+      } else {
+        setRequests(prev => [...prev, ...(data.results || [])]);
+      }
     } catch (err) {
       console.error("Failed to fetch deactivation requests:", err);
     } finally {
@@ -34,7 +42,8 @@ const AdminDeactivations = () => {
     setProcessingId(id);
     try {
       await loanService.updateDeactivationRequest(id, { status });
-      fetchRequests();
+      setPage(1);
+      fetchRequests(1, true);
       alert(`Request ${status.toLowerCase()} successfully.`);
     } catch (err) {
       console.error(`Failed to ${status} request:`, err);
@@ -43,8 +52,6 @@ const AdminDeactivations = () => {
       setProcessingId(null);
     }
   };
-
-  if (loading && requests.length === 0) return <div className="p-12 text-center">Loading requests...</div>;
 
   return (
     <div className="space-y-6">
@@ -57,77 +64,78 @@ const AdminDeactivations = () => {
             </h3>
             <p className="text-sm text-slate-500">Security-sensitive requests submitted by Branch Managers</p>
           </div>
-          <Button variant="outline" size="sm" onClick={fetchRequests}>Refresh List</Button>
+          <Button variant="outline" size="sm" onClick={() => { setPage(1); fetchRequests(1, true); }}>Refresh List</Button>
         </div>
 
-        <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead>
-              <tr className="bg-slate-50 dark:bg-slate-800/50 border-y border-slate-100 dark:border-slate-800">
-                <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase">Target Officer</th>
-                <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase">Requested By</th>
-                <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase">Justification</th>
-                <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase text-center">Status</th>
-                <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase text-right">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-              {requests.length > 0 ? (
-                requests.map((req) => (
-                  <tr key={req.id} className="hover:bg-slate-50 transition-colors">
-                    <td className="px-6 py-4">
-                      <p className="text-sm font-bold text-slate-900 dark:text-white">{req.officer_name}</p>
-                      <Badge variant="outline" className="text-[10px] mt-1">{req.officer_email}</Badge>
-                    </td>
-                    <td className="px-6 py-4">
-                      <p className="text-sm text-slate-700 dark:text-slate-300">{req.requested_by_name}</p>
-                      <p className="text-[10px] text-slate-400 mt-1">{new Date(req.created_at).toLocaleString()}</p>
-                    </td>
-                    <td className="px-6 py-4">
-                      <p className="text-sm text-slate-600 dark:text-slate-400 max-w-sm italic">"{req.reason}"</p>
-                    </td>
-                    <td className="px-6 py-4 text-center">
-                      <Badge variant={
-                        req.status === 'PENDING' ? 'warning' :
-                        req.status === 'APPROVED' ? 'danger' : 'success'
-                      }>
-                        {req.status}
-                      </Badge>
-                    </td>
-                    <td className="px-6 py-4 text-right">
-                      {req.status === 'PENDING' ? (
-                        <div className="flex justify-end gap-2">
-                          <button 
-                            disabled={processingId === req.id}
-                            onClick={() => handleAction(req.id, req, 'REJECTED')}
-                            className="p-1.5 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-600 rounded-lg transition-colors"
-                            title="Reject Request"
-                          >
-                            <XCircle className="w-5 h-5" />
-                          </button>
-                          <button
-                            disabled={processingId === req.id}
-                            onClick={() => handleAction(req.id, req, 'APPROVED')}
-                            className="p-1.5 hover:bg-red-50 text-red-600 rounded-lg transition-colors border border-red-100"
-                            title="Approve & Deactivate"
-                          >
-                            <ShieldOff className="w-5 h-5" />
-                          </button>
-                        </div>
-                      ) : (
-                        <span className="text-xs text-slate-400 font-medium">Finalized</span>
-                      )}
-                    </td>
-                  </tr>
-                ))
-              ) : (
-                <tr>
-                  <td colSpan="5" className="px-6 py-12 text-center text-slate-400 italic">No deactivation requests found</td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
+        <Table
+          headers={['Target Officer', 'Requested By', 'Justification', 'Status', 'Actions']}
+          data={requests}
+          maxHeight="max-h-[500px]"
+          renderRow={(req) => (
+            <tr key={req.id} className="hover:bg-slate-50 transition-colors">
+              <td className="px-6 py-4">
+                <p className="text-sm font-bold text-slate-900 dark:text-white">{req.officer_name}</p>
+                <Badge variant="outline" className="text-[10px] mt-1">{req.officer_email}</Badge>
+              </td>
+              <td className="px-6 py-4">
+                <p className="text-sm text-slate-700 dark:text-slate-300">{req.requested_by_name}</p>
+                <p className="text-[10px] text-slate-400 mt-1">{new Date(req.created_at).toLocaleString()}</p>
+              </td>
+              <td className="px-6 py-4">
+                <p className="text-sm text-slate-600 dark:text-slate-400 max-w-sm italic">"{req.reason}"</p>
+              </td>
+              <td className="px-6 py-4 text-center">
+                <Badge variant={
+                  req.status === 'PENDING' ? 'warning' :
+                  req.status === 'APPROVED' ? 'danger' : 'success'
+                }>
+                  {req.status}
+                </Badge>
+              </td>
+              <td className="px-6 py-4 text-right">
+                {req.status === 'PENDING' ? (
+                  <div className="flex justify-end gap-2">
+                    <button 
+                      disabled={processingId === req.id}
+                      onClick={() => handleAction(req.id, req, 'REJECTED')}
+                      className="p-1.5 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-600 rounded-lg transition-colors"
+                      title="Reject Request"
+                    >
+                      <XCircle className="w-5 h-5" />
+                    </button>
+                    <button
+                      disabled={processingId === req.id}
+                      onClick={() => handleAction(req.id, req, 'APPROVED')}
+                      className="p-1.5 hover:bg-red-50 text-red-600 rounded-lg transition-colors border border-red-100"
+                      title="Approve & Deactivate"
+                    >
+                      <ShieldOff className="w-5 h-5" />
+                    </button>
+                  </div>
+                ) : (
+                  <span className="text-xs text-slate-400 font-medium">Finalized</span>
+                )}
+              </td>
+            </tr>
+          )}
+        />
+
+        {hasMore && (
+          <div className="p-4 border-t border-slate-100 dark:border-slate-800 flex justify-center mt-4">
+            <Button 
+              variant="secondary" 
+              onClick={() => {
+                const nextPage = page + 1;
+                setPage(nextPage);
+                fetchRequests(nextPage);
+              }}
+              disabled={loading}
+              className="px-8 font-black uppercase tracking-widest text-xs"
+            >
+              {loading ? 'Processing...' : 'Load More Requests'}
+            </Button>
+          </div>
+        )}
       </Card>
 
       <Card className="p-6 bg-red-50 border-red-100 dark:bg-red-900/10 dark:border-red-900/30">
