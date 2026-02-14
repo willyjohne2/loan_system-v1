@@ -1957,38 +1957,57 @@ class LoanDetailView(generics.RetrieveUpdateAPIView):
                 "user",
                 "loan_product",
                 "interest_rate",
+                "duration_weeks",
+                "duration_months",
             ]
-            if not self.request.user.is_super_admin:
+
+            # Managers and below cannot edit these if status is FIELD_VERIFIED or higher
+            user_role = getattr(self.request.user, "role", "STAFF")
+            is_critical_role = user_role in [
+                "ADMIN",
+                "MANAGER",
+                "FIELD_OFFICER",
+                "STAFF",
+            ]
+
+            if is_critical_role and not self.request.user.is_super_admin:
                 for field in protected_fields:
                     if field in data:
                         val = data[field]
                         orig = getattr(instance, field)
-                        if hasattr(orig, "id"):
-                            if str(val) != str(orig.id):
-                                from rest_framework.exceptions import ValidationError
 
-                                raise ValidationError(
-                                    f"Security Lock: Cannot change {field} after loan has been {instance.status}."
-                                )
-                        else:
-                            if str(val) != str(orig):
-                                from rest_framework.exceptions import ValidationError
+                        # Handle relation fields (objects)
+                        orig_val = str(orig.id) if hasattr(orig, "id") else str(orig)
+                        target_val = str(val) if val is not None else "None"
 
-                                raise ValidationError(
-                                    f"Security Lock: Cannot change {field} after loan has been {instance.status}."
-                                )
+                        if target_val != orig_val:
+                            from rest_framework.exceptions import ValidationError
+
+                            raise ValidationError(
+                                f"Security Lock: Cannot change {field} after loan has been {instance.status}."
+                            )
 
         # Add reason for status change if provided
         status_change_reason = data.get("status_change_reason")
 
-        updated_instance = serializer.save(
-            last_modified_by=self.request.user,
-            status_change_reason=(
+        # Determine verification timestamps
+        extra_fields = {
+            "last_modified_by": self.request.user,
+            "status_change_reason": (
                 status_change_reason
                 if status_change_reason
                 else instance.status_change_reason
             ),
-        )
+        }
+
+        from django.utils import timezone
+
+        if data.get("status") == "FIELD_VERIFIED":
+            extra_fields["field_officer_verified_at"] = timezone.now()
+        elif data.get("status") == "VERIFIED":
+            extra_fields["manager_verified_at"] = timezone.now()
+
+        updated_instance = serializer.save(**extra_fields)
 
         log_action(
             self.request.user,

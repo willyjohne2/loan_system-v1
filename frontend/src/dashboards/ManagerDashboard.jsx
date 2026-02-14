@@ -54,11 +54,11 @@ const ManagerDashboard = () => {
   const [selectedBranch, setSelectedBranch] = useState('Kagio');
   
   const availableBranches = [
-    'Kagio', 'Embu', 'Thika', 'Naivasha'
+    'All Branches', 'Kagio', 'Embu', 'Thika', 'Naivasha'
   ];
 
   // Derive initial values
-  const rawBranch = user?.admin?.branch || user?.branch || 'Kagio';
+  const rawBranch = user?.admin?.branch || user?.branch || 'All Branches';
   const currentBranch = availableBranches.includes(rawBranch) ? rawBranch : 'Kagio';
 
   useEffect(() => {
@@ -175,7 +175,9 @@ const ManagerDashboard = () => {
       let customersList = custData.results || custData;
 
       // Apply Branch Filter if selected
-      if (selectedBranch !== 'All' && selectedBranch !== 'Azariah Credit') {
+      const isFilterActive = selectedBranch && selectedBranch !== 'All' && selectedBranch !== 'Azariah Credit' && selectedBranch !== 'All Branches';
+      
+      if (isFilterActive) {
           customersList = customersList.filter(c => c.profile?.branch === selectedBranch);
           const validCustomerIds = new Set(customersList.map(c => c.id));
           loansList = loansList.filter(l => validCustomerIds.has(l.user));
@@ -344,11 +346,15 @@ const ManagerDashboard = () => {
 
   const getStatusColor = (status) => {
     switch (status?.toUpperCase()) {
-      case 'AWARDED': return 'success';
-      case 'VERIFIED': return 'info';
-      case 'PENDING': return 'warning';
+      case 'AWARDED':
+      case 'DISBURSED':
+      case 'ACTIVE': return 'success';
+      case 'VERIFIED':
+      case 'APPROVED': return 'info';
+      case 'FIELD_VERIFIED': return 'primary';
+      case 'PENDING':
       case 'UNVERIFIED': return 'warning';
-      case 'REJECTED': return 'danger';
+      case 'REJECTED':
       case 'OVERDUE': return 'danger';
       default: return 'secondary';
     }
@@ -357,7 +363,10 @@ const ManagerDashboard = () => {
   const handleUpdateLoanStatus = async (loanId, newStatus) => {
     setUpdating(true);
     try {
-      await loanService.updateLoan(loanId, { status: newStatus });
+      await loanService.updateLoan(loanId, { 
+        status: newStatus,
+        status_change_reason: `Manager override to ${newStatus}`
+      });
       // Refresh data without full page reload
       fetchCoreData();
       fetchAnalytics();
@@ -413,6 +422,18 @@ const ManagerDashboard = () => {
         </div>
         
         <div className="flex items-center gap-3 flex-wrap">
+          <div className="relative">
+             <select 
+               value={selectedBranch}
+               onChange={(e) => setSelectedBranch(e.target.value)}
+               className="h-10 pl-4 pr-10 text-sm font-bold bg-white dark:bg-slate-800 border border-emerald-200 dark:border-emerald-700 rounded-lg appearance-none focus:ring-2 focus:ring-emerald-500 outline-none cursor-pointer text-slate-700 dark:text-slate-200"
+             >
+               {availableBranches.map(branch => (
+                 <option key={branch} value={branch}>{branch}</option>
+               ))}
+             </select>
+             <ChevronDown className="w-4 h-4 absolute right-3 top-3 pointer-events-none text-slate-400" />
+          </div>
           <Button onClick={() => setIsRegistering(true)} className="flex items-center gap-2">
             <UserPlus className="w-4 h-4" />
             Register Customer
@@ -693,8 +714,9 @@ const ManagerDashboard = () => {
 
            <div className="flex bg-slate-100 dark:bg-slate-800 p-1 rounded-lg">
              {[
+               { id: 'QUEUE', label: 'Queue' },
+               { id: 'VERIFIED', label: 'Verified' },
                { id: 'ACTIVE', label: 'Disbursed' },
-               { id: 'PENDING', label: 'Processing' },
                { id: 'REJECTED', label: 'Rejected' }
              ].map(tab => (
                <button
@@ -741,13 +763,15 @@ const ManagerDashboard = () => {
               {loans.filter(l => {
                   const s = l.status;
                   if (activeTab === 'ACTIVE') return ['DISBURSED', 'ACTIVE', 'OVERDUE', 'CLOSED', 'REPAID'].includes(s);
-                  if (activeTab === 'PENDING') return ['UNVERIFIED', 'VERIFIED', 'APPROVED', 'PENDING'].includes(s);
+                  if (activeTab === 'QUEUE') return ['UNVERIFIED', 'FIELD_VERIFIED', 'PENDING'].includes(s);
+                  if (activeTab === 'VERIFIED') return ['VERIFIED', 'APPROVED'].includes(s);
                   return s === 'REJECTED';
               }).length > 0 ? (
                 loans.filter(l => {
                     const s = l.status;
                     if (activeTab === 'ACTIVE') return ['DISBURSED', 'ACTIVE', 'OVERDUE', 'CLOSED', 'REPAID'].includes(s);
-                    if (activeTab === 'PENDING') return ['UNVERIFIED', 'VERIFIED', 'APPROVED', 'PENDING'].includes(s);
+                    if (activeTab === 'QUEUE') return ['UNVERIFIED', 'FIELD_VERIFIED', 'PENDING'].includes(s);
+                    if (activeTab === 'VERIFIED') return ['VERIFIED', 'APPROVED'].includes(s);
                     return s === 'REJECTED';
                 }).map((loan) => (
                   <tr key={loan.id} className="text-sm hover:bg-slate-50 dark:hover:bg-slate-800/20">
@@ -773,23 +797,27 @@ const ManagerDashboard = () => {
                     </td>
                     <td className="px-4 py-4 text-right">
                       <div className="flex justify-end gap-2">
-                        {loan.status === 'UNVERIFIED' && (
+                        {['UNVERIFIED', 'FIELD_VERIFIED', 'VERIFIED'].includes(loan.status) && (
                           <Button 
                             size="xs" 
-                            className="bg-blue-600 hover:bg-blue-700 text-white font-bold"
+                            className={`${loan.status === 'VERIFIED' ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-blue-600 hover:bg-blue-700'} text-white font-bold whitespace-nowrap`}
                             onClick={() => {
                               setSelectedCustomer(customers.find(c => c.id === loan.user));
                               setSelectedLoan(loan);
                             }}
                             disabled={updating}
                           >
-                            Verify
+                            {loan.status === 'VERIFIED' ? 'Re-Verify' : 'Verify'}
                           </Button>
                         )}
                         <Button 
                           size="xs" 
                           variant="ghost"
-                          onClick={() => setSelectedLoan(loan)}
+                          onClick={() => {
+                            setSelectedLoan(loan);
+                            // Also set customer so the modal can show history if needed
+                            setSelectedCustomer(customers.find(c => c.id === loan.user));
+                          }}
                         >
                           <Eye className="w-4 h-4" />
                         </Button>
@@ -1069,7 +1097,7 @@ const ManagerDashboard = () => {
                   Reject Loan
                 </Button>
               )}
-              {selectedLoan.status === 'UNVERIFIED' && (
+              {['UNVERIFIED', 'FIELD_VERIFIED'].includes(selectedLoan.status) && (
                 <Button 
                   className="bg-blue-600 hover:bg-blue-700 text-white"
                   onClick={() => handleUpdateLoanStatus(selectedLoan.id, 'VERIFIED')}
@@ -1081,10 +1109,14 @@ const ManagerDashboard = () => {
               {selectedLoan.status === 'VERIFIED' && (
                 <Button 
                   className="bg-emerald-600 hover:bg-emerald-700 text-white"
-                  onClick={() => handleUpdateLoanStatus(selectedLoan.id, 'PENDING')}
+                  onClick={() => {
+                    if (window.confirm("This loan is already verified. Do you want to re-verify?")) {
+                      handleUpdateLoanStatus(selectedLoan.id, 'VERIFIED');
+                    }
+                  }}
                   disabled={updating}
                 >
-                  Move to Pending
+                  Re-Verify
                 </Button>
               )}
               {['ACTIVE', 'OVERDUE'].includes(selectedLoan.status) && (

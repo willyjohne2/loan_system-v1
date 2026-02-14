@@ -1,9 +1,11 @@
 import React, { useEffect, useState } from 'react';
 import { loanService } from '../../api/api';
+import { useAuth } from '../../context/AuthContext';
 import { Card, Button, Table } from '../ui/Shared';
 import { X, TrendingUp, TrendingDown, Clock, CheckCircle, FileText, Wallet, User, AlertCircle, Calendar, Eye } from 'lucide-react';
 
 const CustomerHistoryModal = ({ customer, isOpen, onClose, loanToVerify, onVerified }) => {
+  const { user } = useAuth();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [loans, setLoans] = useState([]);
@@ -26,9 +28,30 @@ const CustomerHistoryModal = ({ customer, isOpen, onClose, loanToVerify, onVerif
 
   const handleVerify = async () => {
     if (!loanToVerify) return;
+    
+    // Determine target status based on role
+    const userRole = user?.role?.toUpperCase() || user?.admin?.role?.toUpperCase();
+    let targetStatus = 'VERIFIED'; // Default to manager level
+    
+    if (userRole === 'FIELD_OFFICER') {
+        targetStatus = 'FIELD_VERIFIED';
+    } else if (userRole === 'MANAGER' || userRole === 'ADMIN') {
+        // If it's already manager verified, we might be re-verifying
+        targetStatus = 'VERIFIED';
+    }
+
+    if (loanToVerify.status === targetStatus && (userRole === 'MANAGER' || userRole === 'ADMIN')) {
+        if (!window.confirm("This loan is already verified. Do you want to re-verify? (This action will be logged)")) {
+            return;
+        }
+    }
+
     setUpdating(true);
     try {
-      await loanService.api.patch(`/loans/${loanToVerify.id}/`, { status: 'VERIFIED' });
+      await loanService.api.patch(`/loans/${loanToVerify.id}/`, { 
+        status: targetStatus,
+        status_change_reason: `Verified by ${user.full_name || 'Staff'} (${userRole})`
+      });
       setVerificationSuccess(true);
       onVerified?.();
       

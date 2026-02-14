@@ -113,6 +113,8 @@ class Loans(models.Model):
     loan_reason_other = models.TextField(blank=True, null=True)
     status = models.TextField(default="UNVERIFIED", db_index=True)
     status_change_reason = models.TextField(blank=True, null=True)
+    field_officer_verified_at = models.DateTimeField(null=True, blank=True)
+    manager_verified_at = models.DateTimeField(null=True, blank=True)
     created_by = models.ForeignKey(
         Admins, models.SET_NULL, null=True, blank=True, related_name="processed_loans"
     )
