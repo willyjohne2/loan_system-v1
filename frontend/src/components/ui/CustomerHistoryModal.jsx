@@ -6,6 +6,28 @@ import { X, TrendingUp, TrendingDown, Clock, CheckCircle, FileText, Wallet, User
 
 const CustomerHistoryModal = ({ customer, isOpen, onClose, loanToVerify, onVerified }) => {
   const { user } = useAuth();
+
+  // Returns the correct label for the verify button based on user role and loan status
+  function getVerifyButtonLabel() {
+    if (!loanToVerify) return 'Verify';
+    const userRole = user?.role?.toUpperCase() || user?.admin?.role?.toUpperCase();
+    if (userRole === 'FIELD_OFFICER') {
+      if (loanToVerify.status === 'FIELD_VERIFIED') {
+        return 'Submitted to Manager';
+      }
+      return 'Submit to Manager';
+    }
+    if (userRole === 'MANAGER' || userRole === 'ADMIN') {
+      if (loanToVerify.status === 'VERIFIED') {
+        return 'Already Verified';
+      }
+      if (loanToVerify.status === 'FIELD_VERIFIED') {
+        return 'Verify & Push to Finance';
+      }
+      return 'Verify';
+    }
+    return 'Verify';
+  }
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [loans, setLoans] = useState([]);
