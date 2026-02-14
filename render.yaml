@@ -3,8 +3,8 @@ services:
     name: loan-system-api
     runtime: python
     plan: free
-    buildCommand: pip install -r requirements.txt
-    startCommand: gunicorn loan_system_project.wsgi
+    buildCommand: pip install -r requirements.txt && python manage.py collectstatic --no-input && python manage.py migrate
+    startCommand: gunicorn loan_system_project.wsgi:application --bind 0.0.0.0:$PORT
     envVars:
       - key: SECRET_KEY
         sync: false
