@@ -128,13 +128,16 @@ class Loans(models.Model):
         db_table = "loans"
 
     def save(self, *args, **kwargs):
+        # Check if this is an update by looking up the existing record safely
+        is_update = False
         if self.pk:
-            old_instance = Loans.objects.get(pk=self.pk)
-            # Prevent tampering after verification
-            if old_instance.status in ["VERIFIED", "ACTIVE", "OVERDUE", "CLOSED"]:
-                # If amount or user changed, block it unless super admin
-                # (Note: This is a low-level check, better enforced in views)
-                pass
+            old_instance = Loans.objects.filter(pk=self.pk).first()
+            if old_instance:
+                is_update = True
+                # Prevent tampering after verification
+                if old_instance.status in ["VERIFIED", "ACTIVE", "OVERDUE", "CLOSED"]:
+                    # (Note: This is a low-level check, better enforced in views)
+                    pass
 
         if not self.base_interest_rate and self.interest_rate:
             self.base_interest_rate = self.interest_rate
