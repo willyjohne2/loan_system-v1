@@ -177,7 +177,6 @@ const AdminAuditLogs = () => {
           </div>
         )}
       </Card>
-      </Card>
     </div>
   );
 };

@@ -19,6 +19,12 @@ const AdminManagers = () => {
   const [selectedAdmin, setSelectedAdmin] = useState(null);
   const [saving, setSaving] = useState(false);
   const [filterBranch, setFilterBranch] = useState('All');
+  const [formData, setFormData] = useState({
+    full_name: '',
+    email: '',
+    phone: '',
+    branch: ''
+  });
   
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(false);

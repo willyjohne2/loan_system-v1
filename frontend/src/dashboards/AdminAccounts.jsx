@@ -273,19 +273,8 @@ const AdminAccounts = () => {
         }}
       />
 
-      <BulkInviteModal 
-        isOpen={showInviteModal}
-        onClose={() => setShowInviteModal(false)}
-        branches={['Kagio', 'Embu', 'Thika', 'Naivasha']}
-      />
-    </div>
-  );
-};
-
-export default AdminAccounts;
-
       {admins.length > 0 && (
-        <div className="text-sm text-slate-500 dark:text-slate-400">
+        <div className="text-sm text-slate-500 dark:text-slate-400 mt-4">
           Total: <strong>{admins.length}</strong> admin account(s)
         </div>
       )}
