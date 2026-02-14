@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { loanService } from '../../api/api';
 import { Card, Button, Table } from '../ui/Shared';
-import { X, TrendingUp, TrendingDown, Clock, CheckCircle, FileText, Wallet, User, AlertCircle, Calendar } from 'lucide-react';
+import { X, TrendingUp, TrendingDown, Clock, CheckCircle, FileText, Wallet, User, AlertCircle, Calendar, Eye } from 'lucide-react';
 
 const CustomerHistoryModal = ({ customer, isOpen, onClose, loanToVerify, onVerified }) => {
   const [loading, setLoading] = useState(true);
