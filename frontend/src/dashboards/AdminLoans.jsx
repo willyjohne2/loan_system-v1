@@ -4,6 +4,7 @@ import { Card, Table, Button } from '../components/ui/Shared';
 import { Search, Filter, Download, Eye, CheckCircle, XCircle, Clock, MessageSquareShare, FileCheck } from 'lucide-react';
 import BulkCustomerSMSModal from '../components/ui/BulkCustomerSMSModal';
 import CustomerHistoryModal from '../components/ui/CustomerHistoryModal';
+import { useDebounce } from '../hooks/useDebounce';
 
 const AdminLoans = () => {
   const [loans, setLoans] = useState([]);
@@ -12,6 +13,7 @@ const AdminLoans = () => {
   const [filterStatus, setFilterStatus] = useState('ALL');
   const [filterProduct, setFilterProduct] = useState('ALL');
   const [searchTerm, setSearchTerm] = useState('');
+  const debouncedSearch = useDebounce(searchTerm, 500);
   const [activeTab, setActiveTab] = useState('ACTIVE'); // 'ACTIVE', 'PENDING', 'REJECTED'
   const [isBulkModalOpen, setIsBulkModalOpen] = useState(false);
   const [selectedCustomer, setSelectedCustomer] = useState(null);
@@ -98,9 +100,9 @@ const AdminLoans = () => {
     const matchesProduct = filterProduct === 'ALL' || loan.product_name === filterProduct;
     const customer = customers[loan.user] || {};
     const customerName = customer.full_name || '';
-    const matchesSearch = customerName.toLowerCase().includes(searchTerm.toLowerCase()) || 
-                         loan.id.toString().includes(searchTerm) ||
-                         (loan.product_name || '').toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesSearch = customerName.toLowerCase().includes(debouncedSearch.toLowerCase()) || 
+                         loan.id.toString().includes(debouncedSearch) ||
+                         (loan.product_name || '').toLowerCase().includes(debouncedSearch.toLowerCase());
     return matchesStatus && matchesProduct && matchesSearch;
   });
 
@@ -273,10 +275,10 @@ const AdminLoans = () => {
                 <th className="text-left p-4 text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest">Loan ID</th>
                 <th className="text-left p-4 text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest">Customer Profile</th>
                 <th className="text-left p-4 text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest">Product</th>
-                <th className="text-left p-4 text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest">Principal</th>
-                <th className="text-left p-4 text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest">Repayable</th>
-                <th className="text-left p-4 text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest">Duration</th>
-                <th className="text-left p-4 text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest">Status</th>
+                <th className="text-left p-4 text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest whitespace-nowrap">Principal</th>
+                <th className="text-left p-4 text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest whitespace-nowrap">Repayable</th>
+                <th className="text-left p-4 text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest whitespace-nowrap text-rose-600">Overdue By</th>
+                <th className="text-left p-4 text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest whitespace-nowrap">Status</th>
                 <th className="text-right p-4 text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest whitespace-nowrap">Workflow Actions</th>
               </tr>
             </thead>
@@ -306,8 +308,8 @@ const AdminLoans = () => {
                     <td className="p-4 text-sm font-bold text-emerald-600 dark:text-emerald-400">
                       KES {Number(loan.total_repayable_amount).toLocaleString()}
                     </td>
-                    <td className="p-4 text-xs font-medium text-slate-600 dark:text-slate-400">
-                      {loan.duration_weeks ? `${loan.duration_weeks} Weeks` : `${loan.duration_months} Months`}
+                    <td className="p-4 text-xs font-black text-rose-600">
+                      {loan.overdue_duration || '-'}
                     </td>
                     <td className="p-4">
                       <span className={`px-2.5 py-1 rounded-full text-[9px] font-black uppercase tracking-tight ${getStatusColor(loan.status)}`}>

@@ -55,6 +55,7 @@ class DisbursementService:
 
             # 5. Update Loan Status
             loan.status = "DISBURSED"
+            loan.disbursed_at = timezone.now()
             loan.save()
 
             # 6. Log Activity

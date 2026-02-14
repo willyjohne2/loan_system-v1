@@ -315,6 +315,7 @@ class LoanSerializer(serializers.ModelSerializer):
     amount_paid = serializers.DecimalField(
         max_digits=12, decimal_places=2, read_only=True
     )
+    overdue_duration = serializers.ReadOnlyField()
 
     class Meta:
         model = Loans

@@ -1,9 +1,10 @@
 import React, { useEffect, useState } from 'react';
 import { loanService } from '../api/api';
-import { Table, StatCard, Button } from '../components/ui/Shared';
+import { Table, StatCard, Button, Pagination } from '../components/ui/Shared';
 import { Search, Filter, UserPlus, Trash2, Lock, Unlock, MessageSquare, Send, X } from 'lucide-react';
 import CustomerRegistrationForm from '../components/forms/CustomerRegistrationForm';
 import CustomerHistoryModal from '../components/ui/CustomerHistoryModal';
+import { useDebounce } from '../hooks/useDebounce';
 
 const DirectSMSModal = ({ customer, isOpen, onClose }) => {
   const [message, setMessage] = useState('');
@@ -77,12 +78,17 @@ const AdminCustomers = () => {
   const [selectedCustomer, setSelectedCustomer] = useState(null);
   const [showHistory, setShowHistory] = useState(false);
   const [showSMS, setShowSMS] = useState(false);
+  const [searchTerm, setSearchTerm] = useState('');
+  const debouncedSearch = useDebounce(searchTerm, 500);
+  
+  const [page, setPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
 
   useEffect(() => {
-    fetchData();
-  }, []);
+    fetchData(page, debouncedSearch);
+  }, [page, debouncedSearch]);
 
-  const fetchData = async () => {
+  const fetchData = async (pageNum = 1, search = '') => {
     setLoading(true);
     const parseAmount = (val) => {
       const num = Number(val);
@@ -90,14 +96,18 @@ const AdminCustomers = () => {
     };
 
     try {
-      console.log('[AdminCustomers] Fetching customer data...');
+      console.log(`[AdminCustomers] Fetching customers page ${pageNum}...`);
       const [usersData, loansData, repaymentsData] = await Promise.all([
-        loanService.getCustomers(),
-        loanService.getLoans(),
-        loanService.getRepayments()
+        loanService.getCustomers({ page: pageNum, search }),
+        loanService.getLoans({ limit: 1000 }), // Keep for stats calculation or adjust
+        loanService.getRepayments({ limit: 1000 })
       ]);
 
       const users = usersData.results || usersData;
+      if (usersData.total_pages) setTotalPages(usersData.total_pages);
+      
+      const loans = loansData.results || loansData;
+      const repayments = repaymentsData.results || repaymentsData;
       const loans = loansData.results || loansData;
       const repayments = repaymentsData.results || repaymentsData;
 
@@ -205,23 +215,26 @@ const AdminCustomers = () => {
           <div className="flex gap-2">
             <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-              <input type="text" placeholder="Search customer..." className="pl-9 pr-4 py-2 border border-slate-200 rounded-lg text-sm dark:bg-slate-800 dark:border-slate-700" />
+              <input 
+                type="text" 
+                placeholder="Search customer..." 
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="pl-9 pr-4 py-2 border border-slate-200 rounded-lg text-sm dark:bg-slate-800 dark:border-slate-700" 
+              />
             </div>
-            <button className="p-2 border border-slate-200 rounded-lg hover:bg-slate-50 dark:border-slate-700 dark:hover:bg-slate-800">
-              <Filter className="w-4 h-4 text-slate-600" />
-            </button>
           </div>
         </div>
       </div>
 
-      {customers.length === 0 ? (
+      {filteredCustomers.length === 0 ? (
         <div className="p-8 text-center text-slate-500 bg-slate-50 rounded-lg border border-slate-200 dark:bg-slate-900 dark:border-slate-800">
-          <p>No customers registered yet</p>
+          <p>{searchTerm ? 'No results matching your search' : 'No customers registered yet'}</p>
         </div>
       ) : (
         <Table
           headers={['Customer', 'Borrowed', 'Paid', 'Balance', 'Status', 'Actions']}
-          data={customers}
+          data={filteredCustomers}
           renderRow={(customer) => {
             const balance = customer.totalBorrowed - customer.totalRepaid;
             return (

@@ -59,32 +59,32 @@ export const loanService = {
     const res = await api.post('/auth/2fa/disable/', data);
     return res.data;
   },
-  getManagers: async () => {
-    const res = await api.get('/admins/?role=MANAGER');
+  getManagers: async (params) => {
+    const res = await api.get('/admins/', { params: { ...params, role: 'MANAGER' } });
     return res.data;
   },
   updateAdmin: async (id, data) => {
     const res = await api.patch(`/admins/${id}/`, data);
     return res.data;
   },
-  getOfficers: async () => {
-    const res = await api.get('/admins/?role=FIELD_OFFICER');
+  getOfficers: async (params) => {
+    const res = await api.get('/admins/', { params: { ...params, role: 'FIELD_OFFICER' } });
     return res.data;
   },
-  getFieldOfficers: async () => {
-    const res = await api.get('/admins/?role=FIELD_OFFICER');
+  getFieldOfficers: async (params) => {
+    const res = await api.get('/admins/', { params: { ...params, role: 'FIELD_OFFICER' } });
     return res.data;
   },
-  getFinanceOfficers: async () => {
-    const res = await api.get('/admins/?role=FINANCIAL_OFFICER');
+  getFinanceOfficers: async (params) => {
+    const res = await api.get('/admins/', { params: { ...params, role: 'FINANCIAL_OFFICER' } });
     return res.data;
   },
-  getLoans: async () => {
-    const res = await api.get('/loans/');
+  getLoans: async (params) => {
+    const res = await api.get('/loans/', { params });
     return res.data;
   },
-  getLoanProducts: async () => {
-    const res = await api.get('/loan-products/');
+  getLoanProducts: async (params) => {
+    const res = await api.get('/loan-products/', { params });
     return res.data;
   },
   updateLoanProduct: async (id, data) => {
@@ -95,8 +95,12 @@ export const loanService = {
     const res = await api.patch(`/loans/${id}/`, data);
     return res.data;
   },
-  getCustomers: async () => {
-    const res = await api.get('/users/');
+  getCustomers: async (params) => {
+    const res = await api.get('/users/', { params });
+    return res.data;
+  },
+  getAuditLogs: async (params) => {
+    const res = await api.get('/audit-logs/', { params });
     return res.data;
   },
   updateCustomer: async (id, data) => {

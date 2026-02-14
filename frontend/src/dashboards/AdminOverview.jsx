@@ -70,7 +70,11 @@ const AdminOverview = () => {
           return Number.isFinite(num) ? num : 0;
         };
 
-        // Fetch Loans and Repayments first (Critical for money stats)
+        // Fetch Customers first, then Loans and Repayments
+        // This ensures the sequential load requested by the client
+        const customersData = await loanService.getCustomers();
+        const customers = customersData.results || customersData || [];
+
         const [loansData, repaymentsData] = await Promise.all([
           loanService.getLoans(),
           loanService.getRepayments(),
@@ -78,6 +82,8 @@ const AdminOverview = () => {
 
         const loans = loansData.results || loansData || [];
         const repayments = repaymentsData.results || repaymentsData || [];
+
+        setStats(prev => ({ ...prev, totalCustomers: customers.length }));
 
         const disbursedStatuses = ['DISBURSED', 'ACTIVE', 'OVERDUE', 'CLOSED', 'REPAID'];
         const totalAmount = loans
@@ -183,13 +189,11 @@ const AdminOverview = () => {
 
     const fetchSecondaryData = async () => {
       try {
-        const [customersData, auditData, adminsData] = await Promise.all([
-          loanService.getCustomers(),
+        const [auditData, adminsData] = await Promise.all([
           loanService.getAuditLogs({ limit: 10 }),
           loanService.getAllAdmins()
         ]);
 
-        const customers = customersData.results || customersData || [];
         const logs = auditData.results || auditData || [];
         const admins = adminsData.results || adminsData || [];
 

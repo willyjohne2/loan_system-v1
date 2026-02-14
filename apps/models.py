@@ -119,6 +119,7 @@ class Loans(models.Model):
     last_modified_by = models.ForeignKey(
         Admins, models.SET_NULL, null=True, blank=True, related_name="modified_loans"
     )
+    disbursed_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True, null=True, db_index=True)
     updated_at = models.DateTimeField(auto_now=True, null=True)
 
@@ -165,9 +166,73 @@ class Loans(models.Model):
     @property
     def is_overdue(self):
         today = timezone.now().date()
-        return self.repaymentschedule_set.filter(
+
+        # Priority 1: Check Repayment Schedule
+        schedule_overdue = self.repaymentschedule_set.filter(
             due_date__lt=today, is_paid=False
         ).exists()
+
+        if schedule_overdue:
+            return True
+
+        # Priority 2: Check Tenure from Disbursement Date
+        if self.status in ["ACTIVE", "DISBURSED", "OVERDUE"] and self.disbursed_at:
+            due_date = self.disbursed_at.date()
+            if self.duration_weeks:
+                due_date += timezone.timedelta(weeks=self.duration_weeks)
+            elif self.duration_months:
+                due_date += timezone.timedelta(days=self.duration_months * 30)
+
+            return today > due_date
+
+        return False
+
+    @property
+    def overdue_duration(self):
+        if not self.is_overdue:
+            return None
+
+        today = timezone.now().date()
+
+        # Find the due date to calculate from
+        due_date = None
+
+        # Check schedule first
+        oldest_unpaid = (
+            self.repaymentschedule_set.filter(due_date__lt=today, is_paid=False)
+            .order_by("due_date")
+            .first()
+        )
+
+        if oldest_unpaid:
+            due_date = oldest_unpaid.due_date
+        elif self.disbursed_at:
+            due_date = self.disbursed_at.date()
+            if self.duration_weeks:
+                due_date += timezone.timedelta(weeks=self.duration_weeks)
+            elif self.duration_months:
+                due_date += timezone.timedelta(days=self.duration_months * 30)
+
+        if not due_date:
+            return None
+
+        diff = today - due_date
+        days = diff.days
+
+        if days >= 365:
+            years = days // 365
+            months = (days % 365) // 30
+            if months > 0:
+                return f"{years} year{'s' if years > 1 else ''} {months} month{'s' if months > 1 else ''}"
+            return f"{years} year{'s' if years > 1 else ''}"
+        elif days >= 30:
+            months = days // 30
+            remaining_days = days % 30
+            if remaining_days > 0:
+                return f"{months} month{'s' if months > 1 else ''} {remaining_days} day{'s' if remaining_days > 1 else ''}"
+            return f"{months} month{'s' if months > 1 else ''}"
+        else:
+            return f"{days} day{'s' if days > 1 else ''}"
 
     def update_status_and_rates(self):
         if self.status in ["CLOSED", "REJECTED"]:

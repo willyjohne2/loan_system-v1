@@ -77,7 +77,6 @@ const Navbar = ({ title, onMenuClick, isSidebarOpen }) => {
         </button>
         <div className="flex flex-col">
           <div className="flex items-center gap-2">
-            <span className="text-[10px] font-black text-indigo-600 bg-indigo-50 px-1.5 py-0.5 rounded sm:hidden uppercase tracking-tighter">LOANDO</span>
             <h2 className="text-sm md:text-xl font-black text-slate-900 dark:text-white truncate max-w-[140px] sm:max-w-[200px] md:max-w-none tracking-tight">
               {title}
             </h2>
@@ -189,18 +188,8 @@ const Navbar = ({ title, onMenuClick, isSidebarOpen }) => {
                   }}
                   className="flex items-center w-full px-4 py-2 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 rounded transition-colors"
                 >
-                  <User className="w-4 h-4 mr-3" />
-                  My Profile
-                </button>
-                <button 
-                  onClick={() => {
-                    setShowMenu(false);
-                    navigate(getProfilePath());
-                  }}
-                  className="flex items-center w-full px-4 py-2 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 rounded transition-colors"
-                >
                   <Settings className="w-4 h-4 mr-3" />
-                  Settings
+                  Profile Settings
                 </button>
               </div>
             </div>

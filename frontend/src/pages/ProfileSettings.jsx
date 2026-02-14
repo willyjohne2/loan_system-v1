@@ -165,7 +165,7 @@ const ProfileSettings = () => {
                 <div className="flex items-center justify-between py-4 border-t border-slate-100 dark:border-slate-800">
                    <div>
                       <p className="text-sm font-semibold text-slate-900 dark:text-white">Change Password</p>
-                      <p className="text-xs text-slate-500">Last changed 3 months ago</p>
+                      <p className="text-xs text-slate-500">Ensure your account uses a strong, unique password</p>
                    </div>
                    <Button variant="outline" size="sm">Update</Button>
                 </div>

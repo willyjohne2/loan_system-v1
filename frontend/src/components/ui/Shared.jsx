@@ -24,7 +24,7 @@ export const Button = ({ className, variant = 'primary', loading = false, childr
     <button
       disabled={loading || props.disabled}
       className={cn(
-        "px-4 py-2 rounded-lg text-sm font-medium transition-all focus:outline-none focus:ring-2 focus:ring-primary-500/20 disabled:opacity-50 flex items-center justify-center gap-2",
+        "px-4 py-2 rounded-lg text-base font-medium transition-all focus:outline-none focus:ring-2 focus:ring-primary-500/20 disabled:opacity-50 flex items-center justify-center gap-2",
         variants[variant],
         className
       )}
@@ -52,7 +52,7 @@ export const Card = ({ className, children }) => (
  */
 export const Table = ({ headers, data, renderRow, className }) => (
   <div className={cn("w-full overflow-x-auto rounded-lg border border-slate-200 dark:border-slate-800", className)}>
-    <table className="w-full text-xs md:text-sm text-left min-w-[600px]">
+    <table className="w-full text-sm md:text-base text-left min-w-[600px]">
       <thead className="bg-slate-50 text-slate-600 dark:bg-slate-800/50 dark:text-slate-400 font-medium">
         <tr>
           {headers.map((h, i) => <th key={i} className="px-4 md:px-6 py-3 md:py-4">{h}</th>)}
@@ -89,10 +89,10 @@ export const StatCard = ({ label, value, icon: Icon, trend, trendValue, variant 
       onClick={onClick}
     >
       <div className="flex-1 min-w-0">
-        <p className="text-[10px] md:text-sm font-medium text-slate-500 dark:text-slate-400 truncate">{label}</p>
-        <h3 className="text-base md:text-2xl font-bold mt-0.5 md:mt-1 text-slate-800 dark:text-white truncate">{value}</h3>
+        <p className="text-xs md:text-base font-medium text-slate-500 dark:text-slate-400 truncate">{label}</p>
+        <h3 className="text-lg md:text-3xl font-bold mt-0.5 md:mt-1 text-slate-800 dark:text-white truncate">{value}</h3>
         {trend && (
-          <p className={cn("text-[8px] md:text-xs font-medium mt-1 md:mt-2 flex items-center gap-1", isTrendUp ? 'text-emerald-600' : 'text-rose-600')}>
+          <p className={cn("text-[8px] md:text-sm font-medium mt-1 md:mt-2 flex items-center gap-1", isTrendUp ? 'text-emerald-600' : 'text-rose-600')}>
             {isTrendUp ? '↑' : '↓'} {trendLabel}
           </p>
         )}
@@ -119,11 +119,67 @@ export const Badge = ({ children, variant = 'secondary', className }) => {
 
   return (
     <span className={cn(
-      "px-2.5 py-0.5 rounded-full text-xs font-bold border",
+      "px-2.5 py-0.5 rounded-full text-sm font-bold border",
       variants[variant],
       className
     )}>
       {children}
     </span>
+  );
+};
+
+/**
+ * Pagination Component
+ */
+export const Pagination = ({ currentPage, totalPages, onPageChange }) => {
+  if (totalPages <= 1) return null;
+
+  return (
+    <div className="flex items-center justify-between px-4 py-3 bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800 sm:px-6">
+      <div className="flex flex-1 justify-between sm:hidden">
+        <Button
+          onClick={() => onPageChange(currentPage - 1)}
+          disabled={currentPage <= 1}
+          variant="secondary"
+          size="sm"
+        >
+          Previous
+        </Button>
+        <Button
+          onClick={() => onPageChange(currentPage + 1)}
+          disabled={currentPage >= totalPages}
+          variant="secondary"
+          size="sm"
+        >
+          Next
+        </Button>
+      </div>
+      <div className="hidden sm:flex sm:flex-1 sm:items-center sm:justify-between">
+        <div>
+          <p className="text-sm text-slate-700 dark:text-slate-400">
+            Page <span className="font-bold text-primary-600">{currentPage}</span> of{' '}
+            <span className="font-bold">{totalPages}</span>
+          </p>
+        </div>
+        <div className="flex gap-2">
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={() => onPageChange(currentPage - 1)}
+            disabled={currentPage <= 1}
+          >
+            Previous
+          </Button>
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={() => onPageChange(currentPage + 1)}
+            disabled={currentPage >= totalPages}
+          >
+            Next
+          </Button>
+        </div>
+      </div>
+    </div>
   );
 };
