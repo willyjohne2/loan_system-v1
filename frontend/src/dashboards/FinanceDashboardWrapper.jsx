@@ -1,28 +1,26 @@
 import React from 'react';
-import { Routes, Route, useLocation } from 'react-router-dom';
+import { Routes, Route } from 'react-router-dom';
 import Layout from '../components/layout/Layout';
-import FinanceHome from './FinanceDashboard';
-import AdminOfficers from './AdminOfficers'; 
+import FinanceOverview from './finance/FinanceOverview';
+import FinanceDisbursement from './finance/FinanceDisbursement';
+import FinanceAnalytics from './finance/FinanceAnalytics';
+import FinanceLedger from './finance/FinanceLedger';
+import FinanceReports from './finance/FinanceReports';
+import FinanceControl from './finance/FinanceControl';
 import CustomerCommunicator from './CustomerCommunicator';
 import ProfileSettings from '../pages/ProfileSettings';
 
 const FinanceDashboardWrapper = () => {
-  const location = useLocation();
-  
-  const getTitle = () => {
-    if (location.pathname.includes('/field-officers')) return 'Field Officers';
-    if (location.pathname.includes('/reports')) return 'Financial Reports';
-    if (location.pathname.includes('/customer-communicator')) return 'Customer Communication';
-    if (location.pathname.includes('/profile')) return 'Account Profile';
-    return 'Finance Officer Dashboard';
-  };
-
   return (
-    <Layout title={getTitle()}>
+    <Layout>
       <Routes>
-        <Route index element={<FinanceHome />} />
-        <Route path="dashboard" element={<FinanceHome />} />
-        <Route path="reports" element={<FinanceHome />} />
+        <Route index element={<FinanceOverview />} />
+        <Route path="overview" element={<FinanceOverview />} />
+        <Route path="disbursement" element={<FinanceDisbursement />} />
+        <Route path="analytics" element={<FinanceAnalytics />} />
+        <Route path="ledger" element={<FinanceLedger />} />
+        <Route path="reports" element={<FinanceReports />} />
+        <Route path="control" element={<FinanceControl />} />
         <Route path="customer-communicator" element={<CustomerCommunicator />} />
         <Route path="profile" element={<ProfileSettings />} />
       </Routes>

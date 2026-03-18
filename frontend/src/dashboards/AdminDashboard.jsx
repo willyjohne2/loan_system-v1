@@ -10,6 +10,7 @@ import AdminAuditLogs from './AdminAuditLogs';
 import AdminDeactivations from './AdminDeactivations';
 import AdminLoans from './AdminLoans';
 import AdminSettings from './AdminSettings';
+import BranchManagement from './BranchManagement';
 import CustomerCommunicator from './CustomerCommunicator';
 import OfficialCommunicator from './OfficialCommunicator';
 import ProfileSettings from '../pages/ProfileSettings';
@@ -26,6 +27,7 @@ const AdminDashboard = () => {
     if (location.pathname.includes('/loans')) return 'Loan Portfolio';
     if (location.pathname.includes('/accounts')) return 'Admin Accounts Management';
     if (location.pathname.includes('/deactivations')) return 'Security & Deactivation Requests';
+    if (location.pathname.includes('/branches')) return 'Branch Network Management';
     if (location.pathname.includes('/audit')) return 'System Audit Trail';
     if (location.pathname.includes('/customer-communicator')) return 'Customer Communication';
     if (location.pathname.includes('/official-communicator')) return 'Official Communication';
@@ -40,17 +42,10 @@ const AdminDashboard = () => {
         <nav className="flex space-x-4 border-b border-slate-200 dark:border-slate-800 pb-2 overflow-x-auto no-scrollbar">
           {[
             { to: '/admin/dashboard', label: 'Overview' },
-            { to: '/admin/managers', label: 'Managers' },
-            { to: '/admin/finance-officers', label: 'Finance Officers' },
-            { to: '/admin/field-officers', label: 'Field Officers' },
             { to: '/admin/customers', label: 'Customers' },
             { to: '/admin/loans', label: 'Loans' },
-            { to: '/admin/accounts', label: 'Admin Accounts' },
-            { to: '/admin/deactivations', label: 'Security Requests' },
-            { to: '/admin/audit', label: 'Audit Logs' },
-            { to: '/admin/customer-communicator', label: 'Customer Comm' },
-            { to: '/admin/official-communicator', label: 'Official Comm' },
-            { to: '/admin/settings', label: 'Interest Settings' }
+            { to: '/admin/customer-communicator', label: 'Customer Comms' },
+            { to: '/admin/official-communicator', label: 'Official Comms' },
           ].map(tab => (
             <Link
               key={tab.to}
@@ -77,6 +72,7 @@ const AdminDashboard = () => {
           <Route path="loans" element={<AdminLoans />} />
           <Route path="accounts" element={<AdminAccounts />} />
           <Route path="deactivations" element={<AdminDeactivations />} />
+          <Route path="branches" element={<BranchManagement />} />
           <Route path="audit" element={<AdminAuditLogs />} />
           <Route path="customer-communicator" element={<CustomerCommunicator />} />
           <Route path="official-communicator" element={<OfficialCommunicator />} />

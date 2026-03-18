@@ -3,6 +3,7 @@ import { loanService } from '../../api/api';
 import { useAuth } from '../../context/AuthContext';
 import { Card, Button, Table } from '../ui/Shared';
 import { X, TrendingUp, TrendingDown, Clock, CheckCircle, FileText, Wallet, User, AlertCircle, Calendar, Eye } from 'lucide-react';
+import ChecklistModal from './ChecklistModal';
 
 const CustomerHistoryModal = ({ customer, isOpen, onClose, loanToVerify, onVerified }) => {
   const { user } = useAuth();
@@ -42,6 +43,7 @@ const CustomerHistoryModal = ({ customer, isOpen, onClose, loanToVerify, onVerif
     lastPaymentDate: null
   });
   const [successMessage, setSuccessMessage] = useState('');
+  const [showVerificationChecklist, setShowVerificationChecklist] = useState(false);
 
   useEffect(() => {
     if (isOpen && customer) {
@@ -403,7 +405,7 @@ const CustomerHistoryModal = ({ customer, isOpen, onClose, loanToVerify, onVerif
                    <p className="text-sm font-bold text-indigo-600">KES {Number(loanToVerify.principal_amount).toLocaleString()}</p>
                  </div>
                  <Button
-                  onClick={handleVerify}
+                  onClick={() => setShowVerificationChecklist(true)}
                   disabled={updating}
                   className="w-full flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-3 rounded-xl mt-4"
                 >
@@ -419,6 +421,27 @@ const CustomerHistoryModal = ({ customer, isOpen, onClose, loanToVerify, onVerif
           </div>
           <Button onClick={onClose} variant="secondary" className="px-8">Close Trail</Button>
         </div>
+
+        <ChecklistModal
+          isOpen={showVerificationChecklist}
+          onClose={() => setShowVerificationChecklist(false)}
+          onConfirm={() => {
+            setShowVerificationChecklist(false);
+            handleVerify();
+          }}
+          title="Verification Checklist — Confirm All Items Before Submitting"
+          items={[
+            "The photo in the system matches the customer's actual face",
+            "The customer's name in the system matches exactly what is written on their National ID",
+            "The National ID number in the system matches the number on the ID card photo",
+            "The phone number belongs to the customer and is their active M-Pesa line",
+            "Guarantor details have been filled in and the guarantor is reachable",
+            "The loan amount requested is reasonable relative to the customer's monthly income",
+            "The loan reason field has been filled in clearly"
+          ]}
+          confirmText="Submit Verification"
+          warning="By submitting this verification you confirm that you have physically checked all the above items. Any false verification is subject to disciplinary action."
+        />
       </Card>
 
       {/* Full-screen Image Viewer Overlay */}

@@ -39,6 +39,23 @@ export const Button = ({ className, variant = 'primary', loading = false, childr
 };
 
 /**
+ * Input Component
+ */
+export const Input = ({ className, error, ...props }) => (
+  <div className="w-full">
+    <input
+      className={cn(
+        "w-full px-4 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg text-sm text-slate-800 dark:text-slate-200 outline-none focus:ring-2 focus:ring-primary-500/50 transition-all disabled:opacity-50",
+        error && "border-rose-500 focus:ring-rose-500/20",
+        className
+      )}
+      {...props}
+    />
+    {error && <p className="mt-1 text-xs font-bold text-rose-500 pl-1 animate-in fade-in slide-in-from-top-1">{error}</p>}
+  </div>
+);
+
+/**
  * Card Component
  */
 export const Card = ({ className, children }) => (

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import { 
   LayoutDashboard, 
@@ -11,13 +11,16 @@ import {
   Building2,
   Users2,
   MessageSquare,
-  ChevronDown,
+  ChevronDown, Send, BarChart3,
   ShieldAlert,
   ShieldCheck,
   Zap,
   Briefcase,
   Mail,
-  X
+  X,
+  ChevronRight,
+  ClipboardList,
+  Lock
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { clsx } from 'clsx';
@@ -31,23 +34,26 @@ const Sidebar = ({ isOpen, onClose }) => {
   const { user, logout, activeRole, switchActiveRole } = useAuth();
   const navigate = useNavigate();
 
+  // State for collapsible sections
+  const [officialsOpen, setOfficialsOpen] = useState(true);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+
   const handleRoleSwitch = (role) => {
     switchActiveRole(role);
     if (role === 'ADMIN') navigate('/admin/dashboard');
     else if (role === 'MANAGER') navigate('/manager/dashboard');
-    else if (role === 'FINANCIAL_OFFICER') navigate('/finance/dashboard');
+    else if (role === 'FINANCIAL_OFFICER') navigate('/finance/overview');
     else if (role === 'FIELD_OFFICER') navigate('/field/dashboard');
     
     if (window.innerWidth < 1024) onClose();
   };
 
   const adminLinks = [
-    { to: '/admin/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
-    { to: '/admin/managers', icon: Building2, label: 'Managers' },
-    { to: '/admin/officers', icon: Users2, label: 'Finance Officers' },
+    { to: '/admin/dashboard', icon: LayoutDashboard, label: 'Overview' },
     { to: '/admin/customers', icon: Users, label: 'Customers' },
-    { to: '/admin/customer-communicator', icon: MessageSquare, label: 'Customer Communicator' },
-    { to: '/admin/official-communicator', icon: Mail, label: 'Official Communicator' },
+    { to: '/admin/loans', icon: Wallet, label: 'Loans' },
+    { to: '/admin/customer-communicator', icon: MessageSquare, label: 'Customer Comms' },
+    { to: '/admin/official-communicator', icon: Mail, label: 'Official Comms' },
   ];
 
   const managerLinks = [
@@ -59,16 +65,20 @@ const Sidebar = ({ isOpen, onClose }) => {
   ];
 
   const officerLinks = [
-    { to: '/finance/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
-    { to: '/finance/reports', icon: FileText, label: 'Loan Reports' },
-    { to: '/finance/customer-communicator', icon: MessageSquare, label: 'Customer Communicator' },
+    { to: '/finance/overview', icon: LayoutDashboard, label: 'Overview' },
+    { to: '/finance/disbursement', icon: Send, label: 'Disbursement Queue' },
+    { to: '/finance/analytics', icon: BarChart3, label: 'Analytics' },
+    { to: '/finance/ledger', icon: FileText, label: 'Ledger' },
+    { to: '/finance/reports', icon: ClipboardList, label: 'Reports' },
+    { to: '/finance/control', icon: Settings, label: 'Financial Control' },
+    { to: '/finance/customer-communicator', icon: MessageSquare, label: 'Customer Comms' },
   ];
 
   const fieldLinks = [
     { to: '/field/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
   ];
 
-  const links = activeRole === 'ADMIN' ? adminLinks : 
+  const baseLinks = activeRole === 'ADMIN' ? adminLinks : 
                 activeRole === 'MANAGER' ? managerLinks : 
                 activeRole === 'FINANCIAL_OFFICER' ? officerLinks :
                 fieldLinks;
@@ -121,8 +131,9 @@ const Sidebar = ({ isOpen, onClose }) => {
           )}
         </div>
 
-        <nav className="flex-1 px-4 space-y-1 overflow-y-auto pt-2">
-          {links.map((link) => (
+        <nav className="flex-1 px-4 space-y-1 overflow-y-auto pt-2 no-scrollbar">
+          {/* Main Navigation Links */}
+          {baseLinks.map((link) => (
             <NavLink
               key={link.to}
               to={link.to}
@@ -130,7 +141,7 @@ const Sidebar = ({ isOpen, onClose }) => {
                 if (window.innerWidth < 1024) onClose();
               }}
               className={({ isActive }) => cn(
-                "flex items-center px-4 py-3 text-sm font-medium rounded-lg transition-colors",
+                "flex items-center px-4 py-2.5 text-sm font-medium rounded-lg transition-colors",
                 isActive 
                   ? "bg-primary-50 text-primary-600 dark:bg-primary-900/20 dark:text-primary-400" 
                   : "text-slate-600 hover:bg-slate-50 dark:text-slate-400 dark:hover:bg-slate-800"
@@ -140,6 +151,115 @@ const Sidebar = ({ isOpen, onClose }) => {
               {link.label}
             </NavLink>
           ))}
+
+          {activeRole === 'ADMIN' && (
+            <div className="pt-4 space-y-1">
+              {/* Officials Section */}
+              <div>
+                <button
+                  onClick={() => setOfficialsOpen(!officialsOpen)}
+                  className="w-full flex items-center justify-between px-4 py-2 text-sm font-semibold text-slate-400 uppercase tracking-wider"
+                >
+                  <span>Officials</span>
+                  <ChevronDown className={cn("w-4 h-4 transition-transform", !officialsOpen && "-rotate-90")} />
+                </button>
+                
+                {officialsOpen && (
+                  <div className="mt-1 space-y-1 ml-4 border-l-2 border-slate-100 dark:border-slate-800">
+                    {[
+                      { to: '/admin/field-officers', label: 'Field Officers', icon: Users2 },
+                      { to: '/admin/managers', label: 'Managers', icon: Building2 },
+                      { to: '/admin/finance-officers', label: 'Finance Officers', icon: Briefcase },
+                      { to: '/admin/accounts', label: 'Admins', icon: ShieldCheck },
+                    ].map((subLink) => (
+                      <NavLink
+                        key={subLink.to}
+                        to={subLink.to}
+                        className={({ isActive }) => cn(
+                          "flex items-center px-4 py-2 text-sm font-medium rounded-r-lg transition-colors",
+                          isActive 
+                            ? "bg-primary-50/50 text-primary-600 border-l-2 border-primary-600 -ml-[2px]" 
+                            : "text-slate-500 hover:bg-slate-50 dark:text-slate-400 dark:hover:bg-slate-800"
+                        )}
+                      >
+                        <subLink.icon className="w-4 h-4 mr-3 opacity-70" />
+                        {subLink.label}
+                      </NavLink>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Settings Section */}
+              <div className="pt-2">
+                <button
+                  onClick={() => setSettingsOpen(!settingsOpen)}
+                  className="w-full flex items-center justify-between px-4 py-2 text-sm font-semibold text-slate-400 uppercase tracking-wider"
+                >
+                  <span>Settings</span>
+                  <ChevronDown className={cn("w-4 h-4 transition-transform", !settingsOpen && "-rotate-90")} />
+                </button>
+                
+                {settingsOpen && (
+                  <div className="mt-1 space-y-1 ml-4 border-l-2 border-slate-100 dark:border-slate-800">
+                    <NavLink
+                      to="/admin/settings"
+                      className={({ isActive }) => cn(
+                        "flex items-center px-4 py-2 text-sm font-medium rounded-r-lg transition-colors",
+                        isActive 
+                          ? "bg-primary-50/50 text-primary-600 border-l-2 border-primary-600 -ml-[2px]" 
+                          : "text-slate-500 hover:bg-slate-50 dark:text-slate-400 dark:hover:bg-slate-800"
+                      )}
+                    >
+                      <Settings className="w-4 h-4 mr-3 opacity-70" />
+                      Interest Settings
+                    </NavLink>
+                    <NavLink
+                      to="/admin/branches"
+                      className={({ isActive }) => cn(
+                        "flex items-center px-4 py-2 text-sm font-medium rounded-r-lg transition-colors",
+                        isActive 
+                          ? "bg-primary-50/50 text-primary-600 border-l-2 border-primary-600 -ml-[2px]" 
+                          : "text-slate-500 hover:bg-slate-50 dark:text-slate-400 dark:hover:bg-slate-800"
+                      )}
+                    >
+                      <Building2 className="w-4 h-4 mr-3 opacity-70" />
+                      Branch Management
+                    </NavLink>
+                  </div>
+                )}
+              </div>
+
+              {/* Direct Links */}
+              <div className="pt-2">
+                <NavLink
+                  to="/admin/audit"
+                  className={({ isActive }) => cn(
+                    "flex items-center px-4 py-2.5 text-sm font-medium rounded-lg transition-colors",
+                    isActive 
+                      ? "bg-primary-50 text-primary-600" 
+                      : "text-slate-600 hover:bg-slate-50 dark:text-slate-400 dark:hover:bg-slate-800"
+                  )}
+                >
+                  <ClipboardList className="w-5 h-5 mr-3" />
+                  Audit Logs
+                </NavLink>
+                
+                <NavLink
+                  to="/admin/deactivations"
+                  className={({ isActive }) => cn(
+                    "flex items-center px-4 py-2.5 text-sm font-medium rounded-lg transition-colors",
+                    isActive 
+                      ? "bg-primary-50 text-primary-600" 
+                      : "text-slate-600 hover:bg-slate-50 dark:text-slate-400 dark:hover:bg-slate-800"
+                  )}
+                >
+                  <Lock className="w-5 h-5 mr-3" />
+                  Security Requests
+                </NavLink>
+              </div>
+            </div>
+          )}
         </nav>
 
       <div className="p-4 border-t border-slate-200 dark:border-slate-800">

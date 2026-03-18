@@ -136,6 +136,22 @@ export const loanService = {
     const res = await api.get('/audit-logs/', { params });
     return res.data;
   },
+  getBranches: async (params = {}) => {
+    const res = await api.get('/branches/', { params });
+    return res.data;
+  },
+  createBranch: async (data) => {
+    const res = await api.post('/branches/', data);
+    return res.data;
+  },
+  updateBranch: async (id, data) => {
+    const res = await api.patch(`/branches/${id}/`, data);
+    return res.data;
+  },
+  deleteBranch: async (id) => {
+    const res = await api.delete(`/branches/${id}/`);
+    return res.data;
+  },
   getFinancialAnalytics: async () => {
     const res = await api.get('/finance/analytics/');
     return res.data;

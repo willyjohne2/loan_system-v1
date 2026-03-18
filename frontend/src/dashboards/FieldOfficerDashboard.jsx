@@ -7,6 +7,7 @@ import CustomerRegistrationForm from '../components/forms/CustomerRegistrationFo
 import LoanApplicationForm from '../components/forms/LoanApplicationForm';
 import RepaymentModal from '../components/ui/RepaymentModal';
 import CustomerHistoryModal from '../components/ui/CustomerHistoryModal';
+import ChecklistModal from '../components/ui/ChecklistModal';
 
 const DirectSMSModal = ({ customer, isOpen, onClose }) => {
   const [message, setMessage] = useState('');
@@ -79,6 +80,7 @@ const FieldOfficerDashboard = ({ isRegisteringDefault = false, isApplyingDefault
   const [reviewingLoan, setReviewingLoan] = useState(null);
   const [reviewingCustomer, setReviewingCustomer] = useState(null);
   const [isReviewOpen, setIsReviewOpen] = useState(false);
+  const [showDirectPreRegChecklist, setShowDirectPreRegChecklist] = useState(false);
   const [showSMS, setShowSMS] = useState(false);
   const [selectedForSMS, setSelectedForSMS] = useState(null);
   const [stats, setStats] = useState({
@@ -93,7 +95,9 @@ const FieldOfficerDashboard = ({ isRegisteringDefault = false, isApplyingDefault
 
   // Handle URL change effects and deep linking from state
   useEffect(() => {
-    setIsRegistering(isRegisteringDefault);
+    if (isRegisteringDefault) {
+      setShowDirectPreRegChecklist(true);
+    }
     
     // Check if we have a customer passed in state for registration (editing)
     // or for applying for a loan
@@ -235,11 +239,32 @@ const FieldOfficerDashboard = ({ isRegisteringDefault = false, isApplyingDefault
           <h2 className="text-xl md:text-2xl font-bold text-slate-900 dark:text-white">Field Officer Console</h2>
           <p className="text-slate-500 text-xs md:text-sm">Manage your registrations and portfolios efficiently.</p>
         </div>
-        <Button onClick={() => navigate('/field/register-customer')} className="w-full md:w-auto flex items-center justify-center gap-2 shadow-lg shadow-primary-500/20 py-3 md:py-2">
+        <Button onClick={() => setShowDirectPreRegChecklist(true)} className="w-full md:w-auto flex items-center justify-center gap-2 shadow-lg shadow-primary-500/20 py-3 md:py-2">
           <UserPlus className="w-4 h-4" />
           Register New Customer
         </Button>
       </div>
+
+      <ChecklistModal
+        isOpen={showDirectPreRegChecklist}
+        onClose={() => setShowDirectPreRegChecklist(false)}
+        onConfirm={() => {
+          setShowDirectPreRegChecklist(false);
+          setIsRegistering(true);
+        }}
+        title="Before You Begin — Prepare the Following"
+        items={[
+          "Original National ID card (physical copy present)",
+          "Clear photo of the National ID card (front side)",
+          "Passport photo or clear face photo of the customer",
+          "Active M-Pesa registered phone number",
+          "Details of at least one guarantor (full name, phone number, national ID)",
+          "Customer's employment status and estimated monthly income",
+          "Customer's physical address (village, town)"
+        ]}
+        confirmText="Proceed to Registration"
+        note="Incomplete information will cause delays in loan processing. Ensure all items are ready before proceeding."
+      />
 
       <div className="grid grid-cols-2 md:grid-cols-2 lg:grid-cols-4 gap-3 md:gap-6">
         <StatCard 

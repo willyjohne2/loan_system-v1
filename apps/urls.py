@@ -39,9 +39,15 @@ from .views import (
     ListEmailLogsView,
     DeactivationRequestListCreateView,
     DeactivationRequestDetailView,
+    BranchListCreateView,
+    BranchDetailView,
+    CustomerDraftListCreateView,
+    CustomerDraftDetailView,
 )
 
 urlpatterns = [
+    path("branches/", BranchListCreateView.as_view(), name="branches"),
+    path("branches/<str:pk>/", BranchDetailView.as_view(), name="branch-detail"),
     path(
         "notifications/send-email/",
         SendEmailNotificationView.as_view(),
@@ -106,6 +112,8 @@ urlpatterns = [
     ),
     path("users/", UserListCreateView.as_view(), name="users"),
     path("users/check/", CheckUserView.as_view(), name="check-user"),
+    path("users/drafts/", CustomerDraftListCreateView.as_view(), name="customer-drafts"),
+    path("users/drafts/<str:pk>/", CustomerDraftDetailView.as_view(), name="customer-draft-detail"),
     path("users/<str:pk>/", UserDetailView.as_view(), name="user-detail"),
     path("user-profiles/", UserProfileListCreateView.as_view(), name="user-profiles"),
     path("loans/", LoanListCreateView.as_view(), name="loans"),

@@ -4,6 +4,7 @@ import { Card, Table, Button } from '../components/ui/Shared';
 import { Search, Filter, Download, Eye, CheckCircle, XCircle, Clock, MessageSquareShare, FileCheck } from 'lucide-react';
 import BulkCustomerSMSModal from '../components/ui/BulkCustomerSMSModal';
 import CustomerHistoryModal from '../components/ui/CustomerHistoryModal';
+import ChecklistModal from '../components/ui/ChecklistModal';
 import useDebounce from '../hooks/useDebounce';
 
 const AdminLoans = () => {
@@ -20,6 +21,8 @@ const AdminLoans = () => {
   const [selectedLoan, setSelectedLoan] = useState(null);
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
   const [updatingId, setUpdatingId] = useState(null);
+  const [showApprovalChecklist, setShowApprovalChecklist] = useState(false);
+  const [loanPendingApproval, setLoanPendingApproval] = useState(null);
   
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(false);
@@ -343,7 +346,10 @@ const AdminLoans = () => {
                       )}
                       {loan.status === 'VERIFIED' && (
                         <button 
-                          onClick={() => handleStatusUpdate(loan.id, 'APPROVED')}
+                          onClick={() => {
+                            setLoanPendingApproval(loan.id);
+                            setShowApprovalChecklist(true);
+                          }}
                           className="p-1 px-2 text-[10px] font-bold bg-emerald-50 text-emerald-600 rounded hover:bg-emerald-600 hover:text-white transition-colors border border-emerald-200"
                         >
                           APPROVE
@@ -403,6 +409,31 @@ const AdminLoans = () => {
       <BulkCustomerSMSModal 
         isOpen={isBulkModalOpen} 
         onClose={() => setIsBulkModalOpen(false)} 
+      />
+
+      <ChecklistModal
+        isOpen={showApprovalChecklist}
+        onClose={() => {
+          setShowApprovalChecklist(false);
+          setLoanPendingApproval(null);
+        }}
+        onConfirm={() => {
+          setShowApprovalChecklist(false);
+          handleStatusUpdate(loanPendingApproval, 'APPROVED');
+          setLoanPendingApproval(null);
+        }}
+        title="Approval Checklist — Review Before Approving"
+        items={[
+          "Customer profile is complete with all required documents",
+          "National ID photo is clear and matches the customer's name on record",
+          "Loan amount is within the customer's safe borrowing limit based on income",
+          "Customer has no other active or overdue loans in the system",
+          "Guarantor information is complete and valid",
+          "Loan reason is acceptable and clearly stated",
+          "Field Officer verification has been completed and submitted correctly"
+        ]}
+        confirmText="Confirm Approval"
+        note="By approving this loan you take managerial responsibility for this decision. Ensure due diligence has been completed."
       />
 
       {selectedCustomer && (

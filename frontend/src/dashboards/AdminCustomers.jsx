@@ -4,6 +4,7 @@ import { Table, StatCard, Button, Pagination, Card } from '../components/ui/Shar
 import { Search, Filter, UserPlus, Trash2, Lock, Unlock, MessageSquare, Send, X } from 'lucide-react';
 import CustomerRegistrationForm from '../components/forms/CustomerRegistrationForm';
 import CustomerHistoryModal from '../components/ui/CustomerHistoryModal';
+import ChecklistModal from '../components/ui/ChecklistModal';
 import useDebounce from '../hooks/useDebounce';
 
 const DirectSMSModal = ({ customer, isOpen, onClose }) => {
@@ -78,6 +79,7 @@ const AdminCustomers = () => {
   const [selectedCustomer, setSelectedCustomer] = useState(null);
   const [showHistory, setShowHistory] = useState(false);
   const [showSMS, setShowSMS] = useState(false);
+  const [showPreRegChecklist, setShowPreRegChecklist] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const debouncedSearch = useDebounce(searchTerm, 500);
   
@@ -213,7 +215,7 @@ const AdminCustomers = () => {
           <p className="text-sm text-slate-500">Full list of customers with their loan statuses.</p>
         </div>
         <div className="flex items-center gap-3">
-          <Button onClick={() => setIsRegistering(true)} className="flex items-center gap-2">
+          <Button onClick={() => setShowPreRegChecklist(true)} className="flex items-center gap-2">
             <UserPlus className="w-4 h-4" />
             Register Customer
           </Button>
@@ -230,6 +232,27 @@ const AdminCustomers = () => {
             </div>
           </div>
         </div>
+
+        <ChecklistModal
+          isOpen={showPreRegChecklist}
+          onClose={() => setShowPreRegChecklist(false)}
+          onConfirm={() => {
+            setShowPreRegChecklist(false);
+            setIsRegistering(true);
+          }}
+          title="Before You Begin — Prepare the Following"
+          items={[
+            "Original National ID card (physical copy present)",
+            "Clear photo of the National ID card (front side)",
+            "Passport photo or clear face photo of the customer",
+            "Active M-Pesa registered phone number",
+            "Details of at least one guarantor (full name, phone number, national ID)",
+            "Customer's employment status and estimated monthly income",
+            "Customer's physical address (village, town)"
+          ]}
+          confirmText="Proceed to Registration"
+          note="Incomplete information will cause delays in loan processing. Ensure all items are ready before proceeding."
+        />
       </div>
 
       {customers.length === 0 ? (

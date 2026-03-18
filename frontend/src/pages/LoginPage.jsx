@@ -22,7 +22,7 @@ const LoginPage = () => {
     } else if (role === 'MANAGER') {
       navigate('/manager/dashboard');
     } else if (role === 'FINANCIAL_OFFICER') {
-      navigate('/finance/dashboard');
+      navigate('/finance/overview');
     } else if (role === 'FIELD_OFFICER') {
       navigate('/field/dashboard');
     } else {

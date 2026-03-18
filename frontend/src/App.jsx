@@ -2,6 +2,8 @@ import React from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider } from './context/AuthContext';
 import { ProtectedRoute, PublicRoute } from './routes/ProtectedRoute';
+import IdleTimeout from './components/IdleTimeout';
+import { Toaster } from 'react-hot-toast';
 
 // Auth Pages
 import LoginPage from './pages/LoginPage';
@@ -15,13 +17,14 @@ import AdminDashboard from './dashboards/AdminDashboard';
 import ManagerDashboardWrapper from './dashboards/ManagerDashboardWrapper';
 import FinanceDashboardWrapper from './dashboards/FinanceDashboardWrapper';
 import FieldOfficerDashboardWrapper from './dashboards/FieldOfficerDashboardWrapper';
-
 import { ScrollToTop } from './components/ui/ScrollToTop';
 
 const App = () => {
   return (
     <AuthProvider>
       <BrowserRouter>
+        <IdleTimeout />
+        <Toaster position="top-right" />
         <Routes>
           {/* Public Routes */}
           <Route element={<PublicRoute />}>

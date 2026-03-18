@@ -17,7 +17,29 @@ from .models import (
     DeactivationRequest,
     Guarantors,
     EmailLog,
+    Branch,
+    CustomerDraft,
+    
 )
+
+
+class BranchSerializer(serializers.ModelSerializer):
+    admin_count = serializers.SerializerMethodField()
+    customer_count = serializers.SerializerMethodField()
+    loan_count = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Branch
+        fields = "__all__"
+
+    def get_admin_count(self, obj):
+        return obj.branch_admins.count()
+
+    def get_customer_count(self, obj):
+        return obj.branch_profiles.count()
+
+    def get_loan_count(self, obj):
+        return obj.branch_loans.count()
 
 
 class SMSLogSerializer(serializers.ModelSerializer):
@@ -37,6 +59,8 @@ class EmailLogSerializer(serializers.ModelSerializer):
 
 
 class AdminSerializer(serializers.ModelSerializer):
+    branch_name = serializers.ReadOnlyField(source="branch_fk.name")
+
     class Meta:
         model = Admins
         fields = [
@@ -46,6 +70,8 @@ class AdminSerializer(serializers.ModelSerializer):
             "phone",
             "role",
             "branch",
+            "branch_fk",
+            "branch_name",
             "is_verified",
             "is_blocked",
             "is_super_admin",
@@ -211,6 +237,8 @@ class UserSerializer(serializers.ModelSerializer):
             "national_id": national_id or profile_data.get("national_id"),
             "date_of_birth": profile_data.get("date_of_birth") or None,
             "branch": profile_data.get("branch"),
+            "branch_fk_id": profile_data.get("branch_fk")
+            or (request.user.branch_fk_id if request.user else None),
             "town": profile_data.get("town"),
             "village": profile_data.get("village"),
             "address": profile_data.get("address"),
@@ -335,6 +363,12 @@ class LoanSerializer(serializers.ModelSerializer):
         return guarantor.phone if guarantor else "No Guarantor"
 
     def validate(self, data):
+        request = self.context.get("request")
+        if request and request.user:
+            # Set default branch if not provided
+            if not data.get("branch") and request.user.branch_fk:
+                data["branch"] = request.user.branch_fk
+
         user = data.get("user")
         if user:
             from .models import Loans
@@ -370,6 +404,7 @@ class RepaymentSerializer(serializers.ModelSerializer):
     loan_id = serializers.ReadOnlyField(source="loan.id")
     national_id = serializers.ReadOnlyField(source="loan.user.profile.national_id")
     mpesa_receipt = serializers.ReadOnlyField(source="reference_code")
+    branch_name = serializers.ReadOnlyField(source="loan.user.profile.branch_fk.name")
 
     class Meta:
         model = Repayments
@@ -384,7 +419,9 @@ class RepaymentSerializer(serializers.ModelSerializer):
             "payment_date",
             "reference_code",
             "mpesa_receipt",
+            "branch_name",
         ]
+        
 
 
 class TransactionSerializer(serializers.ModelSerializer):
@@ -400,24 +437,32 @@ class NotificationSerializer(serializers.ModelSerializer):
 
 
 class AuditLogSerializer(serializers.ModelSerializer):
-    admin_name = serializers.ReadOnlyField(source="admin.full_name")
-    admin_role = serializers.ReadOnlyField(source="admin.role")
+    admin_details = serializers.SerializerMethodField()
 
     class Meta:
         model = AuditLogs
         fields = [
             "id",
             "admin",
-            "admin_name",
-            "admin_role",
+            "admin_details",
             "action",
             "log_type",
             "table_name",
             "record_id",
             "old_data",
             "new_data",
+            "ip_address",
             "created_at",
         ]
+
+    def get_admin_details(self, obj):
+        if obj.admin:
+            return {
+                "full_name": obj.admin.full_name,
+                "role": obj.admin.role,
+                "email": obj.admin.email
+            }
+        return None
 
 
 class DeactivationRequestSerializer(serializers.ModelSerializer):
@@ -436,3 +481,30 @@ class SystemSettingsSerializer(serializers.ModelSerializer):
     class Meta:
         model = SystemSettings
         fields = "__all__"
+
+class CustomerDraftSerializer(serializers.ModelSerializer):
+    created_by_name = serializers.ReadOnlyField(source='created_by.full_name')
+
+    class Meta:
+        model = CustomerDraft
+        fields = '__all__'
+        read_only_fields = ('id', 'created_by', 'created_at', 'updated_at')
+
+    def validate_incomplete_reason(self, value):
+        valid_reasons = [
+            "Missing National ID",
+            "Missing National ID Photo",
+            "Missing Profile Photo",
+            "Missing Guarantor Details",
+            "Missing Income Information",
+            "Customer to Provide Additional Documents",
+            "Other"
+        ]
+        if value not in valid_reasons:
+            raise serializers.ValidationError(f"Invalid incomplete_reason. Must be one of: {', '.join(valid_reasons)}")
+        return value
+
+    def validate(self, data):
+        if data.get('incomplete_reason') == 'Other' and not data.get('notes'):
+            raise serializers.ValidationError({"notes": "Notes are required when reason is 'Other'."})
+        return data

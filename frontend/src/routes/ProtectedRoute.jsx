@@ -19,7 +19,7 @@ export const ProtectedRoute = ({ allowedRoles }) => {
     if (user.role === 'MANAGER') {
       return <Navigate to="/manager/dashboard" replace />;
     } else if (user.role === 'FINANCIAL_OFFICER') {
-      return <Navigate to="/finance/dashboard" replace />;
+      return <Navigate to="/finance/overview" replace />;
     } else if (user.role === 'FIELD_OFFICER') {
       return <Navigate to="/field/dashboard" replace />;
     }
@@ -39,7 +39,7 @@ export const PublicRoute = () => {
     } else if (user.role === 'MANAGER') {
       return <Navigate to="/manager/dashboard" replace />;
     } else if (user.role === 'FINANCIAL_OFFICER') {
-      return <Navigate to="/finance/dashboard" replace />;
+      return <Navigate to="/finance/overview" replace />;
     }
   }
 

@@ -13,8 +13,10 @@ import {
   TrendingUp,
   Edit,
   Check,
-  X
+  X,
+  ShieldAlert
 } from 'lucide-react';
+import { clsx } from 'clsx';
 
 const LoanProductCard = ({ product, onUpdate }) => {
   const [isEditing, setIsEditing] = useState(false);
@@ -93,6 +95,7 @@ const LoanProductCard = ({ product, onUpdate }) => {
 
 const AdminSettings = () => {
   const [settings, setSettings] = useState({
+    STRICT_LOAN_WORKFLOW: 'false',
     DEFAULT_INTEREST_RATE: 15,
     OVERDUE_PENALTY_RATE: 5,
     INTEREST_CALCULATION_MODEL: 'MONTHLY_SIMPLE',
@@ -110,14 +113,13 @@ const AdminSettings = () => {
 
   const fetchData = async () => {
     try {
-      const [settingsData, productsData] = await Promise.all([
-        loanService.getSettings(),
-        loanService.getLoanProducts()
-      ]);
+      const settingsData = await loanService.getSettings();
+      const productsData = await loanService.getLoanProducts();
 
       setSettings(prev => ({
         ...prev,
         ...settingsData,
+        STRICT_LOAN_WORKFLOW: String(settingsData.STRICT_LOAN_WORKFLOW || 'false'),
         DEFAULT_INTEREST_RATE: Number(settingsData.DEFAULT_INTEREST_RATE || 15),
         OVERDUE_PENALTY_RATE: Number(settingsData.OVERDUE_PENALTY_RATE || 5),
       }));
@@ -184,6 +186,38 @@ const AdminSettings = () => {
       )}
 
       <div className="grid grid-cols-1 gap-8">
+        {/* Workflow Settings */}
+        <Card className="p-8">
+          <div className="flex items-center gap-4 mb-6">
+            <div className="p-3 bg-amber-50 dark:bg-amber-900/20 rounded-xl">
+               <ShieldAlert className="w-6 h-6 text-amber-600" />
+            </div>
+            <div>
+              <h3 className="text-xl font-bold text-slate-900 dark:text-white">Workflow & Security</h3>
+              <p className="text-sm text-slate-500">Toggle strict operational protocols</p>
+            </div>
+          </div>
+
+          <div className="flex items-center justify-between p-4 bg-slate-50 dark:bg-slate-900 rounded-xl border border-slate-100 dark:border-slate-800">
+            <div className="space-y-1">
+              <h4 className="font-bold text-slate-800 dark:text-white">Strict Loan Lifecycle</h4>
+              <p className="text-xs text-slate-500">Enforce role-based transitions (e.g., only Managers can Approve). Disable for startups where one person handles multiple roles.</p>
+            </div>
+            <button 
+              onClick={() => setSettings(prev => ({ ...prev, STRICT_LOAN_WORKFLOW: prev.STRICT_LOAN_WORKFLOW === 'true' ? 'false' : 'true' }))}
+              className={clsx(
+                "relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none ring-2 ring-transparent ring-offset-2",
+                settings.STRICT_LOAN_WORKFLOW === 'true' ? "bg-primary-600" : "bg-slate-300 dark:bg-slate-700"
+              )}
+            >
+              <span className={clsx(
+                "inline-block h-4 w-4 transform rounded-full bg-white transition-transform",
+                settings.STRICT_LOAN_WORKFLOW === 'true' ? "translate-x-6" : "translate-x-1"
+              )} />
+            </button>
+          </div>
+        </Card>
+
         {/* Basic Interest Rate */}
         <Card className="p-8">
           <div className="flex items-center gap-4 mb-8">

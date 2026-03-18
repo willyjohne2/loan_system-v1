@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { loanService } from '../api/api';
 import { Card, Table, Button } from '../components/ui/Shared';
 import { History, Search, Filter, TrendingUp } from 'lucide-react';
+import { clsx } from 'clsx';
 
 const AdminAuditLogs = () => {
   const [logs, setLogs] = useState([]);
@@ -150,11 +151,33 @@ const AdminAuditLogs = () => {
                 </span>
               </td>
               <td className="px-6 py-4">
-                <p className="text-sm font-medium text-slate-700 dark:text-slate-200">{log.action}</p>
+                <div className="flex flex-col">
+                  <p className="text-sm font-medium text-slate-700 dark:text-slate-200">{log.action}</p>
+                  {log.admin_details && (
+                    <p className="text-[10px] text-slate-400 mt-1 uppercase tracking-tighter">
+                      Executed By: <span className="text-primary-600 font-bold">{log.admin_details.full_name}</span> ({log.admin_details.role})
+                    </p>
+                  )}
+                </div>
               </td>
               <td className="px-6 py-4 text-xs font-mono text-slate-500 dark:text-slate-400">{log.table_name || 'N/A'}</td>
-              <td className="px-6 py-4 text-xs text-slate-600 dark:text-slate-400 max-w-xs truncate">
-                {log.new_data ? JSON.stringify(log.new_data) : 'No extra data'}
+              <td className="px-6 py-4 text-xs text-slate-600 dark:text-slate-400 max-w-xs">
+                {log.new_data ? (
+                  typeof log.new_data === 'object' ? (
+                    <div className="space-y-1">
+                      {Object.entries(log.new_data).map(([key, value]) => (
+                        <div key={key} className="flex gap-2">
+                          <span className="font-bold uppercase text-[9px] text-slate-400">{key}:</span>
+                          <span className={clsx(
+                            "font-medium",
+                            key === 'status' && "text-primary-600 font-black",
+                            key === 'rejection_reason' && "text-red-500 italic"
+                          )}>{String(value)}</span>
+                        </div>
+                      ))}
+                    </div>
+                  ) : String(log.new_data)
+                ) : 'No extra data'}
               </td>
             </tr>
           )}

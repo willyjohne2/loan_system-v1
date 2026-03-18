@@ -59,12 +59,29 @@ class DisbursementService:
             loan.disbursed_at = timezone.now()
             loan.save()
 
+            # Trigger immediate move to ACTIVE after DISBURSED
+            old_status = loan.status
+            loan.status = "ACTIVE"
+            loan.save()
+
             # 6. Log Activity
             LoanActivity.objects.create(
                 loan=loan,
                 admin=admin,
                 action="DISBURSEMENT",
-                note="Loan disbursed via Simulation Mode.",
+                note="Loan disbursed and moved to ACTIVE.",
+            )
+
+            # Audit log for automatic transition to ACTIVE
+            from .utils.security import log_action
+            log_action(
+                admin,
+                f"Loan #{loan.id.hex[:8]} moved to ACTIVE after disbursement.",
+                "loans",
+                loan.id,
+                old_data=old_status,
+                new_data="ACTIVE",
+                log_type="STATUS",
             )
 
             logger.info(f"Successfully disbursed loan {loan.id} via simulation.")

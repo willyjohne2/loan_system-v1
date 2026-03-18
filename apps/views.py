@@ -31,6 +31,7 @@ from .models import (
     EmailLog,
     AdminInvitation,
     DeactivationRequest,
+    Branch,
 )
 from .serializers import (
     AdminSerializer,
@@ -48,6 +49,8 @@ from .serializers import (
     SMSLogSerializer,
     EmailLogSerializer,
     DeactivationRequestSerializer,
+    BranchSerializer,
+    CustomerDraftSerializer,
 )
 from .utils.mpesa import MpesaHandler
 from .utils.sms import send_sms_async
@@ -546,25 +549,27 @@ class UserListCreateView(generics.ListCreateAPIView):
         if not user or not user.is_authenticated:
             return Users.objects.none()
 
-        # Optimization: prefetch profile to avoid N+1
+        # optimization: prefetch profile to avoid N+1
         users = Users.objects.select_related("profile", "created_by")
 
-        # Admin, Financial Officer, and Managers (if simplified) see all
-        # unless we explicitly want to filter
         user_role = getattr(user, "role", "ADMIN")
 
+        # FINANCE, SUPER_ADMIN and ADMIN see everything
+        if user_role in ["FINANCIAL_OFFICER", "SUPER_ADMIN", "ADMIN"]:
+            return users.order_by("-created_at")
+
+        # FIELD_OFFICER only sees those they created
         if user_role == "FIELD_OFFICER":
             return users.filter(created_by=user).order_by("-created_at")
 
-        if user_role == "MANAGER":
-            manager_branch = getattr(user, "branch", None)
-            if manager_branch:
-                return users.filter(profile__branch=manager_branch).order_by(
-                    "-created_at"
-                )
-            return users.order_by("-created_at")
+        # MANAGERS and other roles see only their branch
+        if user.branch_fk:
+            return users.filter(profile__branch_fk=user.branch_fk).order_by(
+                "-created_at"
+            )
 
-        return users.order_by("-created_at")
+        # Fallback for roles without a branch (but aren't finance/super)
+        return users.none()
 
     def perform_create(self, serializer):
         user = self.request.user
@@ -754,19 +759,21 @@ class LoanListCreateView(generics.ListCreateAPIView):
         # Optimization: Select related user and profile to prevent N+1 queries
         loans = Loans.objects.select_related("user", "user__profile", "loan_product")
 
-        if hasattr(user, "role") and user.role == "FIELD_OFFICER":
-            loans = loans.filter(created_by=user)
+        user_role = getattr(user, "role", "ADMIN")
 
-        elif hasattr(user, "role") and user.role == "MANAGER":
-            loans = loans.filter(user__profile__branch=user.branch)
+        # FINANCE, SUPER_ADMIN and ADMIN see everything
+        if user_role in ["FINANCIAL_OFFICER", "SUPER_ADMIN", "ADMIN"]:
+            return loans.order_by("-created_at")
 
-        # Optimization: Only update status if it's been more than a day
-        # or if the loan is currently in a state that could change
-        # Instead of doing it here for every request, we can wrap this
-        # in a faster check or do it during specific triggers.
-        # For now, let's just make it faster by removing the inner loop
-        # from the critical path of a GET list.
-        return loans.order_by("-created_at")
+        # FIELD_OFFICERS see only what they created
+        if user_role == "FIELD_OFFICER":
+            return loans.filter(created_by=user).order_by("-created_at")
+
+        # MANAGERS and other roles see only their branch
+        if user.branch_fk:
+            return loans.filter(branch=user.branch_fk).order_by("-created_at")
+
+        return loans.none()
 
     def perform_create(self, serializer):
         user = self.request.user
@@ -778,18 +785,36 @@ class LoanListCreateView(generics.ListCreateAPIView):
             try:
                 customer = Users.objects.get(id=customer_id)
                 profile = getattr(customer, "profile", None)
-                if not (
-                    customer.full_name
-                    and profile
-                    and profile.profile_image
-                    and profile.national_id_image
-                    and profile.national_id
-                ):
+
+                # Requirement 4: Customer Profile Completeness Check
+                missing_fields = []
+                if not customer.full_name:
+                    missing_fields.append("full_name")
+                if not customer.phone:
+                    missing_fields.append("phone")
+                if not profile:
+                    missing_fields.append("profile")
+                else:
+                    if not profile.national_id:
+                        missing_fields.append("national_id")
+                    if not profile.national_id_image:
+                        missing_fields.append("national_id_image")
+                    if not profile.employment_status:
+                        missing_fields.append("employment_status")
+                    if not profile.monthly_income:
+                        missing_fields.append("monthly_income")
+
+                # Check for at least one guarantor
+                if not customer.guarantors.exists():
+                    missing_fields.append("at least one guarantor")
+
+                if missing_fields:
                     raise serializers.ValidationError(
                         {
-                            "error": "Customer profile incomplete. Full name, profile photo, and national ID image are required before applying for a loan."
+                            "error": f"Customer profile incomplete. Missing fields: {', '.join(missing_fields)}"
                         }
                     )
+
                 if customer.is_locked:
                     raise serializers.ValidationError(
                         {
@@ -891,8 +916,10 @@ class RepaymentListCreateView(generics.ListCreateAPIView):
 
         repayments = Repayments.objects.all()
 
-        if hasattr(user, "role") and user.role == "MANAGER":
-            repayments = repayments.filter(loan__user__profile__branch=user.branch)
+        if hasattr(user, "role") and user.role in ["ADMIN", "SUPER_ADMIN", "FINANCIAL_OFFICER"]:
+            pass # See all repayments
+        elif hasattr(user, "role") and user.role == "MANAGER":
+            repayments = repayments.filter(loan__user__profile__branch_fk=user.branch_fk)
 
         elif hasattr(user, "role") and user.role == "FIELD_OFFICER":
             repayments = repayments.filter(loan__created_by=user)
@@ -1045,7 +1072,7 @@ class MpesaDisbursementView(views.APIView):
         except:
             daily_limit = 500000.0
 
-        today_start = timezone.now().replace(hour=0, minute=0, second=0, microsecond=0)
+        today_start = timezone.now().astimezone(timezone.get_current_timezone()).replace(hour=0, minute=0, second=0, microsecond=0)
 
         # Calculate what this officer has disbursed today
         today_disbursements = AuditLogs.objects.filter(
@@ -1452,6 +1479,54 @@ class BulkSMSView(views.APIView):
         )
 
 
+class BranchListCreateView(generics.ListCreateAPIView):
+    queryset = Branch.objects.all().order_by("name")
+    serializer_class = BranchSerializer
+    permission_classes = [permissions.IsAuthenticated, IsAdminUser]
+
+    def perform_create(self, serializer):
+        branch = serializer.save()
+        log_action(
+            self.request.user,
+            "CREATE",
+            "branches",
+            branch.id,
+            new_data={"name": branch.name},
+        )
+
+
+class BranchDetailView(generics.RetrieveUpdateDestroyAPIView):
+    queryset = Branch.objects.all()
+    serializer_class = BranchSerializer
+    permission_classes = [permissions.IsAuthenticated, IsAdminUser]
+
+    def perform_update(self, serializer):
+        old_data = BranchSerializer(self.get_object()).data
+        branch = serializer.save()
+        log_action(
+            self.request.user,
+            "UPDATE",
+            "branches",
+            branch.id,
+            old_data=old_data,
+            new_data=serializer.data,
+        )
+
+    def perform_destroy(self, instance):
+        if instance.branch_admins.exists() or instance.branch_loans.exists():
+            raise status.ValidationError(
+                "Cannot delete branch with existing staff or loans."
+            )
+        log_action(
+            self.request.user,
+            "DELETE",
+            "branches",
+            instance.id,
+            old_data=BranchSerializer(instance).data,
+        )
+        instance.delete()
+
+
 class AuditLogListView(generics.ListAPIView):
     serializer_class = AuditLogSerializer
     permission_classes = [permissions.IsAuthenticated]
@@ -1462,7 +1537,18 @@ class AuditLogListView(generics.ListAPIView):
         if not user or not hasattr(user, "role"):
             return AuditLogs.objects.none()
 
-        queryset = AuditLogs.objects.all().order_by("-created_at")
+        # FINANCE, SUPER_ADMIN and ADMIN see all logs
+        if user.role in ["FINANCIAL_OFFICER", "SUPER_ADMIN", "ADMIN"]:
+            queryset = AuditLogs.objects.all().order_by("-created_at")
+        else:
+            # MANAGERS and FIELD_OFFICERS only see logs for their branch
+            if user.branch_fk:
+                # We filter logs where the acting admin is in the same branch
+                queryset = AuditLogs.objects.filter(
+                    admin__branch_fk=user.branch_fk
+                ).order_by("-created_at")
+            else:
+                return AuditLogs.objects.none()
 
         # Filters
         log_type = self.request.query_params.get("type")
@@ -1953,18 +2039,107 @@ class LoanDetailView(generics.RetrieveUpdateAPIView):
     def perform_update(self, serializer):
         instance = self.get_object()
         data = self.request.data
+        user = self.request.user
+        user_role = getattr(user, "role", "STAFF")
         ip = get_client_ip(self.request)
 
         # Audit log for change
         old_data = LoanSerializer(instance).data
+        new_status = data.get("status")
 
-        # 1. Block manual status change to DISBURSED
+        # Requirement 1: STRICT LOAN STATE MACHINE
+        # Order: UNVERIFIED → VERIFIED → APPROVED → DISBURSED → ACTIVE → OVERDUE → CLOSED
+        if new_status and new_status != instance.status:
+            # Check if strict mode is enabled in settings
+            try:
+                strict_setting = SystemSettings.objects.get(key="STRICT_LOAN_WORKFLOW")
+                is_strict_mode = str(strict_setting.value).lower() == "true"
+            except SystemSettings.DoesNotExist:
+                is_strict_mode = True  # Default to true as per previous requirement
+
+            # 1.1 Only a Field Officer can move a loan from UNVERIFIED → VERIFIED
+            if instance.status == "UNVERIFIED" and new_status == "VERIFIED":
+                if user_role != "FIELD_OFFICER" and is_strict_mode:
+                    from rest_framework.exceptions import PermissionDenied
+
+                    raise PermissionDenied(
+                        "Only Field Officers can verify unverified loans."
+                    )
+
+            # 1.2 Only a Manager can move a loan from VERIFIED → APPROVED
+            elif instance.status == "VERIFIED" and new_status == "APPROVED":
+                if user_role != "MANAGER" and is_strict_mode:
+                    from rest_framework.exceptions import PermissionDenied
+
+                    raise PermissionDenied("Only Managers can approve verified loans.")
+
+            # 1.3 Only a Finance Officer can move a loan from APPROVED → DISBURSED
+            elif instance.status == "APPROVED" and new_status == "DISBURSED":
+                # Note: This check is redundant with LoanDisbursementView check but good for safety
+                if user_role not in ["FINANCE_OFFICER", "FINANCIAL_OFFICER"] and is_strict_mode:
+                    from rest_framework.exceptions import PermissionDenied
+
+                    raise PermissionDenied(
+                        "Only Finance Officers can disburse approved loans."
+                    )
+
+            # 1.4 Rejection Logic (Requirement 2)
+            elif new_status == "REJECTED":
+                # Any authorized officer can reject at their stage
+                can_reject = False
+                if user.is_super_admin or user_role == "ADMIN":
+                    can_reject = True
+                elif user_role == "FIELD_OFFICER" and instance.status == "UNVERIFIED":
+                    can_reject = True
+                elif user_role == "MANAGER" and instance.status == "VERIFIED":
+                    can_reject = True
+                elif user_role in ["FINANCE_OFFICER", "FINANCIAL_OFFICER"] and instance.status == "APPROVED":
+                    can_reject = True
+
+                if not can_reject and is_strict_mode:
+                    from rest_framework.exceptions import PermissionDenied
+
+                    raise PermissionDenied(
+                        "You do not have permission to reject this loan at its current stage."
+                    )
+
+                # Rejection must have a reason
+                rejection_reason = data.get("rejection_reason")
+                if not rejection_reason:
+                    from rest_framework.exceptions import ValidationError
+
+                    raise ValidationError({"rejection_reason": "This field is required when rejecting a loan."})
+
+            # Check if attempting to skip a stage (allowing REJECTED as escape)
+            else:
+                # Basic ordering validation
+                valid_transitions = {
+                    "UNVERIFIED": ["VERIFIED", "REJECTED"],
+                    "VERIFIED": ["APPROVED", "REJECTED"],
+                    "APPROVED": ["DISBURSED", "REJECTED"],
+                    "DISBURSED": ["ACTIVE"],
+                    "ACTIVE": ["OVERDUE", "CLOSED"],
+                    "OVERDUE": ["ACTIVE", "CLOSED"],
+                    "REJECTED": [],  # Terminal unless Admin resets (not within scope)
+                }
+
+                if new_status not in valid_transitions.get(instance.status, []) and is_strict_mode:
+                    # Admin Escape: Admins/Superadmins might need to fix things, but requirement says "Strict"
+                    if not (user.is_super_admin or user_role == "ADMIN"):
+                        from rest_framework.exceptions import PermissionDenied
+
+                        raise PermissionDenied(
+                            "This action is not permitted at the current loan stage."
+                        )
+
+        # 1. Block manual status change to DISBURSED (Moved this inside logic above, but keep for consistency)
         if data.get("status") == "DISBURSED" and instance.status != "DISBURSED":
-            from rest_framework.exceptions import ValidationError
+            if user_role != "FINANCE_OFFICER":
+                from rest_framework.exceptions import ValidationError
 
-            raise ValidationError(
-                "Loans cannot be manually marked as DISBURSED. Use the disbursement trigger."
-            )
+                raise ValidationError(
+                    "Loans cannot be manually marked as DISBURSED. Use the disbursement trigger."
+                )
 
         # 2. Block critical field changes if loan is beyond UNVERIFIED
         if instance.status not in ["UNVERIFIED"]:
@@ -1978,15 +2153,12 @@ class LoanDetailView(generics.RetrieveUpdateAPIView):
             ]
 
             # Managers and below cannot edit these if status is FIELD_VERIFIED or higher
-            user_role = getattr(self.request.user, "role", "STAFF")
-            is_critical_role = user_role in [
+            if user_role in [
                 "ADMIN",
                 "MANAGER",
                 "FIELD_OFFICER",
                 "STAFF",
-            ]
-
-            if is_critical_role and not self.request.user.is_super_admin:
+            ] and not user.is_super_admin:
                 for field in protected_fields:
                     if field in data:
                         val = data[field]
@@ -2008,7 +2180,7 @@ class LoanDetailView(generics.RetrieveUpdateAPIView):
 
         # Determine verification timestamps
         extra_fields = {
-            "last_modified_by": self.request.user,
+            "last_modified_by": user,
             "status_change_reason": (
                 status_change_reason
                 if status_change_reason
@@ -2016,22 +2188,27 @@ class LoanDetailView(generics.RetrieveUpdateAPIView):
             ),
         }
 
-        from django.utils import timezone
-
-        if data.get("status") == "FIELD_VERIFIED":
+        if data.get("status") == "VERIFIED":
             extra_fields["field_officer_verified_at"] = timezone.now()
-        elif data.get("status") == "VERIFIED":
+        elif data.get("status") == "APPROVED":
             extra_fields["manager_verified_at"] = timezone.now()
 
         updated_instance = serializer.save(**extra_fields)
 
+        # Success message for verification/approval
+        success_msg = f"Loan has been successfully {updated_instance.status.lower()}."
+        
+        # Requirement 3: AUDIT LOGGING
         log_action(
-            self.request.user,
+            user,
             f"Updated Loan status from {instance.status} to {updated_instance.status}",
             "loans",
             instance.id,
-            old_data=old_data,
-            new_data=LoanSerializer(updated_instance).data,
+            old_data=old_data.get("status"),
+            new_data={
+                "status": updated_instance.status,
+                "rejection_reason": updated_instance.rejection_reason,
+            },
             log_type="STATUS",
             ip_address=ip,
         )
@@ -2041,30 +2218,39 @@ class LoanDetailView(generics.RetrieveUpdateAPIView):
         new_status = loan.status
 
         if new_status != old_status:
-            admin = self.request.user if self.request.user.is_authenticated else None
+            admin_user = user if user.is_authenticated else None
             create_loan_activity(
                 loan,
-                admin,
+                admin_user,
                 new_status,
                 f"Status changed from {old_status} to {new_status}",
             )
 
-            # Audit Log
-            AuditLogs.objects.create(
-                admin=self.request.user if self.request.user.is_authenticated else None,
-                action="LOAN_UPDATE",
-                log_type="MANAGEMENT",
-                table_name="loans",
-                record_id=loan.id,
-                old_data={"status": old_status},
-                new_data={"status": new_status},
-                ip_address=ip,
-            )
+            # Rejection Side Effects (Requirement 2)
+            if new_status == "REJECTED":
+                # Notify field officer
+                field_officer = loan.created_by
+                if field_officer and field_officer.phone:
+                    sms_message = f"Loan #{loan.id.hex[:8]} has been rejected. Reason: {loan.rejection_reason}"
+                    send_sms_async(field_officer.phone, sms_message)
+                    SMSLog.objects.create(
+                        sender=admin_user,
+                        recipient_phone=field_officer.phone,
+                        recipient_name=field_officer.full_name,
+                        message=sms_message,
+                        type="REJECTION",
+                    )
 
             create_notification(
                 loan.user,
                 f"Loan Update: The status of your loan has been updated to {new_status}.",
             )
+
+        # Return the success message in the response
+        return Response({
+            "message": success_msg,
+            "loan": LoanSerializer(updated_instance).data
+        }, status=status.HTTP_200_OK)
 
 
 class LoanDisbursementView(views.APIView):
@@ -2079,7 +2265,7 @@ class LoanDisbursementView(views.APIView):
             )
 
         user = request.user
-        if not hasattr(user, "role") or user.role != "FINANCE_OFFICER":
+        if not hasattr(user, "role") or user.role not in ["FINANCE_OFFICER", "FINANCIAL_OFFICER"]:
             return Response(
                 {"error": "Only Finance Officers can disburse loans."},
                 status=status.HTTP_403_FORBIDDEN,
@@ -2273,11 +2459,9 @@ class LoanAnalyticsView(views.APIView):
         )
 
         if hasattr(user, "role") and user.role == "MANAGER":
-            branch = user.branch
-
-        loans = Loans.objects.all()
-        if branch:
-            loans = loans.filter(user__profile__branch=branch)
+            loans = loans.filter(user__profile__branch_fk=user.branch_fk)
+        elif branch:
+            loans = loans.filter(user__profile__branch=branch) # fallback for text search
 
         if hasattr(user, "role") and user.role == "FIELD_OFFICER":
             loans = loans.filter(created_by=user)
@@ -2892,3 +3076,39 @@ class ListEmailLogsView(generics.ListAPIView):
                 | Q(message__icontains=search)
             )
         return queryset.order_by("-created_at")
+
+class CustomerDraftListCreateView(generics.ListCreateAPIView):
+    serializer_class = CustomerDraftSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_queryset(self):
+        return CustomerDraft.objects.filter(created_by=self.request.user, is_completed=False).order_by("-updated_at")
+
+    def perform_create(self, serializer):
+        draft = serializer.save(created_by=self.request.user)
+        log_action(
+            self.request.user,
+            f"Saved customer draft: {draft.incomplete_reason}",
+            "customer_drafts",
+            draft.id,
+            log_type="DRAFT",
+            new_data=serializer.data
+        )
+
+class CustomerDraftDetailView(generics.RetrieveUpdateDestroyAPIView):
+    serializer_class = CustomerDraftSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_queryset(self):
+        return CustomerDraft.objects.filter(created_by=self.request.user)
+
+    def perform_update(self, serializer):
+        draft = serializer.save()
+        log_action(
+            self.request.user,
+            f"Updated customer draft: {draft.incomplete_reason}",
+            "customer_drafts",
+            draft.id,
+            log_type="DRAFT",
+            new_data=serializer.data
+        )

@@ -3,6 +3,23 @@ from django.utils import timezone
 import uuid
 
 
+class Branch(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    name = models.CharField(unique=True, max_length=100)
+    location = models.TextField(blank=True, null=True)
+    contact_phone = models.CharField(max_length=20, blank=True, null=True)
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return self.name
+
+    class Meta:
+        managed = True
+        db_table = "branches"
+
+
 class Admins(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     full_name = models.TextField()
@@ -16,6 +33,13 @@ class Admins(models.Model):
     is_super_admin = models.BooleanField(default=False)
     failed_login_attempts = models.IntegerField(default=0)
     branch = models.TextField(blank=True, null=True)
+    branch_fk = models.ForeignKey(
+        Branch,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="branch_admins",
+    )
     password_reset_code = models.CharField(max_length=6, blank=True, null=True)
     password_reset_expires = models.DateTimeField(blank=True, null=True)
     two_factor_secret = models.CharField(max_length=32, blank=True, null=True)
@@ -48,6 +72,13 @@ class AdminInvitation(models.Model):
     token = models.CharField(max_length=100, unique=True)
     invited_by = models.ForeignKey(Admins, on_delete=models.SET_NULL, null=True)
     branch = models.CharField(max_length=100, blank=True, null=True)
+    branch_fk = models.ForeignKey(
+        Branch,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="branch_invitations",
+    )
     is_used = models.BooleanField(default=False)
     expires_at = models.DateTimeField()
     created_at = models.DateTimeField(auto_now_add=True)
@@ -112,7 +143,15 @@ class Loans(models.Model):
     loan_reason = models.TextField(blank=True, null=True)
     loan_reason_other = models.TextField(blank=True, null=True)
     status = models.TextField(default="UNVERIFIED", db_index=True)
+    rejection_reason = models.TextField(blank=True, null=True)
     status_change_reason = models.TextField(blank=True, null=True)
+    branch = models.ForeignKey(
+        Branch,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="branch_loans",
+    )
     field_officer_verified_at = models.DateTimeField(null=True, blank=True)
     manager_verified_at = models.DateTimeField(null=True, blank=True)
     created_by = models.ForeignKey(
@@ -359,6 +398,13 @@ class UserProfiles(models.Model):
     )
     date_of_birth = models.DateField(blank=True, null=True)
     branch = models.TextField(blank=True, null=True)
+    branch_fk = models.ForeignKey(
+        Branch,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="branch_profiles",
+    )
     town = models.TextField(blank=True, null=True)
     village = models.TextField(blank=True, null=True)
     address = models.TextField(blank=True, null=True)
@@ -558,3 +604,16 @@ class LedgerEntry(models.Model):
     class Meta:
         managed = True
         db_table = "ledger_entries"
+
+class CustomerDraft(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    created_by = models.ForeignKey('Admins', on_delete=models.CASCADE, related_name='customer_drafts')
+    form_data = models.JSONField()
+    incomplete_reason = models.CharField(max_length=100)
+    notes = models.TextField(blank=True, null=True)
+    is_completed = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'customer_drafts'
