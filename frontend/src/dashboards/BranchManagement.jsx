@@ -109,7 +109,7 @@ const BranchManagement = () => {
             <Building2 className="w-8 h-8 text-primary-600" />
             Branch Management
           </h1>
-          <p className="text-slate-500 text-sm font-medium">Configure operational units and regional headquarters</p>
+          <p className="text-slate-600 dark:text-slate-400 text-sm font-medium">Configure operational units and regional headquarters</p>
         </div>
         <Button 
           variant="primary" 

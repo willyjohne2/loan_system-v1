@@ -25,7 +25,12 @@ const Navbar = ({ title, onMenuClick, isSidebarOpen }) => {
 
   const fetchNotifications = async () => {
     try {
-      const response = await loanService.api.get('/notifications/');
+      const endpoint = user?.is_owner 
+        ? '/owner-notifications/' 
+        : user?.role === 'SUPER_ADMIN' || user?.role === 'ADMIN'
+          ? '/security-logs/'
+          : '/notifications/';
+      const response = await loanService.api.get(endpoint);
       const data = response.data.results || response.data;
       setNotifications(Array.isArray(data) ? data : []);
     } catch (err) {
@@ -33,6 +38,15 @@ const Navbar = ({ title, onMenuClick, isSidebarOpen }) => {
       setNotifications([]);
     }
   };
+
+  useEffect(() => {
+    let interval;
+    if (user) {
+      fetchNotifications();
+      interval = setInterval(fetchNotifications, 30000); // Poll every 30s
+    }
+    return () => clearInterval(interval);
+  }, [user]);
 
   const markAsRead = async (id) => {
     try {
@@ -64,36 +78,36 @@ const Navbar = ({ title, onMenuClick, isSidebarOpen }) => {
 
   return (
     <header className="h-16 md:h-20 bg-white/80 dark:bg-slate-900/80 backdrop-blur-md border-b border-slate-200 dark:border-slate-800 flex items-center justify-between px-4 md:px-8 sticky top-0 z-40 transition-all">
-      <div className="flex items-center gap-3 md:gap-4">
+      <div className="flex items-center gap-2 md:gap-4 overflow-hidden">
         <button 
           onClick={onMenuClick}
-          className="p-2 text-slate-600 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800 rounded-xl transition-all active:scale-95 group"
+          className="p-1.5 md:p-2 text-slate-600 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800 rounded-lg md:rounded-xl transition-all active:scale-95 group shrink-0"
           title={isSidebarOpen ? "Hide Menu" : "Show Menu"}
         >
           <Menu className={cn(
-            "w-6 h-6 transition-transform",
+            "w-5 h-5 md:w-6 md:h-6 transition-transform",
             isSidebarOpen && "rotate-180"
           )} />
         </button>
-        <div className="flex flex-col">
+        <div className="flex flex-col min-w-0">
           <div className="flex items-center gap-2">
-            <h2 className="text-sm md:text-xl font-black text-slate-900 dark:text-white truncate max-w-[140px] sm:max-w-[200px] md:max-w-none tracking-tight">
+            <h2 className="text-sm sm:text-lg md:text-xl font-black text-slate-900 dark:text-white truncate tracking-tight">
               {title}
             </h2>
           </div>
-          <span className="text-[10px] text-slate-400 font-medium hidden sm:inline uppercase tracking-widest">
+          <span className="text-[9px] md:text-[10px] text-slate-400 font-medium hidden sm:inline uppercase tracking-widest truncate">
             Azariah Credit Ltd &bull; Dashboard
           </span>
         </div>
       </div>
 
-      <div className="flex items-center space-x-1 sm:space-x-3 md:space-x-6">
-        <div className="relative hidden lg:block">
+      <div className="flex items-center space-x-1 sm:space-x-3 md:space-x-4">
+        <div className="relative hidden xl:block">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
           <input
             type="text"
             placeholder="Search..."
-            className="pl-10 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/20 dark:bg-slate-800 dark:border-slate-700"
+            className="pl-10 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/20 dark:bg-slate-800 dark:border-slate-700 w-48 2xl:w-64"
           />
         </div>
 
@@ -111,7 +125,9 @@ const Navbar = ({ title, onMenuClick, isSidebarOpen }) => {
           {showNotifications && (
             <div className="absolute right-0 mt-2 w-72 md:w-80 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-xl z-30 transition-all">
               <div className="p-4 border-b border-slate-100 dark:border-slate-700 flex justify-between items-center">
-                <h4 className="font-bold text-sm">Notifications</h4>
+                <h4 className="font-bold text-sm">
+                    {user?.is_owner ? 'Owner Activity' : user?.role === 'ADMIN' ? 'Security Alerts' : 'Notifications'}
+                </h4>
                 <span className="text-[10px] bg-primary-100 text-primary-600 px-2 py-1 rounded-full font-bold">
                   {notifications.filter(n => !n.is_read).length} NEW
                 </span>
@@ -127,6 +143,7 @@ const Navbar = ({ title, onMenuClick, isSidebarOpen }) => {
                       <div className="flex-1">
                         <p className={`text-sm ${!notif.is_read ? 'font-bold' : 'text-slate-600 dark:text-slate-400'}`}>
                           {notif.message}
+                          {notif.log_type && <span className="ml-2 text-[8px] opacity-70 px-1 border border-current rounded uppercase">{notif.log_type}</span>}
                         </p>
                         <p className="text-[10px] text-slate-400 mt-1">
                           {new Date(notif.created_at).toLocaleString()}

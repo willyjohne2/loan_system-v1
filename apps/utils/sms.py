@@ -2,13 +2,14 @@ import requests
 import os
 import threading
 from django.conf import settings
+from .encryption import get_setting
 
 
 class SMSHandler:
     def __init__(self):
-        self.username = os.getenv("AT_USERNAME", "sandbox")
-        self.api_key = os.getenv("AT_API_KEY", "")
-        self.sender_id = os.getenv("AT_SENDER_ID", "")  # For Live use
+        self.username = get_setting("AT_USERNAME", os.getenv("AT_USERNAME", "sandbox"))
+        self.api_key = get_setting("AT_API_KEY", os.getenv("AT_API_KEY", ""))
+        self.sender_id = get_setting("AT_SENDER_ID", os.getenv("AT_SENDER_ID", ""))
         self.base_url = (
             "https://api.sandbox.africastalking.com"
             if self.username == "sandbox"

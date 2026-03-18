@@ -1,5 +1,6 @@
 from rest_framework import serializers
 import json
+from django.utils import timezone
 from .models import (
     Admins,
     Users,
@@ -19,8 +20,9 @@ from .models import (
     EmailLog,
     Branch,
     CustomerDraft,
-    
+    SecureSettings,
 )
+from .utils.encryption import encrypt_value
 
 
 class BranchSerializer(serializers.ModelSerializer):
@@ -42,6 +44,60 @@ class BranchSerializer(serializers.ModelSerializer):
         return obj.branch_loans.count()
 
 
+class SecureSettingsSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = SecureSettings
+        fields = ["key", "encrypted_value", "setting_group", "description", "updated_by", "updated_at"]
+        read_only_fields = ["updated_by", "updated_at"]
+
+    def to_representation(self, instance):
+        ret = super().to_representation(instance)
+        # Never return encrypted_value raw—mask sensitive ones
+        sensitive_groups = ["mpesa", "sms", "security"]
+        if instance.setting_group in sensitive_groups or "key" in instance.key or "secret" in instance.key or "passkey" in instance.key:
+            # Check if this specific key is sensitive (e.g. mpesa_environment is not really sensitive)
+            non_sensitive_keys = ["mpesa_environment", "mpesa_shortcode_type", "sms_provider", "ip_whitelist_enabled", "force_2fa_admin", "force_2fa_finance"]
+            if instance.key not in non_sensitive_keys:
+                ret["encrypted_value"] = "••••••••"
+            else:
+                # Decrypt it for non-sensitive system settings/toggles
+                from .utils.encryption import decrypt_value
+                ret["encrypted_value"] = decrypt_value(instance.encrypted_value)
+        else:
+            # For system group or others, return decrypted if not sensitive
+            from .utils.encryption import decrypt_value
+            ret["encrypted_value"] = decrypt_value(instance.encrypted_value)
+        return ret
+
+    def create(self, validated_data):
+        # Encrypt value before saving
+        value = validated_data.get("encrypted_value")
+        if value:
+            validated_data["encrypted_value"] = encrypt_value(value)
+        
+        request = self.context.get("request")
+        if request and request.user.is_authenticated:
+            validated_data["updated_by"] = request.user
+            
+        # Use update_or_create logic for upsert behavior if needed, 
+        # but generics handle create if not exists.
+        return super().create(validated_data)
+
+    def update(self, instance, validated_data):
+        value = validated_data.get("encrypted_value")
+        if value and value != "••••••••":
+            validated_data["encrypted_value"] = encrypt_value(value)
+        else:
+            # If masked value is sent back, don't update the actual value
+            validated_data.pop("encrypted_value", None)
+
+        request = self.context.get("request")
+        if request and request.user.is_authenticated:
+            validated_data["updated_by"] = request.user
+            
+        return super().update(instance, validated_data)
+
+
 class SMSLogSerializer(serializers.ModelSerializer):
     sender_name = serializers.ReadOnlyField(source="sender.full_name")
 
@@ -60,6 +116,7 @@ class EmailLogSerializer(serializers.ModelSerializer):
 
 class AdminSerializer(serializers.ModelSerializer):
     branch_name = serializers.ReadOnlyField(source="branch_fk.name")
+    ownership_granted_by_name = serializers.SerializerMethodField()
 
     class Meta:
         model = Admins
@@ -75,9 +132,44 @@ class AdminSerializer(serializers.ModelSerializer):
             "is_verified",
             "is_blocked",
             "is_super_admin",
+            "is_owner",
+            "is_primary_owner",
+            "god_mode_enabled",
+            "ownership_granted_at",
             "is_two_factor_enabled",
             "created_at",
+            "ownership_granted_by_name",
         ]
+
+    def get_ownership_granted_by_name(self, obj):
+        return obj.ownership_granted_by.full_name if obj.ownership_granted_by else None
+
+    def to_representation(self, instance):
+        ret = super().to_representation(instance)
+        request = self.context.get("request")
+        
+        # Safe access to query_params with request check
+        unmasked = False
+        if request and hasattr(request, 'query_params'):
+            unmasked = request.query_params.get("unmasked", "false").lower() == "true"
+        
+        is_owner = request and request.user.is_authenticated and str(request.user.id) == str(instance.id)
+        is_admin = request and request.user.is_authenticated and request.user.role in ["ADMIN"]
+
+        if unmasked and (is_admin or is_owner):
+            from .utils.security import log_action
+            log_action(
+                request.user, 
+                f"Viewed unmasked data for admin {instance.id}", 
+                "admins", 
+                instance.id, 
+                log_type="SECURITY"
+            )
+        else:
+            phone = ret.get("phone")
+            if phone and len(phone) >= 10:
+                ret["phone"] = f"{phone[:2]}***{phone[-2:]}"
+        return ret
 
     def validate_phone(self, value):
         import re
@@ -142,6 +234,42 @@ class UserSerializer(serializers.ModelSerializer):
     class Meta:
         model = Users
         fields = "__all__"
+
+    def to_representation(self, instance):
+        ret = super().to_representation(instance)
+        request = self.context.get("request")
+        
+        # Safe access to query_params with request check
+        unmasked = False
+        if request and hasattr(request, 'query_params'):
+            unmasked = request.query_params.get("unmasked", "false").lower() == "true"
+        
+        # Admin check for unmasked parameter
+        is_owner = request and request.user.is_authenticated and str(request.user.id) == str(instance.id)
+        is_admin = request and request.user.is_authenticated and request.user.role in ["ADMIN", "MANAGER", "FINANCIAL_OFFICER"]
+
+        if unmasked and (is_admin or is_owner):
+            # Log unmasked access
+            from .utils.security import log_action
+            log_action(
+                request.user, 
+                f"Viewed unmasked data for user {instance.id}", 
+                "users", 
+                instance.id, 
+                log_type="SECURITY"
+            )
+        else:
+            # Mask Phone
+            phone = ret.get("phone")
+            if phone and len(phone) >= 10:
+                ret["phone"] = f"{phone[:2]}***{phone[-2:]}"
+            
+            # Mask National ID in profile
+            if ret.get("profile") and ret["profile"].get("national_id"):
+                nid = ret["profile"]["national_id"]
+                if len(nid) >= 4:
+                    ret["profile"]["national_id"] = f"{nid[:2]}xxxx{nid[-1:]}"
+        return ret
 
     def get_has_active_loan(self, obj):
         return Loans.objects.filter(
@@ -236,15 +364,21 @@ class UserSerializer(serializers.ModelSerializer):
         profile_defaults = {
             "national_id": national_id or profile_data.get("national_id"),
             "date_of_birth": profile_data.get("date_of_birth") or None,
-            "branch": profile_data.get("branch"),
+            "branch": profile_data.get("branch") or None,
             "branch_fk_id": profile_data.get("branch_fk")
             or (request.user.branch_fk_id if request.user else None),
-            "town": profile_data.get("town"),
-            "village": profile_data.get("village"),
-            "address": profile_data.get("address"),
+            "town": profile_data.get("town") or None,
+            "village": profile_data.get("village") or None,
+            "address": profile_data.get("address") or None,
             "employment_status": profile_data.get("employment_status"),
             "monthly_income": profile_data.get("monthly_income") or None,
         }
+
+        # Ensure numeric fields are really None if empty string
+        if profile_defaults["monthly_income"] == "":
+            profile_defaults["monthly_income"] = None
+        if profile_defaults["date_of_birth"] == "":
+            profile_defaults["date_of_birth"] = None
 
         # Extract images primarily from FILES
         if files.get("profile_image"):
@@ -254,10 +388,16 @@ class UserSerializer(serializers.ModelSerializer):
             profile_defaults["national_id_image"] = files.get("national_id_image")
 
         # Use update_or_create to populate the fields correctly
-        UserProfiles.objects.update_or_create(
+        UserProfile, created = UserProfiles.objects.update_or_create(
             user=user,
             defaults=profile_defaults,
         )
+        
+        # Manually sync created_at for profiles if they exist but were created with naive datetime
+        if not created and not timezone.is_aware(UserProfile.created_at):
+             UserProfile.created_at = timezone.now()
+             UserProfile.save()
+
         return user
 
     def update(self, instance, validated_data):
@@ -297,13 +437,18 @@ class UserSerializer(serializers.ModelSerializer):
         profile_defaults = {
             "national_id": national_id or profile_data.get("national_id"),
             "date_of_birth": profile_data.get("date_of_birth") or None,
-            "branch": profile_data.get("branch"),
-            "town": profile_data.get("town"),
-            "village": profile_data.get("village"),
-            "address": profile_data.get("address"),
+            "branch": profile_data.get("branch") or None,
+            "town": profile_data.get("town") or None,
+            "village": profile_data.get("village") or None,
+            "address": profile_data.get("address") or None,
             "employment_status": profile_data.get("employment_status"),
             "monthly_income": profile_data.get("monthly_income") or None,
         }
+
+        # Clean empty strings
+        for k, v in profile_defaults.items():
+            if v == "":
+                profile_defaults[k] = None
 
         # Only update images if they are provided in files
         if files.get("profile_image"):
@@ -321,7 +466,7 @@ class UserSerializer(serializers.ModelSerializer):
         ):
             profile_defaults["national_id_image"] = None
 
-        UserProfiles.objects.update_or_create(
+        up, created = UserProfiles.objects.update_or_create(
             user=instance,
             defaults=profile_defaults,
         )

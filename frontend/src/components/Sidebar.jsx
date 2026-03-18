@@ -72,6 +72,7 @@ const Sidebar = () => {
       { to: '/branches', icon: Building2, label: 'Branch Access' },
       { to: '/loans', icon: Wallet, label: 'All Portfolio' },
       { to: '/reports', icon: FileText, label: 'Intelligence' },
+      { to: '/settings', icon: Settings, label: 'Admin Settings' },
     ],
     MANAGER: [
       { to: '/dashboard', icon: LayoutDashboard, label: 'Branch Hub' },

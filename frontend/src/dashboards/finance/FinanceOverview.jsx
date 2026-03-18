@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { RefreshCcw, TrendingUp, TrendingDown, Wallet, Users, AlertCircle, CheckCircle2, Clock } from 'lucide-react';
+import { RefreshCcw, TrendingUp, TrendingDown, Wallet, Users, AlertCircle, CheckCircle2, Clock, DollarSign, AlertTriangle } from 'lucide-react';
 import { Card, StatCard, Button } from '../../components/ui/Shared';
 import { loanService } from '../../api/api';
 import toast from 'react-hot-toast';
@@ -84,17 +84,35 @@ const FinanceOverview = () => {
   const formatKES = (val) => new Intl.NumberFormat('en-KE', { style: 'currency', currency: 'KES' }).format(val);
 
   return (
-    <div className="space-y-6">
-      <div className="flex justify-between items-center">
+    <div className="space-y-6 px-4 sm:px-0">
+      {/* Simulation Mode Banner */}
+      <div className="p-4 bg-blue-50 border border-blue-200 rounded-xl flex flex-col sm:flex-row items-start sm:items-center gap-4 shadow-sm animate-in fade-in slide-in-from-top-4 duration-500">
+        <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center shrink-0">
+          <div className="w-2.5 h-2.5 rounded-full bg-blue-500 animate-pulse" />
+        </div>
+        <div className="flex-1">
+          <p className="text-sm font-bold text-blue-900">Simulation Mode Active</p>
+          <p className="text-xs text-blue-700 mt-0.5 font-medium leading-relaxed">
+            Note: No real M-Pesa transactions are being processed. The system is using a virtual capital pool (KES 500,000.00) to simulate real-world flows for testing purposes.
+          </p>
+        </div>
+        <div className="shrink-0 w-full sm:w-auto">
+          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-black bg-blue-100 text-blue-800 uppercase tracking-widest border border-blue-200">
+            Phase 1 Testing
+          </span>
+        </div>
+      </div>
+
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
-          <h2 className="text-2xl font-bold text-slate-900">Financial Overview</h2>
-          <p className="text-sm text-slate-500 mt-1">Portfolio health and system status</p>
+          <h2 className="text-xl sm:text-2xl font-bold text-slate-900">Financial Overview</h2>
+          <p className="text-xs sm:text-sm text-slate-500 mt-1">Portfolio health and system status</p>
         </div>
         <Button 
           variant="secondary" 
           onClick={fetchData} 
           loading={loading}
-          className="flex items-center gap-2"
+          className="flex items-center gap-2 w-full sm:w-auto"
         >
           <RefreshCcw className="w-4 h-4" />
           Sync Data
@@ -102,7 +120,7 @@ const FinanceOverview = () => {
       </div>
 
       {/* KPI Stat Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
         <StatCard
           label="Portfolio Size"
           value={formatKES(data.stats.portfolioSize)}
@@ -113,6 +131,23 @@ const FinanceOverview = () => {
           label="Total Collections"
           value={formatKES(data.stats.totalCollections)}
           icon={TrendingUp}
+          variant="success"
+        />
+        <StatCard
+          label="Available Capital"
+          value={formatKES(data.stats.availableCapital)}
+          icon={DollarSign}
+          variant="info"
+        />
+        <StatCard
+          label="Portfolio at Risk"
+          value={formatKES(data.stats.portfolioAtRisk)}
+          icon={AlertTriangle}
+          variant="warning"
+        />
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           variant="success"
         />
         <StatCard

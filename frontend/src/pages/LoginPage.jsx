@@ -16,18 +16,21 @@ const LoginPage = () => {
   const { login } = useAuth();
   const navigate = useNavigate();
 
-  const handleDashboardRedirect = (role) => {
-    if (role === 'ADMIN') {
-      navigate('/admin/dashboard');
-    } else if (role === 'MANAGER') {
-      navigate('/manager/dashboard');
-    } else if (role === 'FINANCIAL_OFFICER') {
-      navigate('/finance/overview');
-    } else if (role === 'FIELD_OFFICER') {
-      navigate('/field/dashboard');
-    } else {
-      setError('Unauthorized role');
+  const handleDashboardRedirect = (userData) => {
+    if (userData.is_owner) {
+      navigate('/owner/dashboard');
+      return;
     }
+    if (userData.is_super_admin || userData.god_mode_enabled) {
+      navigate('/admin/dashboard');
+      return;
+    }
+    const role = userData.role;
+    if (role === 'ADMIN') navigate('/admin/dashboard');
+    else if (role === 'MANAGER') navigate('/manager/dashboard');
+    else if (role === 'FINANCIAL_OFFICER') navigate('/finance/overview');
+    else if (role === 'FIELD_OFFICER') navigate('/field/dashboard');
+    else setError('Unauthorized role. Contact your administrator.');
   };
 
   const handleSubmit = async (e) => {
@@ -49,7 +52,7 @@ const LoginPage = () => {
       }
 
       login(res);
-      handleDashboardRedirect(res.role);
+      handleDashboardRedirect(res);
     } catch (err) {
       console.error('[LoginPage] Login error:', err);
       const message = err.response?.data?.error || err.message || 'Login failed. Please try again.';
@@ -71,7 +74,7 @@ const LoginPage = () => {
       });
       
       login(res);
-      handleDashboardRedirect(res.role);
+      handleDashboardRedirect(res);
     } catch (err) {
       setError(err.response?.data?.error || 'Invalid 2FA code');
     } finally {

@@ -31,6 +31,24 @@ class Admins(models.Model):
     verification_token = models.CharField(max_length=100, blank=True, null=True)
     is_blocked = models.BooleanField(default=False)
     is_super_admin = models.BooleanField(default=False)
+    is_owner = models.BooleanField(default=False)
+    god_mode_enabled = models.BooleanField(default=False)
+    suspended_at = models.DateTimeField(null=True, blank=True)
+    suspended_by = models.ForeignKey(
+        "self",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="suspended_accounts",
+    )
+    suspension_reason = models.TextField(blank=True, null=True)
+    invited_by = models.ForeignKey(
+        "self",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="invited_accounts",
+    )
     failed_login_attempts = models.IntegerField(default=0)
     branch = models.TextField(blank=True, null=True)
     branch_fk = models.ForeignKey(
@@ -46,6 +64,10 @@ class Admins(models.Model):
     is_two_factor_enabled = models.BooleanField(default=False)
     lockout_until = models.DateTimeField(null=True, blank=True)
     last_login_ip = models.GenericIPAddressField(null=True, blank=True)
+    is_primary_owner = models.BooleanField(default=False)  # Only the very first owner ever created
+    ownership_granted_by = models.ForeignKey('self', on_delete=models.SET_NULL, null=True, blank=True, related_name='owners_created')
+    ownership_granted_at = models.DateTimeField(null=True, blank=True)
+    ownership_relinquished_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True, null=True)
 
     class Meta:
@@ -71,6 +93,9 @@ class AdminInvitation(models.Model):
     role = models.CharField(max_length=50)
     token = models.CharField(max_length=100, unique=True)
     invited_by = models.ForeignKey(Admins, on_delete=models.SET_NULL, null=True)
+    invited_by_admin = models.ForeignKey(
+        Admins, on_delete=models.SET_NULL, null=True, related_name="sent_invitations"
+    )
     branch = models.CharField(max_length=100, blank=True, null=True)
     branch_fk = models.ForeignKey(
         Branch,
@@ -98,6 +123,7 @@ class AuditLogs(models.Model):
     log_type = models.CharField(
         max_length=50, default="GENERAL"
     )  # STATUS, COMMUNICATION, MANAGEMENT, GENERAL
+    is_owner_log = models.BooleanField(default=False)
     table_name = models.TextField()
     record_id = models.UUIDField(blank=True, null=True)
     old_data = models.JSONField(blank=True, null=True)
@@ -108,6 +134,19 @@ class AuditLogs(models.Model):
     class Meta:
         managed = True
         db_table = "audit_logs"
+
+
+class SecureSettings(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    key = models.CharField(max_length=100, unique=True)
+    encrypted_value = models.TextField()
+    setting_group = models.CharField(max_length=50)  # 'mpesa', 'sms', 'system', 'security'
+    description = models.TextField(blank=True, null=True)
+    updated_by = models.ForeignKey(Admins, on_delete=models.SET_NULL, null=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'secure_settings'
 
 
 class LoanProducts(models.Model):

@@ -200,6 +200,26 @@ export const loanService = {
     const res = await api.post('/settings/', settings);
     return res.data;
   },
+  getSecureSettings: async (group = '') => {
+    const res = await api.get('/settings/secure/', { params: { group } });
+    return res.data;
+  },
+  updateSecureSetting: async (key, value, group) => {
+    const res = await api.post('/settings/secure/', { key, value, group });
+    return res.data;
+  },
+  revealSecureSetting: async (key) => {
+    const res = await api.post(`/settings/secure/${key}/reveal/`);
+    return res.data;
+  },
+  testMpesaConnection: async () => {
+    const res = await api.post('/settings/test-mpesa/');
+    return res.data;
+  },
+  testSMSSend: async (phone, message) => {
+    const res = await api.post('/settings/test-sms/', { phone, message });
+    return res.data;
+  },
   register: async (full_name, email, phone, role, password, invitation_token = null, branch = null) => {
     const res = await api.post('/auth/register/', { 
       full_name, 
@@ -226,6 +246,26 @@ export const loanService = {
   },
   getSMSLogs: async (params) => {
     const res = await api.get('/sms-logs/', { params });
+    return res.data;
+  },
+  getOwnership: async () => {
+    const res = await api.get('/ownership/');
+    return res.data;
+  },
+  grantOwnership: async (data) => {
+    const res = await api.post('/ownership/grant/', data);
+    return res.data;
+  },
+  relinquishOwnership: async (data) => {
+    const res = await api.post('/ownership/relinquish/', data);
+    return res.data;
+  },
+  handoverOwnership: async (data) => {
+    const res = await api.post('/ownership/handover/', data);
+    return res.data;
+  },
+  getOwnerAuditLogs: async (params) => {
+    const res = await api.get('/owner-audit/', { params });
     return res.data;
   },
   getEmailLogs: async (params) => {

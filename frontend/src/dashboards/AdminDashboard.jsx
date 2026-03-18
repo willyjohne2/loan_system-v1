@@ -14,11 +14,19 @@ import BranchManagement from './BranchManagement';
 import CustomerCommunicator from './CustomerCommunicator';
 import OfficialCommunicator from './OfficialCommunicator';
 import ProfileSettings from '../pages/ProfileSettings';
+import SuperAdminPage from './SuperAdminPage';
+import SecurityLogsPage from './SecurityLogsPage';
+import OwnerAuditPage from './owner/OwnerAuditPage';
 import { clsx } from 'clsx';
+import { useAuth } from '../context/AuthContext';
+import { Navigate, useNavigate } from 'react-router-dom';
+import { Zap } from 'lucide-react';
 
 const AdminDashboard = () => {
   const location = useLocation();
-  
+  const { user } = useAuth();
+  const navigate = useNavigate();
+
   const getTitle = () => {
     if (location.pathname.includes('/managers')) return 'Manager Management';
     if (location.pathname.includes('/finance-officers')) return 'Finance Officer Management';
@@ -31,6 +39,9 @@ const AdminDashboard = () => {
     if (location.pathname.includes('/audit')) return 'System Audit Trail';
     if (location.pathname.includes('/customer-communicator')) return 'Customer Communication';
     if (location.pathname.includes('/official-communicator')) return 'Official Communication';
+    if (location.pathname.includes('/super-admins')) return 'Super Admin Console';
+    if (location.pathname.includes('/security-logs')) return 'Security & Compliance';
+    if (location.pathname.includes('/owner-audit')) return 'Owner Audit Trail';
     if (location.pathname.includes('/settings')) return 'System Financial Settings';
     if (location.pathname.includes('/profile')) return 'Account Profile';
     return 'Admin Dashboard';
@@ -74,6 +85,17 @@ const AdminDashboard = () => {
           <Route path="deactivations" element={<AdminDeactivations />} />
           <Route path="branches" element={<BranchManagement />} />
           <Route path="audit" element={<AdminAuditLogs />} />
+          <Route path="super-admins" element={
+            (user?.is_owner || user?.is_super_admin)
+              ? <SuperAdminPage />
+              : <Navigate to="/admin/dashboard" replace />
+          } />
+          <Route path="security-logs" element={<SecurityLogsPage />} />
+          <Route path="owner-audit" element={
+            user?.is_owner
+              ? <OwnerAuditPage />
+              : <Navigate to="/admin/dashboard" replace />
+          } />
           <Route path="customer-communicator" element={<CustomerCommunicator />} />
           <Route path="official-communicator" element={<OfficialCommunicator />} />
           <Route path="settings" element={<AdminSettings />} />

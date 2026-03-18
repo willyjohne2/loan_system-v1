@@ -11,9 +11,11 @@ import SignupPage from './pages/SignupPage';
 import VerifyEmailPage from './pages/VerifyEmailPage';
 import ForgotPasswordPage from './pages/ForgotPasswordPage';
 import ResetPasswordPage from './pages/ResetPasswordPage';
+import SetupPage from './pages/SetupPage';
 
 // Dashboards
 import AdminDashboard from './dashboards/AdminDashboard';
+import OwnerDashboardWrapper from './dashboards/owner/OwnerDashboardWrapper';
 import ManagerDashboardWrapper from './dashboards/ManagerDashboardWrapper';
 import FinanceDashboardWrapper from './dashboards/FinanceDashboardWrapper';
 import FieldOfficerDashboardWrapper from './dashboards/FieldOfficerDashboardWrapper';
@@ -26,6 +28,9 @@ const App = () => {
         <IdleTimeout />
         <Toaster position="top-right" />
         <Routes>
+          {/* Setup Route - Outside everything */}
+          <Route path="/setup" element={<SetupPage />} />
+
           {/* Public Routes */}
           <Route element={<PublicRoute />}>
             <Route path="/login" element={<LoginPage />} />
@@ -33,6 +38,11 @@ const App = () => {
             <Route path="/verify-email" element={<VerifyEmailPage />} />
             <Route path="/forgot-password" element={<ForgotPasswordPage />} />
             <Route path="/reset-password" element={<ResetPasswordPage />} />
+          </Route>
+
+          {/* Owner Routes - Only accessible when is_owner === true */}
+          <Route element={<ProtectedRoute allowedRoles={['OWNER']} />}>
+            <Route path="/owner/*" element={<OwnerDashboardWrapper />} />
           </Route>
 
           {/* Protected Admin Routes */}

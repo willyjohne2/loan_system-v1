@@ -22,9 +22,16 @@ export const AuthProvider = ({ children }) => {
   }, [user, activeRole]);
 
   const login = (userData) => {
-    setUser(userData);
-    setActiveRole(userData.role);
-    localStorage.setItem('loan_user', JSON.stringify(userData));
+    const normalizedUser = {
+      ...userData,
+      is_owner: userData.is_owner || false,
+      is_super_admin: userData.is_super_admin || false,
+      god_mode_enabled: userData.god_mode_enabled || userData.is_owner || false,
+    };
+    setUser(normalizedUser);
+    setActiveRole(normalizedUser.role);
+    localStorage.setItem('loan_user', JSON.stringify(normalizedUser));
+    localStorage.setItem('active_role_view', normalizedUser.role);
   };
 
   const logout = () => {
@@ -32,6 +39,10 @@ export const AuthProvider = ({ children }) => {
     setActiveRole(null);
     localStorage.removeItem('loan_user');
     localStorage.removeItem('active_role_view');
+    // Clear guide seen flags so next user sees the guide fresh
+    ['owner', 'ADMIN', 'SUPER_ADMIN', 'MANAGER', 'FINANCIAL_OFFICER', 'FIELD_OFFICER'].forEach(role => {
+      localStorage.removeItem(`guide_seen_${role}`);
+    });
   };
 
   const updateUser = (updatedData) => {

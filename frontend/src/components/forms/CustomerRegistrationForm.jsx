@@ -349,8 +349,8 @@ const CustomerRegistrationForm = ({ onSuccess, onApplyLoan, onCancel, initialCus
       if (formData.date_of_birth) data.append('date_of_birth', formData.date_of_birth);
       data.append('branch', formData.branch);
       data.append('town', formData.town);
-      data.append('village', formData.village);
-      data.append('address', formData.address);
+      if (formData.village) data.append('village', formData.village);
+      if (formData.address) data.append('address', formData.address);
       data.append('employment_status', formData.employment_status);
       if (formData.monthly_income) data.append('monthly_income', formData.monthly_income);
       
@@ -380,6 +380,8 @@ const CustomerRegistrationForm = ({ onSuccess, onApplyLoan, onCancel, initialCus
     } catch (err) {
       let errorMessage = 'Failed to process registration';
       
+      console.error('Registration/Update failed Detail:', err.response?.data);
+
       if (err?.response?.data) {
         if (typeof err.response.data === 'string') {
           errorMessage = err.response.data;
@@ -1034,10 +1036,14 @@ const CustomerRegistrationForm = ({ onSuccess, onApplyLoan, onCancel, initialCus
               {(!hasOutstanding || outstandingLoanDetails?.status === 'REJECTED') && (
                 <Button 
                   onClick={() => {
+                    if (!registeredUser) {
+                      setError('System Error: User details missing from session. Please try again.');
+                      return;
+                    }
                     clearDraft();
                     onApplyLoan?.(registeredUser);
                   }}
-                  className="bg-primary-600 hover:bg-primary-700 text-white flex items-center justify-center gap-2 px-8"
+                  className="bg-primary-600 hover:bg-primary-700 text-white flex items-center justify-center gap-2 px-8 w-full sm:w-auto"
                 >
                   <CreditCard className="w-4 h-4" />
                   Apply for a Loan Now
@@ -1049,7 +1055,7 @@ const CustomerRegistrationForm = ({ onSuccess, onApplyLoan, onCancel, initialCus
                   clearDraft();
                   onSuccess?.();
                 }}
-                className="px-8"
+                className="px-8 w-full sm:w-auto"
               >
                 {hasOutstanding ? 'Close' : 'Finish & Close'}
               </Button>

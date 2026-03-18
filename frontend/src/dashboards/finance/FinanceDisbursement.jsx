@@ -91,16 +91,16 @@ const FinanceDisbursement = () => {
 
   return (
     <div className="space-y-6">
-      <div className="flex justify-between items-center">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
-          <h2 className="text-2xl font-bold text-slate-900">Disbursement Queue</h2>
-          <p className="text-sm text-slate-500 mt-1">Approved loans awaiting disbursement</p>
+          <h2 className="text-xl md:text-2xl font-bold text-slate-900">Disbursement Queue</h2>
+          <p className="text-sm text-slate-500 mt-0.5">Approved loans awaiting disbursement</p>
         </div>
       </div>
 
-      <Card className="flex flex-col md:flex-row gap-4 items-center justify-between">
-        <div className="flex gap-4 items-center w-full md:w-auto">
-          <div className="relative w-full md:w-64">
+      <Card className="flex flex-col lg:flex-row gap-4 items-stretch lg:items-center justify-between p-4">
+        <div className="flex flex-col sm:flex-row gap-3 items-stretch sm:items-center w-full lg:w-auto">
+          <div className="relative w-full sm:w-64">
             <select
               value={selectedBranch}
               onChange={(e) => setSelectedBranch(e.target.value)}
@@ -110,7 +110,7 @@ const FinanceDisbursement = () => {
             </select>
             <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
           </div>
-          <div className="bg-indigo-50 text-indigo-700 px-3 py-1 rounded-full text-xs font-bold">
+          <div className="inline-flex items-center self-start sm:self-auto bg-indigo-50 text-indigo-700 px-3 py-1 rounded-full text-xs font-bold">
             {filteredLoans.length} Pending
           </div>
         </div>
@@ -118,7 +118,7 @@ const FinanceDisbursement = () => {
         {filteredLoans.length > 0 && (
           <Button 
             variant="primary" 
-            className="bg-emerald-600 hover:bg-emerald-700 w-full md:w-auto"
+            className="bg-emerald-600 hover:bg-emerald-700 w-full sm:w-auto text-sm py-2 px-4 flex items-center justify-center gap-2"
             onClick={handleBulkDisburse}
             disabled={disbursing}
           >
@@ -129,34 +129,38 @@ const FinanceDisbursement = () => {
       </Card>
 
       <Card className="p-0 overflow-hidden">
-        <Table
-          headers={['Customer Name', 'ID Number', 'M-Pesa Number', 'Principal', 'Branch', 'Date Approved', 'Action']}
-          data={filteredLoans}
-          loading={loading}
-          renderRow={(loan) => (
-            <tr key={loan.id} className="hover:bg-slate-50">
-              <td className="px-6 py-4 font-medium text-slate-900">{loan.customer_name}</td>
-              <td className="px-6 py-4 text-slate-600">{loan.national_id || 'N/A'}</td>
-              <td className="px-6 py-4 text-slate-600">{loan.customer_phone}</td>
-              <td className="px-6 py-4 font-bold text-slate-900">{formatKES(loan.principal_amount)}</td>
-              <td className="px-6 py-4">
-                <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-700">
-                  {loan.branch_name}
-                </span>
-              </td>
-              <td className="px-6 py-4 text-slate-500">{new Date(loan.updated_at).toLocaleDateString()}</td>
-              <td className="px-6 py-4">
-                <Button 
-                  variant="primary" 
-                  className="px-3 py-1.5 text-xs bg-emerald-600 hover:bg-emerald-700"
-                  onClick={() => openDisburseModal(loan)}
-                >
-                  Confirm & Disburse
-                </Button>
-              </td>
-            </tr>
-          )}
-        />
+        <div className="overflow-x-auto scrollbar-thin scrollbar-thumb-slate-200">
+          <Table
+            headers={['Customer Name', 'ID Number', 'M-Pesa Number', 'Principal', 'Branch', 'Date Approved', 'Action']}
+            data={filteredLoans}
+            loading={loading}
+            renderRow={(loan) => (
+              <tr key={loan.id} className="hover:bg-slate-50 border-b border-slate-100 last:border-0 whitespace-nowrap">
+                <td className="px-6 py-4 font-medium text-slate-900">{loan.customer_name}</td>
+                <td className="px-6 py-4 text-slate-600">{loan.national_id || 'N/A'}</td>
+                <td className="px-6 py-4 text-slate-600">{loan.customer_phone}</td>
+                <td className="px-6 py-4 font-bold text-slate-900">{formatKES(loan.principal_amount)}</td>
+                <td className="px-6 py-4">
+                  <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-700">
+                    {loan.branch_name}
+                  </span>
+                </td>
+                <td className="px-6 py-4 text-slate-500">{new Date(loan.updated_at).toLocaleDateString()}</td>
+                <td className="px-6 py-4">
+                  <Button 
+                    variant="primary" 
+                    size="sm"
+                    className="flex items-center gap-2"
+                    onClick={() => openDisburseModal(loan)}
+                  >
+                    <Send className="w-3.5 h-3.5" />
+                    Disburse
+                  </Button>
+                </td>
+              </tr>
+            )}
+          />
+        </div>
       </Card>
 
       {/* Confirmation Modal */}

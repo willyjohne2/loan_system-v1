@@ -20,11 +20,21 @@ import {
   X,
   ChevronRight,
   ClipboardList,
-  Lock
+  Lock,
+  Crown,
+  Sliders
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { clsx } from 'clsx';
 import { twMerge } from 'tailwind-merge';
+import CollapsableSection from './CollapsableSection';
+import HelpGuide from '../ui/HelpGuide';
+import { useHelpGuide } from '../../hooks/useHelpGuide';
+import { 
+  fieldOfficerGuide, managerGuide, 
+  financeOfficerGuide, adminGuide 
+} from '../../data/guideContent';
+import { HelpCircle } from 'lucide-react';
 
 function cn(...inputs) {
   return twMerge(clsx(inputs));
@@ -34,13 +44,21 @@ const Sidebar = ({ isOpen, onClose }) => {
   const { user, logout, activeRole, switchActiveRole } = useAuth();
   const navigate = useNavigate();
 
-  // State for collapsible sections
-  const [officialsOpen, setOfficialsOpen] = useState(true);
-  const [settingsOpen, setSettingsOpen] = useState(false);
+  const getGuide = () => {
+    if (activeRole === 'ADMIN' || activeRole === 'SUPER_ADMIN') return adminGuide;
+    if (activeRole === 'MANAGER') return managerGuide;
+    if (activeRole === 'FINANCIAL_OFFICER') return financeOfficerGuide;
+    if (activeRole === 'FIELD_OFFICER') return fieldOfficerGuide;
+    return adminGuide;
+  };
+
+  const currentGuide = getGuide();
+  const { isOpen: guideOpen, openGuide, closeGuide } = useHelpGuide(activeRole || 'admin');
 
   const handleRoleSwitch = (role) => {
     switchActiveRole(role);
-    if (role === 'ADMIN') navigate('/admin/dashboard');
+    if (role === 'SUPER_ADMIN') navigate('/admin/super-admins');
+    else if (role === 'ADMIN') navigate('/admin/dashboard');
     else if (role === 'MANAGER') navigate('/manager/dashboard');
     else if (role === 'FINANCIAL_OFFICER') navigate('/finance/overview');
     else if (role === 'FIELD_OFFICER') navigate('/field/dashboard');
@@ -52,6 +70,8 @@ const Sidebar = ({ isOpen, onClose }) => {
     { to: '/admin/dashboard', icon: LayoutDashboard, label: 'Overview' },
     { to: '/admin/customers', icon: Users, label: 'Customers' },
     { to: '/admin/loans', icon: Wallet, label: 'Loans' },
+    { to: '/admin/security-logs', icon: ShieldAlert, label: 'Security Logs' },
+    ...(user?.is_owner ? [{ to: '/admin/owner-audit', icon: Crown, label: 'Owner Audit' }] : []),
     { to: '/admin/customer-communicator', icon: MessageSquare, label: 'Customer Comms' },
     { to: '/admin/official-communicator', icon: Mail, label: 'Official Comms' },
   ];
@@ -109,10 +129,24 @@ const Sidebar = ({ isOpen, onClose }) => {
             </button>
           </div>
 
-          {/* Role Switcher - ONLY FOR ADMINS */}
-          {user?.role === 'ADMIN' && (
+          {/* Role Switcher - ONLY FOR ADMINS with God Mode */}
+          {(user?.god_mode_enabled || user?.is_owner) && (
             <div className="mt-2 space-y-1">
-              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest px-2 mb-1">Privileged Access</p>
+              {user?.god_mode_enabled && (
+                <div className="mx-0 mb-2 px-3 py-1.5 bg-amber-50 border border-amber-200 rounded-lg flex items-center gap-2">
+                  <Zap className="w-3 h-3 text-amber-500" />
+                  <span className="text-xs font-bold text-amber-600">
+                    {user?.is_owner ? '👑 Owner' : '⚡ God Mode'}
+                  </span>
+                </div>
+              )}
+              <div className="flex items-center justify-between px-2 mb-1">
+                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Privileged Access</p>
+                <span className="bg-amber-100 text-amber-600 dark:bg-amber-900/30 dark:text-amber-400 text-[9px] px-1.5 py-0.5 rounded-full font-black animate-pulse flex items-center gap-1 border border-amber-200 dark:border-amber-800">
+                  <Zap className="w-2.5 h-2.5 fill-current" />
+                  GOD MODE
+                </span>
+              </div>
               <div className="relative group">
                 <select 
                   value={activeRole}
@@ -120,6 +154,7 @@ const Sidebar = ({ isOpen, onClose }) => {
                   className="w-full pl-9 pr-4 py-2 bg-primary-600 text-white rounded-lg text-xs font-bold appearance-none cursor-pointer focus:outline-none focus:ring-2 focus:ring-primary-500/50 shadow-lg shadow-primary-500/20"
                 >
                   <option value="ADMIN">God Mode: Admin</option>
+                  <option value="SUPER_ADMIN">View: Super Admin</option>
                   <option value="MANAGER">View: Branch Manager</option>
                   <option value="FINANCIAL_OFFICER">View: Finance Officer</option>
                   <option value="FIELD_OFFICER">View: Field Officer</option>
@@ -154,90 +189,47 @@ const Sidebar = ({ isOpen, onClose }) => {
 
           {activeRole === 'ADMIN' && (
             <div className="pt-4 space-y-1">
-              {/* Officials Section */}
-              <div>
-                <button
-                  onClick={() => setOfficialsOpen(!officialsOpen)}
-                  className="w-full flex items-center justify-between px-4 py-2 text-sm font-semibold text-slate-400 uppercase tracking-wider"
-                >
-                  <span>Officials</span>
-                  <ChevronDown className={cn("w-4 h-4 transition-transform", !officialsOpen && "-rotate-90")} />
-                </button>
-                
-                {officialsOpen && (
-                  <div className="mt-1 space-y-1 ml-4 border-l-2 border-slate-100 dark:border-slate-800">
-                    {[
-                      { to: '/admin/field-officers', label: 'Field Officers', icon: Users2 },
-                      { to: '/admin/managers', label: 'Managers', icon: Building2 },
-                      { to: '/admin/finance-officers', label: 'Finance Officers', icon: Briefcase },
-                      { to: '/admin/accounts', label: 'Admins', icon: ShieldCheck },
-                    ].map((subLink) => (
-                      <NavLink
-                        key={subLink.to}
-                        to={subLink.to}
-                        className={({ isActive }) => cn(
-                          "flex items-center px-4 py-2 text-sm font-medium rounded-r-lg transition-colors",
-                          isActive 
-                            ? "bg-primary-50/50 text-primary-600 border-l-2 border-primary-600 -ml-[2px]" 
-                            : "text-slate-500 hover:bg-slate-50 dark:text-slate-400 dark:hover:bg-slate-800"
-                        )}
-                      >
-                        <subLink.icon className="w-4 h-4 mr-3 opacity-70" />
-                        {subLink.label}
-                      </NavLink>
-                    ))}
-                  </div>
-                )}
+              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-3 mb-2">Staff</p>
+              <CollapsableSection 
+                icon={Users} 
+                label="Officials" 
+                setSidebarOpen={(val) => { if (!val && window.innerWidth < 1024) onClose(); }}
+                activeClass="bg-primary-50 text-primary-600 dark:bg-primary-900/20 dark:text-primary-400"
+                links={[
+                  { to: '/admin/field-officers', label: 'Field Officers', icon: Users2 },
+                  { to: '/admin/managers', label: 'Managers', icon: Building2 },
+                  { to: '/admin/finance-officers', label: 'Finance Officers', icon: Briefcase },
+                  { to: '/admin/accounts', label: 'Admins', icon: ShieldCheck },
+                  ...((user?.is_owner || user?.is_super_admin) ? [{ to: '/admin/super-admins', label: 'Super Admins', icon: ShieldCheck }] : []),
+                ]}
+              />
+
+              <div className="pt-2">
+                <CollapsableSection 
+                    icon={Settings} 
+                    label="Settings" 
+                    setSidebarOpen={(val) => { if (!val && window.innerWidth < 1024) onClose(); }}
+                    activeClass="bg-primary-50 text-primary-600 dark:bg-primary-900/20 dark:text-primary-400"
+                    links={[
+                        ...((user?.is_owner || user?.is_super_admin) ? [
+                            { to: '/admin/settings/mpesa', icon: Wallet, label: 'M-Pesa' },
+                            { to: '/admin/settings/sms', icon: MessageSquare, label: 'SMS' },
+                        ] : []),
+                        { to: '/admin/settings/system', icon: Sliders, label: 'System' },
+                        ...(user?.is_owner ? [{ to: '/admin/settings/security', icon: Lock, label: 'Security' }] : []),
+                        { to: '/admin/settings/branches', icon: Building2, label: 'Branches' },
+                    ]}
+                />
               </div>
 
-              {/* Settings Section */}
               <div className="pt-2">
-                <button
-                  onClick={() => setSettingsOpen(!settingsOpen)}
-                  className="w-full flex items-center justify-between px-4 py-2 text-sm font-semibold text-slate-400 uppercase tracking-wider"
-                >
-                  <span>Settings</span>
-                  <ChevronDown className={cn("w-4 h-4 transition-transform", !settingsOpen && "-rotate-90")} />
-                </button>
-                
-                {settingsOpen && (
-                  <div className="mt-1 space-y-1 ml-4 border-l-2 border-slate-100 dark:border-slate-800">
-                    <NavLink
-                      to="/admin/settings"
-                      className={({ isActive }) => cn(
-                        "flex items-center px-4 py-2 text-sm font-medium rounded-r-lg transition-colors",
-                        isActive 
-                          ? "bg-primary-50/50 text-primary-600 border-l-2 border-primary-600 -ml-[2px]" 
-                          : "text-slate-500 hover:bg-slate-50 dark:text-slate-400 dark:hover:bg-slate-800"
-                      )}
-                    >
-                      <Settings className="w-4 h-4 mr-3 opacity-70" />
-                      Interest Settings
-                    </NavLink>
-                    <NavLink
-                      to="/admin/branches"
-                      className={({ isActive }) => cn(
-                        "flex items-center px-4 py-2 text-sm font-medium rounded-r-lg transition-colors",
-                        isActive 
-                          ? "bg-primary-50/50 text-primary-600 border-l-2 border-primary-600 -ml-[2px]" 
-                          : "text-slate-500 hover:bg-slate-50 dark:text-slate-400 dark:hover:bg-slate-800"
-                      )}
-                    >
-                      <Building2 className="w-4 h-4 mr-3 opacity-70" />
-                      Branch Management
-                    </NavLink>
-                  </div>
-                )}
-              </div>
-
-              {/* Direct Links */}
-              <div className="pt-2">
+                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-3 mb-2">Monitoring</p>
                 <NavLink
                   to="/admin/audit"
                   className={({ isActive }) => cn(
                     "flex items-center px-4 py-2.5 text-sm font-medium rounded-lg transition-colors",
                     isActive 
-                      ? "bg-primary-50 text-primary-600" 
+                      ? "bg-primary-50 text-primary-600 font-bold" 
                       : "text-slate-600 hover:bg-slate-50 dark:text-slate-400 dark:hover:bg-slate-800"
                   )}
                 >
@@ -250,7 +242,7 @@ const Sidebar = ({ isOpen, onClose }) => {
                   className={({ isActive }) => cn(
                     "flex items-center px-4 py-2.5 text-sm font-medium rounded-lg transition-colors",
                     isActive 
-                      ? "bg-primary-50 text-primary-600" 
+                      ? "bg-primary-50 text-primary-600 font-bold" 
                       : "text-slate-600 hover:bg-slate-50 dark:text-slate-400 dark:hover:bg-slate-800"
                   )}
                 >
@@ -262,32 +254,51 @@ const Sidebar = ({ isOpen, onClose }) => {
           )}
         </nav>
 
-      <div className="p-4 border-t border-slate-200 dark:border-slate-800">
-        <div className="bg-slate-50 dark:bg-slate-800/50 rounded-xl p-3">
-          <div className="flex items-center gap-3 mb-3">
-            <div className="w-8 h-8 rounded-full bg-primary-100 dark:bg-primary-900/30 flex items-center justify-center text-primary-600 dark:text-primary-400 font-bold text-xs">
-              {user?.role?.charAt(0)}
-            </div>
-            <div className="flex-1 min-w-0">
-              <p className="text-xs font-bold text-slate-900 dark:text-white truncate">{user?.full_name || 'Staff Member'}</p>
-              <p className="text-[10px] text-slate-500 truncate uppercase mt-0.5">{activeRole?.replace('_', ' ')}</p>
-            </div>
-          </div>
+        {/* Help Guide Button */}
+        <div className="px-4 pb-2">
           <button
-            onClick={() => {
-              if (window.confirm('Are you sure you want to sign out?')) {
-                logout();
-              }
-            }}
-            className="flex items-center w-full px-3 py-2 text-xs font-bold text-red-600 hover:bg-red-50 dark:hover:bg-red-900/10 rounded-lg transition-colors border border-transparent hover:border-red-100"
+            onClick={openGuide}
+            className="w-full flex items-center gap-2 px-3 py-2.5 text-sm font-medium text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 rounded-lg transition-colors border border-dashed border-slate-200 dark:border-slate-700"
           >
-            <LogOut className="w-4 h-4 mr-2" />
-            Sign Out System
+            <HelpCircle className="w-4 h-4" />
+            Help & Guide
           </button>
         </div>
-      </div>
-    </aside>
-  </>
+
+        <div className="p-4 border-t border-slate-200 dark:border-slate-800">
+          <div className="bg-slate-50 dark:bg-slate-800/50 rounded-xl p-3">
+            <div className="flex items-center gap-3 mb-3 text-left">
+              <div className="w-8 h-8 rounded-full bg-primary-100 dark:bg-primary-900/30 flex items-center justify-center text-primary-600 dark:text-primary-400 font-bold text-xs uppercase">
+                {user?.full_name?.charAt(0) || user?.username?.charAt(0) || 'U'}
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-xs font-bold text-slate-900 dark:text-white truncate">{user?.full_name || 'Staff'}</p>
+                <p className="text-[10px] text-slate-500 truncate uppercase mt-0.5">{activeRole?.replace(/_/g, ' ')}</p>
+              </div>
+            </div>
+            <button
+              onClick={() => {
+                if (window.confirm('Are you sure you want to sign out?')) {
+                  logout();
+                }
+              }}
+              className="flex items-center w-full px-3 py-2 text-xs font-bold text-red-600 hover:bg-red-50 dark:hover:bg-red-900/10 rounded-lg transition-colors border border-transparent hover:border-red-100"
+            >
+              <LogOut className="w-4 h-4 mr-2" />
+              Sign Out System
+            </button>
+          </div>
+        </div>
+      </aside>
+
+      <HelpGuide
+        isOpen={guideOpen}
+        onClose={closeGuide}
+        title={currentGuide.title}
+        sections={currentGuide.sections}
+        role={currentGuide.role}
+      />
+    </>
   );
 };
 

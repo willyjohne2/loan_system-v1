@@ -4,22 +4,23 @@ from datetime import datetime
 import json
 import os
 from django.conf import settings
+from .encryption import get_setting
 
 
 class MpesaHandler:
     def __init__(self):
-        self.consumer_key = getattr(settings, "MPESA_CONSUMER_KEY", "")
-        self.consumer_secret = getattr(settings, "MPESA_CONSUMER_SECRET", "")
-        self.shortcode = getattr(settings, "MPESA_SHORTCODE", "")
-        self.passkey = getattr(settings, "MPESA_PASSKEY", "")
-        self.b2c_shortcode = getattr(settings, "MPESA_B2C_SHORTCODE", "")
-        self.initiator_name = getattr(settings, "MPESA_INITIATOR_NAME", "testapi")
-        self.initiator_password = getattr(
-            settings, "MPESA_INITIATOR_PASSWORD", "Safaricom007*"
+        self.consumer_key = get_setting("MPESA_CONSUMER_KEY", getattr(settings, "MPESA_CONSUMER_KEY", ""))
+        self.consumer_secret = get_setting("MPESA_CONSUMER_SECRET", getattr(settings, "MPESA_CONSUMER_SECRET", ""))
+        self.shortcode = get_setting("MPESA_SHORTCODE", getattr(settings, "MPESA_SHORTCODE", ""))
+        self.passkey = get_setting("MPESA_PASSKEY", getattr(settings, "MPESA_PASSKEY", ""))
+        self.b2c_shortcode = get_setting("MPESA_B2C_SHORTCODE", getattr(settings, "MPESA_B2C_SHORTCODE", ""))
+        self.initiator_name = get_setting("MPESA_INITIATOR_NAME", getattr(settings, "MPESA_INITIATOR_NAME", "testapi"))
+        self.initiator_password = get_setting(
+            "MPESA_INITIATOR_PASSWORD", getattr(settings, "MPESA_INITIATOR_PASSWORD", "Safaricom007*")
         )
-        self.callback_url = getattr(settings, "MPESA_CALLBACK_URL", "")
+        self.callback_url = get_setting("MPESA_CALLBACK_URL", getattr(settings, "MPESA_CALLBACK_URL", ""))
 
-        env = getattr(settings, "MPESA_ENVIRONMENT", "sandbox")
+        env = get_setting("MPESA_ENVIRONMENT", getattr(settings, "MPESA_ENVIRONMENT", "sandbox"))
         self.base_url = (
             "https://sandbox.safaricom.co.ke"
             if env == "sandbox"

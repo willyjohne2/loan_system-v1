@@ -11,9 +11,13 @@ from django.db.models import Q, Sum, Count, Avg, Max, Min
 from django.core.mail import send_mail
 from django.conf import settings
 from django.utils import timezone
-from rest_framework import status, views, permissions, generics, parsers
+from django.db import models
+from rest_framework import status, views, permissions, generics, parsers, serializers
+from .exceptions import InsufficientCapitalError
+from .services import DisbursementService
 from rest_framework.response import Response
 from rest_framework_simplejwt.tokens import RefreshToken
+from django_ratelimit.decorators import ratelimit
 from .models import (
     Admins,
     Users,
@@ -32,6 +36,8 @@ from .models import (
     AdminInvitation,
     DeactivationRequest,
     Branch,
+    SecureSettings,
+    CustomerDraft,
 )
 from .serializers import (
     AdminSerializer,
@@ -46,15 +52,18 @@ from .serializers import (
     SystemSettingsSerializer,
     LoanActivitySerializer,
     LoanDocumentSerializer,
+    CustomerDraftSerializer,
     SMSLogSerializer,
     EmailLogSerializer,
     DeactivationRequestSerializer,
     BranchSerializer,
     CustomerDraftSerializer,
+    SecureSettingsSerializer,
 )
 from .utils.mpesa import MpesaHandler
 from .utils.sms import send_sms_async
 from .utils.security import log_action, get_client_ip
+from .utils.encryption import decrypt_value, get_setting
 from .permissions import (
     IsSuperAdmin,
     IsAdminUser,
@@ -262,17 +271,265 @@ def send_password_reset_email_async(full_name, email, reset_code):
         pass
 
 
+def send_new_device_login_alert_async(full_name, email, context):
+    try:
+        sender_name = os.getenv("SENDER_NAME", "Azariah Credit Ltd")
+        from_email = os.getenv("FROM_EMAIL")
+        brevo_api_key = os.getenv("BREVO_API_KEY")
+
+        if not brevo_api_key or not from_email:
+            return
+
+        login_time = context.get('login_time', timezone.now().strftime('%Y-%m-%d %H:%M:%S'))
+        ip_address = context.get('ip_address', 'Unknown')
+        user_agent = context.get('user_agent', 'Unknown')
+
+        url = "https://api.brevo.com/v3/smtp/email"
+        headers = {
+            "accept": "application/json",
+            "api-key": brevo_api_key,
+            "content-type": "application/json",
+        }
+
+        payload = {
+            "sender": {"name": sender_name, "email": from_email},
+            "to": [{"email": email}],
+            "subject": f"New login detected — {sender_name}",
+            "htmlContent": f"""
+                <html>
+                <body style="font-family: Arial, sans-serif;">
+                <h2>New Login Detected</h2>
+                <p>Hello {full_name},</p>
+                <p>A new login was detected for your account on <strong>{sender_name}</strong>.</p>
+                <ul>
+                    <li><strong>Time:</strong> {login_time}</li>
+                    <li><strong>IP Address:</strong> {ip_address}</li>
+                    <li><strong>User Agent:</strong> {user_agent}</li>
+                </ul>
+                <p>If this was not you, please reset your password immediately or contact your administrator.</p>
+                <p>Best regards,<br/>{sender_name} Team</p>
+                </body>
+                </html>
+            """,
+        }
+        requests.post(url, json=payload, headers=headers)
+    except Exception as e:
+        print(f"Error sending login alert: {e}")
+
+
+class SecureSettingsView(views.APIView):
+    permission_classes = [permissions.IsAuthenticated, IsAdminUser]
+
+    def get(self, request):
+        group = request.query_params.get("group")
+        if group:
+            settings = SecureSettings.objects.filter(setting_group__iexact=group)
+        else:
+            settings = SecureSettings.objects.all()
+        
+        serializer = SecureSettingsSerializer(settings, many=True, context={'request': request})
+        return Response(serializer.data)
+
+    def post(self, request):
+        key = request.data.get("key")
+        if not key:
+            return Response({"error": "Key is required"}, status=400)
+            
+        setting, created = SecureSettings.objects.get_or_create(
+            key=key,
+            defaults={
+                "setting_group": request.data.get("setting_group", "system"),
+                "description": request.data.get("description", "")
+            }
+        )
+        
+        serializer = SecureSettingsSerializer(setting, data=request.data, partial=True, context={'request': request})
+        if serializer.is_valid():
+            serializer.save()
+            # Clear cache
+            from django.core.cache import cache
+            cache.delete(f"secure_setting_{key}")
+            
+            log_action(
+                request.user,
+                f"Updated setting: {key}",
+                "secure_settings",
+                setting.id,
+                log_type="MANAGEMENT",
+                ip_address=get_client_ip(request)
+            )
+            return Response(serializer.data)
+        return Response(serializer.errors, status=400)
+
+
+class SecureSettingsRevealView(views.APIView):
+    permission_classes = [permissions.IsAuthenticated, IsAdminUser]
+
+    def post(self, request, key):
+        try:
+            setting = SecureSettings.objects.get(key=key)
+            decrypted_value = decrypt_value(setting.encrypted_value)
+            
+            log_action(
+                request.user,
+                f"Revealed sensitive setting: {key}",
+                "secure_settings",
+                setting.id,
+                log_type="SECURITY",
+                ip_address=get_client_ip(request)
+            )
+            
+            return Response({"key": key, "value": decrypted_value})
+        except SecureSettings.DoesNotExist:
+            return Response({"error": "Setting not found"}, status=404)
+
+
+class TestMpesaConnectionView(views.APIView):
+    permission_classes = [permissions.IsAuthenticated, IsAdminUser]
+
+    def post(self, request):
+        try:
+            from .utils.mpesa import MpesaHandler
+            handler = MpesaHandler()
+            token = handler.get_access_token()
+            if token:
+                return Response({"status": "success", "message": "Successfully connected to Daraja and obtained access token."})
+            return Response({"status": "error", "message": "Failed to obtain access token from Daraja."}, status=400)
+        except Exception as e:
+            return Response({"status": "error", "message": str(e)}, status=500)
+
+
+class TestSMSSendView(views.APIView):
+    permission_classes = [permissions.IsAuthenticated, IsAdminUser]
+
+    def post(self, request):
+        phone = request.data.get("phone")
+        message = request.data.get("message", "Test SMS from Azariah Credit Ltd")
+        
+        if not phone:
+            return Response({"error": "Phone number is required"}, status=400)
+            
+        try:
+            # We'll use the existing send_sms_async logic
+            from .utils.sms import send_sms_async
+            send_sms_async(phone, message)
+            
+            log_action(
+                request.user,
+                f"Sent test SMS to {phone}",
+                "sms_logs",
+                None,
+                log_type="MANAGEMENT",
+                ip_address=get_client_ip(request)
+            )
+            
+            return Response({"status": "success", "message": f"Test SMS queued for {phone}"})
+        except Exception as e:
+            return Response({"status": "error", "message": str(e)}, status=500)
+
+
+class PublicSystemSettingsView(views.APIView):
+    permission_classes = [permissions.AllowAny]
+
+    def get(self, request):
+        # Only expose non-sensitive public settings
+        timeout = get_setting('session_idle_timeout', 30)
+        return Response({
+            "session_idle_timeout": int(timeout),
+            "mpesa_environment": get_setting('mpesa_environment', 'sandbox')
+        })
+
+
+# --- Ownership Claim Endpoints ---
+
+class OwnerExistsView(views.APIView):
+    permission_classes = [permissions.AllowAny]
+
+    def get(self, request):
+        exists = Admins.objects.filter(is_owner=True).exists()
+        return Response({"exists": exists})
+
+
+class ClaimOwnershipView(views.APIView):
+    permission_classes = [permissions.AllowAny]
+
+    def post(self, request):
+        if Admins.objects.filter(is_owner=True).exists():
+            return Response(
+                {"error": "Ownership has already been claimed. This endpoint is permanently disabled."},
+                status=403
+            )
+
+        full_name = request.data.get("full_name")
+        email = request.data.get("email")
+        password = request.data.get("password")
+
+        if not all([full_name, email, password]):
+            return Response({"error": "Missing required fields"}, status=400)
+
+        import bcrypt
+        hashed_password = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
+
+        owner = Admins.objects.create(
+            id=uuid.uuid4(),
+            full_name=full_name,
+            email=email,
+            password_hash=hashed_password,
+            is_owner=True,
+            is_super_admin=True,
+            god_mode_enabled=True,
+            role="ADMIN",
+            is_verified=True
+        )
+
+        # Log Action
+        client_ip = get_client_ip(request)
+        AuditLogs.objects.create(
+            admin=owner,
+            action=f"System ownership claimed from IP {client_ip}",
+            log_type="SECURITY",
+            table_name="admins",
+            record_id=owner.id,
+            is_owner_log=True,
+            ip_address=client_ip
+        )
+
+        # Send Confirmation Email (Async placeholder/simple)
+        try:
+            from django.core.mail import send_mail
+            subject = "System Ownership Claimed — Azariah Credit Ltd"
+            message = f"Hello {full_name},\n\nSystem ownership has been claimed for this account on {timezone.now().strftime('%Y-%m-%d %H:%M:%S')} from IP address {client_ip}.\n\nIf you did not perform this action, contact your system administrator immediately."
+            send_mail(
+                subject,
+                message,
+                settings.DEFAULT_FROM_EMAIL,
+                [email],
+                fail_silently=True
+            )
+        except:
+            pass
+
+        return Response({"message": "Ownership claimed successfully."}, status=201)
+
+
 class LoginView(views.APIView):
     permission_classes = [permissions.AllowAny]
 
     def post(self, request):
+        # Apply ratelimit manually inside the method because the decorator 
+        # is having trouble with the DRF Request object's attributes in this version
+        from django_ratelimit.core import is_ratelimited
+        if is_ratelimited(request, key='ip', rate='10/m', group='login', method='POST', increment=True):
+            return Response(
+                {"error": "Too many requests. Please wait before trying again."},
+                status=status.HTTP_429_TOO_MANY_REQUESTS
+            )
+
         email = request.data.get("email")
         password = request.data.get("password")
-
+        # ... logic for content data ...
         if not email and "_content" in request.data:
             try:
-                import json
-
                 content_data = json.loads(request.data.get("_content"))
                 email = content_data.get("email")
                 password = content_data.get("password")
@@ -304,6 +561,9 @@ class LoginView(views.APIView):
                     status=status.HTTP_401_UNAUTHORIZED,
                 )
 
+            # Security Hardening: Max failed logins setting
+            max_failed_logins = int(get_setting('max_failed_logins', 4))
+
             # Check for lockout
             if admin.lockout_until and admin.lockout_until > timezone.now():
                 minutes_left = int(
@@ -330,6 +590,26 @@ class LoginView(views.APIView):
             if bcrypt.checkpw(
                 password.encode("utf-8"), admin.password_hash.encode("utf-8")
             ):
+                # New Device Login Alert
+                if admin.last_login_ip and admin.last_login_ip != client_ip:
+                    threading.Thread(
+                        target=send_new_device_login_alert_async,
+                        args=(admin.full_name, admin.email, {
+                            "login_time": timezone.now().strftime('%Y-%m-%d %H:%M:%S'),
+                            "ip_address": client_ip,
+                            "user_agent": request.META.get('HTTP_USER_AGENT', 'Unknown')
+                        }),
+                    ).start()
+                    
+                    log_action(
+                        admin,
+                        "New Device Login Detected",
+                        "admins",
+                        admin.id,
+                        log_type="SECURITY",
+                        ip_address=client_ip,
+                    )
+
                 admin.failed_login_attempts = 0
                 admin.lockout_until = None
                 admin.last_login_ip = client_ip
@@ -346,9 +626,6 @@ class LoginView(views.APIView):
 
                 # Check if 2FA is enabled
                 if admin.is_two_factor_enabled:
-                    # Return a temporary session or reference to handle 2FA verification
-                    # We can use a short-lived token or just the admin ID for now
-                    # For security, let's return a partial success response
                     return Response(
                         {
                             "id": str(admin.id),
@@ -359,11 +636,13 @@ class LoginView(views.APIView):
                     )
 
                 try:
-                    # Use for_user to ensure all standard claims are correctly set
-                    # Even if Admins is not the default User model, simplejwt will use its pk
                     refresh = RefreshToken.for_user(admin)
                     refresh["admin_id"] = str(admin.id)
                     refresh["role"] = admin.role
+                    refresh["is_owner"] = admin.is_owner
+                    refresh["is_super_admin"] = admin.is_super_admin
+                    # JWT Session Binding: Embed client IP
+                    refresh["client_ip"] = client_ip
 
                     access_token = str(refresh.access_token)
                     refresh_token = str(refresh)
@@ -378,13 +657,16 @@ class LoginView(views.APIView):
                         "access": access_token,
                         "refresh": refresh_token,
                         "role": admin.role,
+                        "god_mode_enabled": admin.god_mode_enabled or admin.is_owner,
+                        "is_owner": admin.is_owner,
+                        "is_super_admin": admin.is_super_admin,
                         "admin": AdminSerializer(admin).data,
-                    }
+                    },
+                    status=status.HTTP_200_OK,
                 )
             else:
                 admin.failed_login_attempts = (admin.failed_login_attempts or 0) + 1
 
-                # Audit log for failed attempt
                 log_action(
                     None,
                     f"Failed Login Attempt: {email}",
@@ -394,7 +676,7 @@ class LoginView(views.APIView):
                     ip_address=client_ip,
                 )
 
-                if admin.failed_login_attempts >= 4:
+                if admin.failed_login_attempts >= max_failed_logins:
                     admin.lockout_until = timezone.now() + timezone.timedelta(
                         minutes=20
                     )
@@ -927,51 +1209,106 @@ class RepaymentListCreateView(generics.ListCreateAPIView):
         return repayments.order_by("-payment_date")
 
     def perform_create(self, serializer):
-        repayment = serializer.save(id=uuid.uuid4())
-        loan = repayment.loan
+        from django.db import transaction
+        from decimal import Decimal
+        from .models import SystemCapital, LedgerEntry, RepaymentSchedule
 
-        # Log activity
-        admin = self.request.user if hasattr(self.request.user, "role") else None
-        create_loan_activity(
-            loan,
-            admin,
-            "REPAYMENT",
-            f"Repayment of KES {repayment.amount_paid} recorded.",
-        )
+        with transaction.atomic():
+            repayment = serializer.save(id=uuid.uuid4())
+            loan = repayment.loan
 
-        # Create transaction for user
-        Transactions.objects.create(
-            id=uuid.uuid4(),
-            user=loan.user,
-            type="REPAYMENT",
-            amount=repayment.amount_paid,
-        )
+            # Increase capital balance for simulation
+            capital = SystemCapital.objects.select_for_update().filter(
+                name="Simulation Capital"
+            ).first()
+            if capital:
+                capital.balance += repayment.amount_paid
+                capital.save()
+                LedgerEntry.objects.create(
+                    capital_account=capital,
+                    amount=repayment.amount_paid,
+                    entry_type="REPAYMENT",
+                    loan=loan,
+                    reference_id=repayment.reference_code,
+                    note=f"Repayment of KES {repayment.amount_paid} for Loan {loan.id.hex[:8]}"
+                )
 
-        # Check if loan is fully paid
-        if loan.remaining_balance <= 0:
-            old_status = loan.status
-            loan.status = "CLOSED"
-            loan.save()
-            create_notification(
-                loan.user,
-                f"Congratulations! Your loan of KES {loan.principal_amount} has been fully repaid.",
-            )
+            # Mark repayment schedule installments as paid
+            amount_remaining = float(repayment.amount_paid)
+            for installment in RepaymentSchedule.objects.filter(
+                loan=loan, is_paid=False
+            ).order_by('due_date'):
+                if amount_remaining <= 0:
+                    break
+                if amount_remaining >= float(installment.amount_due):
+                    installment.is_paid = True
+                    installment.save()
+                    amount_remaining -= float(installment.amount_due)
+                else:
+                    break
+
+            # Log activity
+            admin = self.request.user if hasattr(self.request.user, "role") else None
             create_loan_activity(
-                loan, admin, "STATUS_CHANGE", "Loan closed - fully repaid."
+                loan,
+                admin,
+                "REPAYMENT",
+                f"Repayment of KES {repayment.amount_paid} recorded.",
             )
-            # Audit Log
-            AuditLogs.objects.create(
-                admin=admin,
-                action=f"Loan {loan.id} fully repaid and closed.",
-                log_type="STATUS",
-                table_name="loans",
-                record_id=loan.id,
-                old_data={"status": old_status},
-                new_data={"status": "CLOSED"},
+
+            # Create transaction for user
+            Transactions.objects.create(
+                id=uuid.uuid4(),
+                user=loan.user,
+                type="REPAYMENT",
+                amount=repayment.amount_paid,
             )
-        else:
-            # Update overdue status if needed
-            loan.update_status_and_rates()
+
+            # FIX 2: Update Repayment Schedule
+            from .models import RepaymentSchedule
+            schedules = RepaymentSchedule.objects.filter(
+                loan=loan, 
+                status='PENDING'
+            ).order_by('due_date')
+            
+            amount_to_apply = repayment.amount_paid
+            for schedule in schedules:
+                if amount_to_apply <= 0:
+                    break
+                if amount_to_apply >= schedule.amount_due:
+                    amount_to_apply -= schedule.amount_due
+                    schedule.status = 'PAID'
+                    schedule.save()
+                else:
+                    # Partial payment for this installment
+                    # (Simple logic: mark as paid if they pay a chunk, or keep pending)
+                    break 
+
+            # Check if loan is fully paid
+            if loan.remaining_balance <= 0:
+                old_status = loan.status
+                loan.status = "CLOSED"
+                loan.save()
+                create_notification(
+                    loan.user,
+                    f"Congratulations! Your loan of KES {loan.principal_amount} has been fully repaid.",
+                )
+                create_loan_activity(
+                    loan, admin, "STATUS_CHANGE", "Loan closed - fully repaid."
+                )
+                # Audit Log
+                AuditLogs.objects.create(
+                    admin=admin,
+                    action=f"Loan {loan.id} fully repaid and closed.",
+                    log_type="STATUS",
+                    table_name="loans",
+                    record_id=loan.id,
+                    old_data={"status": old_status},
+                    new_data={"status": "CLOSED"},
+                )
+            else:
+                # Update overdue status if needed
+                loan.update_status_and_rates()
 
 
 class MpesaRepaymentView(views.APIView):
@@ -1093,6 +1430,19 @@ class MpesaDisbursementView(views.APIView):
 
             try:
                 loan = Loans.objects.get(id=loan_id)
+
+                # FIX 8: Low Capital Threshold Alert
+                from .models import SystemCapital
+                capital = SystemCapital.objects.first()
+                if capital and capital.balance < 50000:
+                    print(f"LOW CAPITAL ALERT: Balance is {capital.balance}")
+                    # In real app, send email/SMS to Super Admin
+                    try:
+                        super_admins = Admins.objects.filter(is_super_admin=True)
+                        for sa in super_admins:
+                            create_notification(sa, f"URGENT: System Capital is low! Current Balance: {capital.balance}")
+                    except:
+                        pass
 
                 # Check limit
                 if total_today + float(loan.principal_amount) > daily_limit:
@@ -1250,9 +1600,17 @@ class MpesaCallbackView(views.APIView):
             result_code = result.get("ResultCode")
             originator_id = result.get("OriginatorConversationID")
             trans_id = result.get("TransactionID")
+            
+            # FIX 7: Extract real M-Pesa Receipt Number from metadata if available
+            receipt_number = trans_id
+            if "ResultParameters" in result:
+                params = result.get("ResultParameters", {}).get("ResultParameter", [])
+                for p in params:
+                    if p.get("Key") == "ReceiptNumber":
+                        receipt_number = p.get("Value")
 
             print(
-                f"B2C Result: Code={result_code}, ID={originator_id}, Trans={trans_id}"
+                f"B2C Result: Code={result_code}, ID={originator_id}, Trans={trans_id}, Receipt={receipt_number}"
             )
 
             # Since we set status to DISBURSED immediately in the triggering view,
@@ -1479,6 +1837,390 @@ class BulkSMSView(views.APIView):
         )
 
 
+class GodModeToggleView(views.APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request):
+        if not request.user.is_owner:
+            return Response({"error": "Only the Owner can toggle God Mode."}, status=403)
+
+        target_id = request.data.get("target_admin_id")
+        enabled = request.data.get("enabled")
+
+        if not target_id:
+            return Response({"error": "target_admin_id is required."}, status=400)
+
+        try:
+            target = Admins.objects.get(id=target_id)
+            if target.is_owner and not enabled:
+                return Response({"error": "Cannot disable God Mode for the Owner account."}, status=403)
+
+            target.god_mode_enabled = enabled
+            target.save()
+
+            AuditLogs.objects.create(
+                admin=request.user,
+                action=f"{'Enabled' if enabled else 'Disabled'} God Mode for {target.full_name}",
+                log_type="SECURITY",
+                table_name="admins",
+                record_id=target.id,
+                is_owner_log=True,
+                ip_address=get_client_ip(request)
+            )
+
+            return Response({"message": f"God Mode {'enabled' if enabled else 'disabled'} for {target.full_name}"})
+        except Admins.DoesNotExist:
+            return Response({"error": "Admin not found"}, status=404)
+
+
+class SecurityLogsView(views.APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        if not (request.user.is_owner or request.user.is_super_admin):
+            return Response({"error": "Unauthorized access to security logs."}, status=403)
+
+        if request.user.is_super_admin and not request.user.is_owner:
+            AuditLogs.objects.create(
+                admin=request.user,
+                action=f"Super Admin {request.user.full_name} viewed security logs",
+                log_type="SECURITY",
+                table_name="audit_logs",
+                is_owner_log=True,
+                ip_address=get_client_ip(request)
+            )
+
+        logs = AuditLogs.objects.filter(log_type="SECURITY").order_by("-created_at")
+        serializer = AuditLogSerializer(logs, many=True)
+        return Response(serializer.data)
+
+
+class OwnerAuditListView(views.APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        if not request.user.is_owner:
+            return Response({"error": "Owner access only."}, status=403)
+
+        logs = AuditLogs.objects.filter(is_owner_log=True).order_by("-created_at")
+        serializer = AuditLogSerializer(logs, many=True)
+        return Response(serializer.data)
+
+
+class OwnerNotificationsView(views.APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        if not request.user.is_owner:
+            return Response({"error": "Owner access only."}, status=403)
+
+        time_threshold = timezone.now() - timedelta(hours=24)
+        logs = AuditLogs.objects.filter(is_owner_log=True, created_at__gte=time_threshold).order_by("-created_at")[:10]
+        
+        # Read last read timestamp from settings? Or let frontend handle it? 
+        # Request asks for last-read timestamp in SystemSettings key 'owner_last_read_notifications'
+        last_read_str = get_setting('owner_last_read_notifications', '2000-01-01 00:00:00')
+        from datetime import datetime
+        try:
+            last_read = datetime.strptime(last_read_str, '%Y-%m-%d %H:%M:%S')
+            last_read = timezone.make_aware(last_read)
+        except:
+            last_read = time_threshold
+
+        unread_count = AuditLogs.objects.filter(is_owner_log=True, created_at__gt=last_read).count()
+        serializer = AuditLogSerializer(logs, many=True)
+        
+        return Response({
+            "notifications": serializer.data,
+            "unread_count": unread_count
+        })
+
+
+class MarkOwnerNotificationsReadView(views.APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request):
+        if not request.user.is_owner:
+            return Response({"error": "Owner access only."}, status=403)
+        
+        now_str = timezone.now().strftime('%Y-%m-%d %H:%M:%S')
+        SystemSettings.objects.update_or_create(
+            key='owner_last_read_notifications',
+            defaults={'value': now_str}
+        )
+        return Response({"message": "Notifications marked as read."})
+
+
+class OwnershipListView(views.APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        if not request.user.is_owner:
+            return Response({"error": "Owner access only."}, status=403)
+        
+        owners = Admins.objects.filter(is_owner=True).order_by('ownership_granted_at')
+        serializer = AdminSerializer(owners, many=True)
+        return Response(serializer.data)
+
+
+class OwnershipGrantView(views.APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request):
+        if not request.user.is_owner:
+            return Response({"error": "Owner access only."}, status=403)
+
+        confirm_password = request.data.get("confirm_password")
+        if not confirm_password or not bcrypt.checkpw(confirm_password.encode('utf-8'), request.user.password_hash.encode('utf-8')):
+            return Response({"error": "Password confirmation failed."}, status=403)
+
+        if Admins.objects.filter(is_owner=True).count() >= 3:
+            return Response({"error": "Maximum of 3 owners allowed. Relinquish an existing ownership before granting a new one."}, status=400)
+
+        grant_type = request.data.get("type")
+        target = None
+
+        if grant_type == "existing":
+            target_id = request.data.get("target_admin_id")
+            try:
+                target = Admins.objects.get(id=target_id)
+                if target.is_owner:
+                    return Response({"error": "Target is already an owner."}, status=400)
+                
+                target.is_owner = True
+                target.god_mode_enabled = True
+                target.ownership_granted_by = request.user
+                target.ownership_granted_at = timezone.now()
+                target.save()
+            except Admins.DoesNotExist:
+                return Response({"error": "Staff member not found."}, status=404)
+
+        elif grant_type == "new":
+            full_name = request.data.get("full_name")
+            email = request.data.get("email")
+            password = request.data.get("password")
+
+            if not all([full_name, email, password]):
+                return Response({"error": "Missing required fields for new account."}, status=400)
+            
+            if Admins.objects.filter(email=email).exists():
+                return Response({"error": "An account with this email already exists."}, status=400)
+
+            password_hash = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
+            target = Admins.objects.create(
+                id=uuid.uuid4(),
+                full_name=full_name,
+                email=email,
+                password_hash=password_hash,
+                role="ADMIN",
+                is_owner=True,
+                god_mode_enabled=True,
+                is_verified=True,
+                is_primary_owner=False,
+                ownership_granted_by=request.user,
+                ownership_granted_at=timezone.now()
+            )
+        else:
+            return Response({"error": "Invalid grant type."}, status=400)
+
+        # Notify all current owners
+        all_owners = Admins.objects.filter(is_owner=True)
+        subject = "Ownership Granted — Azariah Credit Ltd"
+        ip = get_client_ip(request)
+        message = f"Ownership has been granted to {target.full_name} ({target.email}) by {request.user.full_name}.\n\nDate: {timezone.now().strftime('%Y-%m-%d %H:%M:%S')}\nIP Address: {ip}"
+        
+        brevo_api_key = os.getenv("BREVO_API_KEY")
+        from_email = os.getenv("FROM_EMAIL")
+        sender_name = os.getenv("SENDER_NAME", "Azariah Credit Ltd")
+
+        if brevo_api_key and from_email:
+            for owner in all_owners:
+                try:
+                    payload = {
+                        "sender": {"name": sender_name, "email": from_email},
+                        "to": [{"email": owner.email}],
+                        "subject": subject,
+                        "htmlContent": f"<html><body><p>{message.replace('\n', '<br>')}</p></body></html>"
+                    }
+                    requests.post("https://api.brevo.com/v3/smtp/email", json=payload, headers={
+                        "api-key": brevo_api_key, "content-type": "application/json"
+                    })
+                except:
+                    pass
+
+        # Audit Log
+        AuditLogs.objects.create(
+            admin=request.user,
+            action=f"Ownership granted to {target.full_name} ({target.email}) by {request.user.full_name}",
+            log_type="SECURITY",
+            table_name="admins",
+            record_id=target.id,
+            is_owner_log=True,
+            ip_address=ip,
+            old_data={"is_owner": False},
+            new_data={"is_owner": True, "granted_by": str(request.user.id)}
+        )
+
+        return Response({"message": f"Ownership successfully granted to {target.full_name}."})
+
+
+class OwnershipRelinquishView(views.APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request):
+        if not request.user.is_owner:
+            return Response({"error": "Owner access only."}, status=403)
+
+        confirm_password = request.data.get("confirm_password")
+        if not confirm_password or not bcrypt.checkpw(confirm_password.encode('utf-8'), request.user.password_hash.encode('utf-8')):
+            return Response({"error": "Password confirmation failed."}, status=403)
+
+        if Admins.objects.filter(is_owner=True).count() <= 1:
+            return Response({"error": "You are the only owner. You cannot relinquish ownership until at least one other owner exists. Use Full Handover instead."}, status=400)
+
+        admin = request.user
+        admin.is_owner = False
+        admin.god_mode_enabled = False
+        admin.ownership_relinquished_at = timezone.now()
+        admin.save()
+
+        # Notify others
+        other_owners = Admins.objects.filter(is_owner=True)
+        ip = get_client_ip(request)
+        subject = f"{admin.full_name} has relinquished ownership of Azariah Credit Ltd"
+        message = f"{admin.full_name} ({admin.email}) has voluntarily relinquished their ownership status.\n\nDate: {timezone.now().strftime('%Y-%m-%d %H:%M:%S')}\nIP: {ip}"
+
+        brevo_api_key = os.getenv("BREVO_API_KEY")
+        from_email = os.getenv("FROM_EMAIL")
+        sender_name = os.getenv("SENDER_NAME", "Azariah Credit Ltd")
+
+        if brevo_api_key and from_email:
+            # Notify remaining owners
+            for owner in other_owners:
+                try:
+                    payload = {
+                        "sender": {"name": sender_name, "email": from_email},
+                        "to": [{"email": owner.email}],
+                        "subject": subject,
+                        "htmlContent": f"<html><body><p>{message.replace('\n', '<br>')}</p></body></html>"
+                    }
+                    requests.post("https://api.brevo.com/v3/smtp/email", json=payload, headers={
+                        "api-key": brevo_api_key, "content-type": "application/json"
+                    })
+                except:
+                    pass
+            
+            # Notify self
+            try:
+                requests.post("https://api.brevo.com/v3/smtp/email", json={
+                    "sender": {"name": sender_name, "email": from_email},
+                    "to": [{"email": admin.email}],
+                    "subject": "Ownership Relinquished — Azariah Credit Ltd",
+                    "htmlContent": f"<html><body><p>You have successfully relinquished your ownership status.</p></body></html>"
+                }, headers={"api-key": brevo_api_key, "content-type": "application/json"})
+            except:
+                pass
+
+        AuditLogs.objects.create(
+            admin=admin,
+            action=f"Ownership relinquished by {admin.full_name}",
+            log_type="SECURITY",
+            table_name="admins",
+            record_id=admin.id,
+            is_owner_log=True,
+            ip_address=ip,
+            old_data={"is_owner": True},
+            new_data={"is_owner": False}
+        )
+
+        return Response({"message": "Ownership successfully relinquished."})
+
+
+class OwnershipHandoverView(views.APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request):
+        if not request.user.is_owner:
+            return Response({"error": "Owner access only."}, status=403)
+
+        confirm_password = request.data.get("confirm_password")
+        if not confirm_password or not bcrypt.checkpw(confirm_password.encode('utf-8'), request.user.password_hash.encode('utf-8')):
+            return Response({"error": "Password confirmation failed."}, status=403)
+
+        grant_type = request.data.get("type")
+        target = None
+
+        # Check limit logic for handover
+        current_owners = Admins.objects.filter(is_owner=True)
+        if grant_type == "new" and current_owners.count() >= 3:
+            return Response({"error": "Cannot handover to a new person — 3 owners already exist. Use Grant to replace an existing owner first."}, status=400)
+
+        # 1. Grant to target
+        if grant_type == "existing":
+            target_id = request.data.get("target_admin_id")
+            try:
+                target = Admins.objects.get(id=target_id)
+                # If target is already an owner, we can still "handover" (essentially self-relinquishing while ensuring target stays owner)
+                target.is_owner = True
+                target.god_mode_enabled = True
+                target.ownership_granted_by = request.user
+                target.ownership_granted_at = timezone.now()
+                target.save()
+            except Admins.DoesNotExist:
+                return Response({"error": "Staff member not found."}, status=404)
+        elif grant_type == "new":
+            full_name = request.data.get("full_name")
+            email = request.data.get("email")
+            password = request.data.get("password")
+            if not all([full_name, email, password]):
+                return Response({"error": "Missing fields."}, status=400)
+            
+            password_hash = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
+            target = Admins.objects.create(
+                id=uuid.uuid4(), full_name=full_name, email=email, password_hash=password_hash,
+                role="ADMIN", is_owner=True, god_mode_enabled=True, is_verified=True,
+                ownership_granted_by=request.user, ownership_granted_at=timezone.now()
+            )
+
+        # 2. Relinquish self
+        old_owner = request.user
+        old_owner.is_owner = False
+        old_owner.god_mode_enabled = False
+        old_owner.ownership_relinquished_at = timezone.now()
+        old_owner.save()
+
+        # Audit logs
+        ip = get_client_ip(request)
+        AuditLogs.objects.create(
+            admin=old_owner, action=f"Ownership granted to {target.full_name} via handover",
+            log_type="SECURITY", table_name="admins", record_id=target.id, is_owner_log=True, ip_address=ip
+        )
+        AuditLogs.objects.create(
+            admin=old_owner, action=f"Ownership relinquished by {old_owner.full_name} via handover",
+            log_type="SECURITY", table_name="admins", record_id=old_owner.id, is_owner_log=True, ip_address=ip
+        )
+
+        # Notify
+        all_owners = Admins.objects.filter(is_owner=True)
+        subject = "Full ownership handover completed"
+        message = f"Full ownership handover completed. {old_owner.full_name} has transferred ownership to {target.full_name}.\n\nDate: {timezone.now().strftime('%Y-%m-%d %H:%M:%S')}"
+        
+        brevo_api_key = os.getenv("BREVO_API_KEY")
+        from_email = os.getenv("FROM_EMAIL")
+        sender_name = os.getenv("SENDER_NAME", "Azariah Credit Ltd")
+
+        if brevo_api_key and from_email:
+            for owner in all_owners:
+                try:
+                    requests.post("https://api.brevo.com/v3/smtp/email", json={
+                        "sender": {"name": sender_name, "email": from_email}, "to": [{"email": owner.email}],
+                        "subject": subject, "htmlContent": f"<html><body><p>{message}</p></body></html>"
+                    }, headers={"api-key": brevo_api_key, "content-type": "application/json"})
+                except: pass
+
+        return Response({"message": "Handover successful. You are no longer an owner."})
+
+
 class BranchListCreateView(generics.ListCreateAPIView):
     queryset = Branch.objects.all().order_by("name")
     serializer_class = BranchSerializer
@@ -1636,6 +2378,146 @@ class DeactivationRequestDetailView(generics.RetrieveUpdateAPIView):
             )
 
 
+class AdminSuspendView(views.APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request, pk):
+        try:
+            target = Admins.objects.get(pk=pk)
+            user = request.user
+            reason = request.data.get("reason")
+
+            if not reason:
+                return Response({"error": "Reason for suspension is required."}, status=400)
+
+            # Owner Protection
+            if target.is_owner:
+                return Response({"error": "The owner account cannot be suspended."}, status=403)
+
+            # Suspension rules
+            can_suspend = False
+            if user.is_owner:
+                can_suspend = True
+            elif user.is_super_admin:
+                # Super Admin can suspend Admin, Manager, etc. but not Owner or other Super Admins
+                if not (target.is_owner or target.is_super_admin):
+                    can_suspend = True
+
+            if not can_suspend:
+                return Response({"error": "Your role does not have permission to suspend this account."}, status=403)
+
+            target.is_blocked = True
+            target.suspended_at = timezone.now()
+            target.suspended_by = user
+            target.suspension_reason = reason
+            target.save()
+
+            # Audit Log
+            AuditLogs.objects.create(
+                admin=user,
+                action=f"Suspended admin {target.full_name}. Reason: {reason}",
+                log_type="SECURITY",
+                table_name="admins",
+                record_id=target.id,
+                is_owner_log=user.is_owner or user.is_super_admin,
+                ip_address=get_client_ip(request)
+            )
+
+            return Response({"message": f"Account {target.full_name} has been suspended."})
+        except Admins.DoesNotExist:
+            return Response({"error": "Admin not found"}, status=404)
+
+
+class AdminUnsuspendView(views.APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request, pk):
+        try:
+            target = Admins.objects.get(pk=pk)
+            user = request.user
+
+            # Suspension rules
+            can_unsuspend = False
+            if user.is_owner:
+                can_unsuspend = True
+            elif user.is_super_admin:
+                if not (target.is_owner or target.is_super_admin):
+                    can_unsuspend = True
+
+            if not can_unsuspend:
+                return Response({"error": "Your role does not have permission to unsuspend this account."}, status=403)
+
+            target.is_blocked = False
+            target.suspended_at = None
+            target.suspended_by = None
+            target.suspension_reason = None
+            target.save()
+
+            # Audit Log
+            AuditLogs.objects.create(
+                admin=user,
+                action=f"Unsuspended admin {target.full_name}",
+                log_type="SECURITY",
+                table_name="admins",
+                record_id=target.id,
+                is_owner_log=user.is_owner or user.is_super_admin,
+                ip_address=get_client_ip(request)
+            )
+
+            return Response({"message": f"Account {target.full_name} has been unsuspended."})
+        except Admins.DoesNotExist:
+            return Response({"error": "Admin not found"}, status=404)
+
+
+class AdminRevokeView(views.APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request, pk):
+        try:
+            target = Admins.objects.get(pk=pk)
+            user = request.user
+            new_role = request.data.get("new_role")
+            reason = request.data.get("reason")
+
+            if not all([new_role, reason]):
+                return Response({"error": "New role and reason are required."}, status=400)
+
+            # Owner Protection
+            if target.is_owner:
+                return Response({"error": "The owner account is protected and cannot be modified."}, status=403)
+
+            # Role revocation rules
+            can_revoke = False
+            if user.is_owner:
+                can_revoke = True
+            elif user.is_super_admin:
+                # Super Admin can revoke Admin, Manager, etc. but not Owner or other Super Admins
+                if not (target.is_owner or target.is_super_admin):
+                    can_revoke = True
+
+            if not can_revoke:
+                return Response({"error": "Your role does not have permission to revoke roles for this account."}, status=403)
+
+            old_role = target.role
+            target.role = new_role
+            target.save()
+
+            # Audit Log
+            AuditLogs.objects.create(
+                admin=user,
+                action=f"Revoked roles for {target.full_name}. Downgraded from {old_role} to {new_role}. Reason: {reason}",
+                log_type="SECURITY",
+                table_name="admins",
+                record_id=target.id,
+                is_owner_log=user.is_owner or user.is_super_admin,
+                ip_address=get_client_ip(request)
+            )
+
+            return Response({"message": f"Role for {target.full_name} has been updated to {new_role}."})
+        except Admins.DoesNotExist:
+            return Response({"error": "Admin not found"}, status=404)
+
+
 class AdminListCreateView(generics.ListCreateAPIView):
     serializer_class = AdminSerializer
     permission_classes = [permissions.AllowAny]
@@ -1772,8 +2654,10 @@ class RegisterAdminView(views.APIView):
 
         # Requirement: Everyone must have an invitation if the system is already initialized
         # First ADMIN can register without invitation
-        is_initialized = Admins.objects.filter(role="ADMIN").exists()
+        is_initialized = Admins.objects.filter(is_owner=True).exists()
 
+        inviter = None
+        branch_fk = None
         if is_initialized:
             if not invitation_token:
                 return Response(
@@ -1790,33 +2674,18 @@ class RegisterAdminView(views.APIView):
                     is_used=False,
                     expires_at__gt=timezone.now(),
                 )
-                # Ensure the invite role matches requested role
-                if invite.role != role:
-                    return Response(
-                        {
-                            "error": f"This invitation is for a {invite.role} role, not {role}."
-                        },
-                        status=400,
-                    )
 
-                # If branch was pre-assigned in invitation, use it
-                if invite.branch:
-                    branch = invite.branch
+                # Assign inviter and branch
+                inviter = invite.invited_by_admin
+                branch_fk = invite.branch_fk
 
-                # Mark invite as used after successful registration
-                invite.is_used = True
-                invite.save()
+                # If the new user is a Field Officer, their branch is locked
+                # (Simple role verification/sync)
             except AdminInvitation.DoesNotExist:
                 return Response(
                     {"error": "Invalid or expired invitation token."},
                     status=status.HTTP_400_BAD_REQUEST,
                 )
-
-        elif role != "ADMIN":
-            return Response(
-                {"error": "The first user registered must be an Administrator."},
-                status=status.HTTP_403_FORBIDDEN,
-            )
 
         if Admins.objects.filter(email__iexact=email).exists():
             return Response(
@@ -1836,6 +2705,7 @@ class RegisterAdminView(views.APIView):
             role == "ADMIN" and not Admins.objects.filter(role="ADMIN").exists()
         )
 
+        # Signup Completion
         admin = Admins.objects.create(
             id=uuid.uuid4(),
             full_name=full_name,
@@ -1846,8 +2716,15 @@ class RegisterAdminView(views.APIView):
             password_hash=password_hash,
             verification_token=verification_code,
             is_verified=False,
-            is_super_admin=is_first_admin,
+            is_super_admin=(role == "ADMIN"),
+            invited_by=inviter,
+            branch_fk=branch_fk,
         )
+
+        # Mark invite used
+        if 'invite' in locals():
+            invite.is_used = True
+            invite.save()
 
         email_thread = threading.Thread(
             target=send_verification_email_async,
@@ -1916,6 +2793,13 @@ class RequestPasswordResetView(views.APIView):
     permission_classes = [permissions.AllowAny]
 
     def post(self, request):
+        from django_ratelimit.core import is_ratelimited
+        if is_ratelimited(request, key='ip', rate='5/m', group='password_reset', method='POST', increment=True):
+            return Response(
+                {"error": "Too many requests. Please wait before trying again."},
+                status=status.HTTP_429_TOO_MANY_REQUESTS
+            )
+
         email = request.data.get("email")
         if not email:
             return Response({"error": "Email is required"}, status=400)
@@ -2762,88 +3646,106 @@ class FinanceAnalyticsView(views.APIView):
 
 
 class AdminInviteView(views.APIView):
-    permission_classes = [IsAdminUser]
+    permission_classes = [permissions.IsAuthenticated]
 
     def post(self, request):
-        # request.user is an instance of Admins model via CustomJWTAuthentication
-        if not request.user or request.user.role != "ADMIN":
-            return Response(
-                {"error": "Only administrators can invite others"},
-                status=status.HTTP_403_FORBIDDEN,
-            )
+        inviter = request.user
+        inviter_role = getattr(inviter, "role", "ADMIN")
+        if inviter.is_owner:
+            inviter_role = "OWNER"
+        elif inviter.is_super_admin:
+            inviter_role = "SUPER_ADMIN"
 
-        emails = request.data.get("emails")  # Changed from 'email' to 'emails' (list)
-        email = request.data.get("email")  # Fallback for single email
+        INVITE_PERMISSIONS = {
+            'OWNER': ['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'FINANCIAL_OFFICER', 'FIELD_OFFICER'],
+            'SUPER_ADMIN': ['ADMIN', 'FINANCIAL_OFFICER'],
+            'ADMIN': ['MANAGER'],
+            'MANAGER': ['FIELD_OFFICER'],
+            'FIELD_OFFICER': [],
+        }
+
+        emails = request.data.get("emails") or request.data.get("email")
         role = request.data.get("role")
-        branch = request.data.get("branch")
-
-        if not emails and email:
-            emails = [email]
+        branch_id = request.data.get("branch") # branch_id or pk
 
         if not emails or not role:
-            return Response(
-                {"error": "Email(s) and role are required."},
-                status=400,
+            return Response({"error": "Email(s) and role are required."}, status=400)
+
+        # Enforce Invite Chain
+        allowed_roles = INVITE_PERMISSIONS.get(inviter_role, [])
+        if role not in allowed_roles:
+            AuditLogs.objects.create(
+                admin=inviter,
+                action=f"Invite Chain Violation: {inviter_role} tried to invite {role}",
+                log_type="SECURITY",
+                table_name="admin_invitations",
+                is_owner_log=True,
+                ip_address=get_client_ip(request)
             )
+            return Response({"error": f"Your role ({inviter_role}) does not have permission to invite {role}."}, status=403)
 
         if isinstance(emails, str):
-            emails = [e.strip() for e in emails.split(",") if e.strip()]
+            emails = [e.strip().lower() for e in emails.split(",") if e.strip()]
+        elif not isinstance(emails, list):
+            emails = [str(emails).strip().lower()]
 
-        if len(emails) > 5:
-            return Response(
-                {"error": "Maximum of 5 invitations can be sent at once."},
-                status=400,
-            )
+        # Branch Auto-Assignment logic
+        branch_fk = None
+        if inviter_role == "MANAGER" and role == "FIELD_OFFICER":
+            branch_fk = inviter.branch_fk
+        elif inviter_role == "ADMIN" and role == "MANAGER":
+            if not branch_id:
+                return Response({"error": "Branch is required for Manager invitations."}, status=400)
+            try:
+                branch_fk = Branch.objects.get(id=branch_id)
+            except:
+                return Response({"error": "Invalid branch ID."}, status=400)
 
-        valid_roles = ["ADMIN", "MANAGER", "FINANCIAL_OFFICER", "FIELD_OFFICER"]
-        if role not in valid_roles:
-            return Response(
-                {"error": f"Invalid role: {role}. Must be one of {valid_roles}"},
-                status=400,
-            )
-
-        inviter = request.user
         sent_emails = []
         errors = []
 
         for email_addr in emails:
-            email_addr = email_addr.lower().strip()
-
-            # Check if already registered
+            # Check if registered
             if Admins.objects.filter(email__iexact=email_addr).exists():
                 errors.append(f"{email_addr} is already registered.")
                 continue
 
-            # Update or create invitation
-            token = secrets.token_urlsafe(32)
-            expires_at = timezone.now() + timezone.timedelta(
-                hours=24
-            )  # Changed to 24 hours
-
+            token = secrets.token_hex(20)
             AdminInvitation.objects.update_or_create(
                 email=email_addr,
                 defaults={
                     "role": role,
-                    "branch": branch,
                     "token": token,
                     "invited_by": inviter,
+                    "invited_by_admin": inviter,
+                    "branch_fk": branch_fk,
+                    "expires_at": timezone.now() + timedelta(days=7),
                     "is_used": False,
-                    "expires_at": expires_at,
                 },
             )
 
-            # Send email
-            threading.Thread(
-                target=send_invitation_email_async,
-                args=(email_addr, role, inviter.full_name, token, branch),
-            ).start()
+            # Audit log
+            AuditLogs.objects.create(
+                admin=inviter,
+                action=f"Sent invitation to {email_addr} as {role}",
+                log_type="MANAGEMENT",
+                table_name="admin_invitations",
+                is_owner_log=inviter.is_owner or inviter.is_super_admin,
+                ip_address=get_client_ip(request)
+            )
 
+            from .utils.sms import send_invite_email_async
+            threading.Thread(
+                target=send_invite_email_async,
+                args=(email_addr, token, role),
+            ).start()
             sent_emails.append(email_addr)
 
-        if not sent_emails:
-            return Response(
-                {"error": "No invitations sent.", "details": errors}, status=400
-            )
+        return Response({
+            "message": f"Sent {len(sent_emails)} invitations.",
+            "sent": sent_emails,
+            "errors": errors
+        })
 
         return Response(
             {
@@ -2917,165 +3819,6 @@ class DirectSMSView(views.APIView):
             return Response({"error": str(e)}, status=500)
 
 
-class BulkSMSView(views.APIView):
-    permission_classes = [permissions.IsAuthenticated]
-
-    def post(self, request):
-        user = request.user
-        if user.role not in ["ADMIN", "MANAGER"]:
-            return Response({"error": "Unauthorized"}, status=403)
-
-        sms_type = request.data.get("type", "DEFAULTERS")
-        message = request.data.get("message")
-
-        if not message:
-            return Response({"error": "Message is required"}, status=400)
-
-        # Logic to get phone numbers based on type
-        phones = []
-        if sms_type == "DEFAULTERS":
-            phones = list(
-                Users.objects.filter(loans__status="DEFAULTED")
-                .values_list("phone_number", flat=True)
-                .distinct()
-            )
-        else:
-            phones = list(Users.objects.values_list("phone_number", flat=True))
-
-        if not phones:
-            return Response({"error": "No recipients found"}, status=404)
-
-        try:
-            send_sms_async(phones, message)
-            SMSLog.objects.create(
-                sender=user,
-                recipient_phone=f"{len(phones)} Numbers",
-                recipient_name=f"Bulk: {sms_type}",
-                message=message,
-                type="BULK",
-                status="SENT",
-            )
-            return Response(
-                {"message": f"Successfully queued SMS to {len(phones)} users"}
-            )
-        except Exception as e:
-            return Response({"error": str(e)}, status=500)
-
-
-class SMSLogListView(generics.ListAPIView):
-    # Fixed typo in class name from previous attempts
-    serializer_class = SMSLogSerializer
-    permission_classes = [permissions.IsAuthenticated]
-
-    def get_queryset(self):
-        user = self.request.user
-        if user.role not in ["ADMIN", "MANAGER", "FINANCIAL_OFFICER"]:
-            return SMSLog.objects.none()
-
-        queryset = SMSLog.objects.all()
-        search = self.request.query_params.get("search")
-        if search:
-            queryset = queryset.filter(
-                Q(recipient_name__icontains=search)
-                | Q(recipient_phone__icontains=search)
-                | Q(message__icontains=search)
-            )
-        return queryset.order_by("-created_at")
-
-
-class SendEmailNotificationView(views.APIView):
-    permission_classes = [permissions.IsAuthenticated]
-
-    def post(self, request):
-        admin = request.user
-        if admin.role not in ["ADMIN", "MANAGER"]:
-            return Response({"error": "Unauthorized"}, status=403)
-
-        subject = request.data.get("subject", "Official Notification")
-        message = request.data.get("message")
-        target_group = request.data.get("target_group")  # 'STAFF' or others
-        target_ids = request.data.get("target_ids")  # list of IDs
-
-        if not message:
-            return Response({"error": "Message content is required"}, status=400)
-
-        emails_to_send = []
-
-        if target_group == "STAFF":
-            staff = Admins.objects.all()
-            for s in staff:
-                emails_to_send.append(
-                    {"email": s.email, "name": s.full_name, "id": s.id}
-                )
-        elif target_ids:
-            # We assume target_ids refer to Admins for official communicator
-            staff = Admins.objects.filter(id__in=target_ids)
-            for s in staff:
-                emails_to_send.append(
-                    {"email": s.email, "name": s.full_name, "id": s.id}
-                )
-        else:
-            return Response(
-                {"error": "No valid recipients specified"},
-                status=400,
-            )
-
-        if not emails_to_send:
-            return Response({"error": "No recipients found"}, status=404)
-
-        success_count = 0
-        for item in emails_to_send:
-            # Send Email
-            threading.Thread(
-                target=send_official_email_async,
-                args=(item["email"], subject, message, item["name"]),
-            ).start()
-
-            # Log Email
-            EmailLog.objects.create(
-                sender=admin,
-                recipient_email=item["email"],
-                recipient_name=item["name"],
-                subject=subject,
-                message=message,
-                status="SENT",
-            )
-            success_count += 1
-
-        # Audit log
-        AuditLogs.objects.create(
-            admin=admin,
-            action="SENT_OFFICIAL_EMAIL",
-            log_type="COMMUNICATION",
-            table_name="email_logs",
-            new_data={"count": success_count, "subject": subject},
-            ip_address=request.META.get("REMOTE_ADDR"),
-        )
-
-        return Response(
-            {"message": f"Successfully queued {success_count} emails for processing"}
-        )
-
-
-class ListEmailLogsView(generics.ListAPIView):
-    serializer_class = EmailLogSerializer
-    permission_classes = [permissions.IsAuthenticated]
-
-    def get_queryset(self):
-        user = self.request.user
-        if user.role not in ["ADMIN", "MANAGER"]:
-            return EmailLog.objects.none()
-
-        queryset = EmailLog.objects.all()
-        search = self.request.query_params.get("search")
-        if search:
-            queryset = queryset.filter(
-                Q(recipient_name__icontains=search)
-                | Q(recipient_email__icontains=search)
-                | Q(subject__icontains=search)
-                | Q(message__icontains=search)
-            )
-        return queryset.order_by("-created_at")
 
 class CustomerDraftListCreateView(generics.ListCreateAPIView):
     serializer_class = CustomerDraftSerializer
