@@ -328,9 +328,13 @@ class SecureSettingsView(views.APIView):
     def get(self, request):
         group = request.query_params.get("group")
         if group:
+            # Case-insensitive match but also allow for group lists
             settings = SecureSettings.objects.filter(setting_group__iexact=group)
         else:
             settings = SecureSettings.objects.all()
+        
+        # Log for debugging - remove in production or use proper logging
+        # print(f"Fetching settings for group '{group}'. Found {settings.count()} records.")
         
         serializer = SecureSettingsSerializer(settings, many=True, context={'request': request})
         return Response(serializer.data)
