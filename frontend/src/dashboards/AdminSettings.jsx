@@ -308,9 +308,12 @@ const AdminSettings = ({ defaultTab = 'mpesa' }) => {
   const handleUpdate = async (key, value, group) => {
     try {
       await loanService.updateSecureSetting(key, value, group);
+      toast.success(`${key.replace(/_/g, ' ')} saved successfully`);
       await fetchSecureSettings();
     } catch (err) {
-      toast.error("Failed to update setting");
+      console.error('Update error:', err);
+      toast.error(err.response?.data?.error || "Failed to update setting — Check encryption key is set on server");
+      throw err; // Re-throw for CredentialField to handle
     }
   };
 
