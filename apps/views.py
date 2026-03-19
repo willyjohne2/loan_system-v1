@@ -346,11 +346,11 @@ class SecureSettingsView(views.APIView):
         if not setting:
             setting = SecureSettings.objects.create(
                 key=key,
-                setting_group=request.data.get("setting_group", "system"),
+                setting_group=request.data.get("setting_group", "system").upper(),
                 description=request.data.get("description", "")
             )
         elif "setting_group" in request.data:
-            setting.setting_group = request.data.get("setting_group")
+            setting.setting_group = request.data.get("setting_group", "system").upper()
             setting.save()
         
         serializer = SecureSettingsSerializer(setting, data=request.data, partial=True, context={'request': request})

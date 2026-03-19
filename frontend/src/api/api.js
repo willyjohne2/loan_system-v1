@@ -202,7 +202,7 @@ export const loanService = {
   },
   getSecureSettings: async (group = '') => {
     const res = await api.get('/settings/secure/', { params: { group } });
-    return res.data;
+    return Array.isArray(res.data) ? res.data : (res.data?.results || res.data || []);
   },
   updateSecureSetting: async (key, value, group) => {
     const res = await api.post('/settings/secure/', { key, encrypted_value: value, setting_group: group });

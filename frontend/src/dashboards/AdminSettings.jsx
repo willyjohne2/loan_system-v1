@@ -40,11 +40,9 @@ const CredentialField = ({ fieldKey, label, placeholder, sensitive, currentValue
   const [loading, setLoading] = useState(false);
 
   const isConfigured = !!currentValue && 
-                      currentValue !== '••••••••' && 
-                      currentValue !== '••••••••••••••••' && 
-                      currentValue !== '••••••••••••' && 
                       currentValue !== 'null' && 
-                      currentValue !== '';
+                      currentValue !== '' &&
+                      currentValue !== 'undefined';
 
   const handleSave = async () => {
     if (!inputValue.trim()) { toast.error('Value cannot be empty'); return; }
@@ -141,7 +139,14 @@ const CredentialField = ({ fieldKey, label, placeholder, sensitive, currentValue
       ) : (
         <div className="flex items-center gap-2 mt-1">
           <div className={`flex-1 font-mono text-sm truncate py-1.5 ${revealed ? 'text-indigo-600 dark:text-indigo-400 font-bold' : (isConfigured && sensitive ? 'text-slate-300 dark:text-slate-700 tracking-[0.3em] text-[10px]' : 'text-slate-600 dark:text-slate-300')}`}>
-            {revealed ? revealed : (isConfigured ? (sensitive ? '••••••••••••••••' : currentValue) : <span className="text-slate-300 dark:text-slate-700 italic font-sans text-xs">Unconfigured</span>)}
+            {revealed 
+              ? revealed 
+              : isConfigured 
+                ? (sensitive 
+                    ? '••••••••' 
+                    : currentValue) 
+                : <span className="text-slate-300 dark:text-slate-700 italic font-sans text-xs">Not configured</span>
+            }
           </div>
           {isConfigured && (
              <span className="text-[8px] font-black text-slate-300 dark:text-slate-600 border border-slate-200 dark:border-slate-800 px-1.5 py-0.5 rounded-md uppercase">
@@ -247,9 +252,15 @@ const AdminSettings = ({ defaultTab = 'mpesa' }) => {
   const [loading, setLoading] = useState(true);
   const [testLoading, setTestLoading] = useState(false);
 
+  // Helper for reading values reliably
+  const getSettingValue = (key) => {
+    const s = secureSettings.find(s => s.key === key);
+    return s?.encrypted_value || s?.value || '';
+  };
+
   // Derive current values from secureSettings for display
-  const currentEnvironment = secureSettings.find(s => s.key === 'mpesa_environment')?.encrypted_value || 'sandbox';
-  const currentShortcodeType = secureSettings.find(s => s.key === 'mpesa_shortcode_type')?.encrypted_value || 'paybill';
+  const currentEnvironment = getSettingValue('mpesa_environment') || 'sandbox';
+  const currentShortcodeType = getSettingValue('mpesa_shortcode_type') || 'paybill';
   
   // Maintenance State
   const [maintenanceDate, setMaintenanceDate] = useState('');
@@ -280,19 +291,28 @@ const AdminSettings = ({ defaultTab = 'mpesa' }) => {
   useEffect(() => {
     if (visibleTabs.length > 0 && !visibleTabs.find(t => t.id === activeTab)) {
       setActiveTab(visibleTabs[0].id);
-    }
-  }, [visibleTabs, activeTab]);
-
-  const fetchSecureSettings = useCallback(async () => {
-    setLoading(true);
-    try {
-      const data = await loanService.getSecureSettings();
-      setSecureSettings(data);
+    }// Handle paginated or direct array response
+      const settingsArray = Array.isArray(data) 
+        ? data 
+        : (data?.results || []);
+      
+      console.log(`Loaded ${settingsArray.length} settings:`, settingsArray.map(s => `${s.key}=${s.setting_group}`));
+      setSecureSettings(settingsArray);
       
       // Initialize maintenance state if keys exist
-      const mActive = data.find(s => s.key === 'maintenance_mode_active');
-      const mTime = data.find(s => s.key === 'maintenance_schedule_time');
+      const mActive = settingsArray.find(s => s.key === 'maintenance_mode_active');
+      const mTime = settingsArray.find(s => s.key === 'maintenance_schedule_time');
       
+      if (mActive) setIsMaintenanceActive(mActive.encrypted_value === 'true');
+      if (mTime && mTime.encrypted_value && !mTime.encrypted_value.startsWith('•')) {
+          const dt = new Date(mTime.encrypted_value);
+          if (!isNaN(dt)) {
+            setMaintenanceDate(dt.toISOString().split('T')[0]);
+            setMaintenanceTime(dt.toTimeString().split(' ')[0].substring(0, 5));
+          }
+      }
+    } catch (err) {
+      console.error('Settings fetch error:', err);
       if (mActive) setIsMaintenanceActive(mActive.encrypted_value === 'true');
       if (mTime && mTime.encrypted_value && mTime.encrypted_value !== '••••••••') {
           const dt = new Date(mTime.encrypted_value);
@@ -579,30 +599,27 @@ const AdminSettings = ({ defaultTab = 'mpesa' }) => {
                       <span>Buy Goods (Till)</span>
                       <p className={`text-[10px] font-medium mt-0.5 truncate w-full px-2 transition-colors ${currentShortcodeType === 'till' ? 'opacity-80' : 'text-slate-400'}`}>
                         Direct Payment
-                      </p>
-                    </div>
-                  </button>
-                </div>
-              </div>
+                      </p>(
+                  <CredentialField
+                    key={field.key}
+                    fieldKey={field.key}
+                    label={field.label}
+                    placeholder={field.placeholder}
+                    sensitive={field.sensitive}
+                    currentValue={getSettingValue(field.key)}
+                    onSave={(val) => handleUpdate(field.key, val, 'mpesa')}
+                    onReveal={() => handleReveal(field.key)}
+                  />
+                ))}
 
-              {/* ── Credential Fields ── */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {[
-                  { key: 'mpesa_consumer_key',    label: 'Consumer Key',         placeholder: 'From Daraja portal → My Apps', sensitive: true  },
-                  { key: 'mpesa_consumer_secret', label: 'Consumer Secret',      placeholder: 'From Daraja portal → My Apps', sensitive: true  },
-                  { key: 'mpesa_shortcode',       label: 'Shortcode',            placeholder: 'Sandbox: 174379',              sensitive: false },
-                  { key: 'mpesa_passkey',         label: 'Passkey',              placeholder: 'From Daraja portal',           sensitive: true  },
-                  { key: 'mpesa_b2c_initiator',   label: 'B2C Initiator Name',   placeholder: 'Sandbox: testapi',             sensitive: false },
-                  { key: 'mpesa_b2c_credential',  label: 'B2C Security Credential', placeholder: 'From Daraja portal',        sensitive: true  },
-                ].map(field => {
-                  const setting = secureSettings.find(s => s.key === field.key);
-                  return (
-                    <CredentialField
-                      key={field.key}
-                      fieldKey={field.key}
-                      label={field.label}
-                      placeholder={field.placeholder}
-                      sensitive={field.sensitive}
+                {/* Callback URL — full width */}
+                <div className="md:col-span-2">
+                  <CredentialField
+                    fieldKey="mpesa_callback_url"
+                    label="Callback URL"
+                    placeholder="https://your-backend.onrender.com/api/payments/mpesa-callback/"
+                    sensitive={false}
+                    currentValue={getSettingValue('mpesa_callback_url')
                       currentValue={setting?.encrypted_value || setting?.value || ''}
                       onSave={(val) => handleUpdate(field.key, val, 'mpesa')}
                       onReveal={() => handleReveal(field.key)}
@@ -653,21 +670,18 @@ const AdminSettings = ({ defaultTab = 'mpesa' }) => {
                 { key: 'sms_provider',  label: 'SMS Provider',  placeholder: "e.g. Africa's Talking or Brevo", sensitive: false },
                 { key: 'sms_api_key',   label: 'API Key',        placeholder: 'Your SMS provider API key',      sensitive: true  },
                 { key: 'sms_sender_id', label: 'Sender ID',      placeholder: 'e.g. AZARIAH',                  sensitive: false },
-              ].map(field => {
-                const setting = secureSettings.find(s => s.key === field.key);
-                return (
-                  <CredentialField
-                    key={field.key}
-                    fieldKey={field.key}
-                    label={field.label}
-                    placeholder={field.placeholder}
-                    sensitive={field.sensitive}
-                    currentValue={setting?.encrypted_value || setting?.value || ''}
-                    onSave={(val) => handleUpdate(field.key, val, 'sms')}
-                    onReveal={() => handleReveal(field.key)}
-                  />
-                );
-              })}
+              ].map(field => (
+                <CredentialField
+                  key={field.key}
+                  fieldKey={field.key}
+                  label={field.label}
+                  placeholder={field.placeholder}
+                  sensitive={field.sensitive}
+                  currentValue={getSettingValue(field.key)}
+                  onSave={(val) => handleUpdate(field.key, val, 'sms')}
+                  onReveal={() => handleReveal(field.key)}
+                />
+              ))}
 
               {/* Test SMS */}
               <div className="p-4 bg-indigo-50 dark:bg-indigo-900/10 border border-indigo-200 rounded-xl">
