@@ -340,13 +340,18 @@ class SecureSettingsView(views.APIView):
         if not key:
             return Response({"error": "Key is required"}, status=400)
             
-        setting, created = SecureSettings.objects.get_or_create(
-            key=key,
-            defaults={
-                "setting_group": request.data.get("setting_group", "system"),
-                "description": request.data.get("description", "")
-            }
-        )
+        # Try to find existing first to update group if necessary
+        setting = SecureSettings.objects.filter(key=key).first()
+        
+        if not setting:
+            setting = SecureSettings.objects.create(
+                key=key,
+                setting_group=request.data.get("setting_group", "system"),
+                description=request.data.get("description", "")
+            )
+        elif "setting_group" in request.data:
+            setting.setting_group = request.data.get("setting_group")
+            setting.save()
         
         serializer = SecureSettingsSerializer(setting, data=request.data, partial=True, context={'request': request})
         if serializer.is_valid():
