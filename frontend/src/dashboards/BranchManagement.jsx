@@ -97,8 +97,7 @@ const BranchManagement = () => {
   };
 
   const filteredBranches = branches.filter(b => 
-    b.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    b.location?.toLowerCase().includes(searchTerm.toLowerCase())
+    b.name.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
   return (
