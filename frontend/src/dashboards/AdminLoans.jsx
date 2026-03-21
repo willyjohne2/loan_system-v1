@@ -1,16 +1,83 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import { loanService } from '../api/api';
+import { useLoans, useCustomers, useInvalidate } from '../hooks/useQueries';
 import { Card, Table, Button } from '../components/ui/Shared';
-import { Search, Filter, Download, Eye, CheckCircle, XCircle, Clock, MessageSquareShare, FileCheck } from 'lucide-react';
+import { Search, Filter, Calendar, Download, Eye, CheckCircle, XCircle, Clock, MessageSquareShare, FileCheck } from 'lucide-react';
+import { useAuth } from '../context/AuthContext';
 import BulkCustomerSMSModal from '../components/ui/BulkCustomerSMSModal';
 import CustomerHistoryModal from '../components/ui/CustomerHistoryModal';
 import ChecklistModal from '../components/ui/ChecklistModal';
 import useDebounce from '../hooks/useDebounce';
 
+const FilterBar = ({ searchTerm, setSearchTerm, filterProduct, setFilterProduct, filterStatus, setFilterStatus, uniqueProducts, activeTab, startDate, setStartDate, endDate, setEndDate }) => (
+  <Card className="p-0 overflow-hidden border-none shadow-sm dark:bg-slate-900">
+    <div className="p-4 border-b border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/20 flex flex-col lg:flex-row gap-4">
+      <div className="relative flex-1">
+        <Search className="absolute left-3 top-2.5 w-4 h-4 text-slate-400" />
+        <input 
+          className="pl-10 pr-4 py-2 w-full border rounded-lg text-sm bg-white dark:bg-slate-800 dark:border-slate-700 dark:text-white focus:ring-2 focus:ring-primary-500 outline-none transition-all" 
+          placeholder={`Search in ${activeTab.toLowerCase()} loans...`} 
+          value={searchTerm}
+          onChange={(e) => setSearchTerm(e.target.value)}
+        />
+      </div>
+      <div className="flex flex-wrap items-center gap-3">
+        <div className="flex items-center gap-2 bg-white dark:bg-slate-800 border dark:border-slate-700 rounded-lg px-2 py-1">
+          <Calendar className="w-4 h-4 text-slate-400" />
+          <input 
+            type="date" 
+            value={startDate} 
+            onChange={(e) => setStartDate(e.target.value)}
+            className="bg-transparent text-xs outline-none dark:text-white uppercase font-bold"
+          />
+          <span className="text-slate-300">-</span>
+          <input 
+            type="date" 
+            value={endDate} 
+            onChange={(e) => setEndDate(e.target.value)}
+            className="bg-transparent text-xs outline-none dark:text-white uppercase font-bold"
+          />
+        </div>
+        <select 
+          className="border rounded-lg px-3 py-2 text-sm bg-white dark:bg-slate-800 dark:border-slate-700 dark:text-white outline-none focus:ring-2 focus:ring-primary-500 font-bold"
+          value={filterProduct}
+          onChange={(e) => setFilterProduct(e.target.value)}
+        >
+          <option value="ALL">ALL PRODUCTS</option>
+          {uniqueProducts.map(p => (
+            <option key={p} value={p}>{p.toUpperCase()}</option>
+          ))}
+        </select>
+        <select 
+          className="border rounded-lg px-3 py-2 text-sm bg-white dark:bg-slate-800 dark:border-slate-700 dark:text-white outline-none focus:ring-2 focus:ring-primary-500 font-bold"
+          value={filterStatus}
+          onChange={(e) => setFilterStatus(e.target.value)}
+        >
+          <option value="ALL">ALL STATUSES</option>
+          {activeTab === 'ACTIVE' && (
+            <>
+              <option value="DISBURSED">DISBURSED</option>
+              <option value="ACTIVE">ACTIVE</option>
+              <option value="OVERDUE">OVERDUE</option>
+              <option value="CLOSED">CLOSED</option>
+            </>
+          )}
+          {activeTab === 'PENDING' && (
+            <>
+              <option value="UNVERIFIED">UNVERIFIED</option>
+              <option value="VERIFIED">VERIFIED</option>
+              <option value="APPROVED">APPROVED</option>              <option value="PENDING">PENDING</option>            </>
+          )}
+          {activeTab === 'REJECTED' && <option value="REJECTED">REJECTED</option>}
+        </select>
+      </div>
+    </div>
+  </Card>
+);
+
 const AdminLoans = () => {
-  const [loans, setLoans] = useState([]);
-  const [customers, setCustomers] = useState({});
-  const [loading, setLoading] = useState(true);
+  const { user } = useAuth();
+  const { invalidateLoans } = useInvalidate();
   const [filterStatus, setFilterStatus] = useState('ALL');
   const [filterProduct, setFilterProduct] = useState('ALL');
   const [searchTerm, setSearchTerm] = useState('');
@@ -23,57 +90,37 @@ const AdminLoans = () => {
   const [updatingId, setUpdatingId] = useState(null);
   const [showApprovalChecklist, setShowApprovalChecklist] = useState(false);
   const [loanPendingApproval, setLoanPendingApproval] = useState(null);
+  const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate] = useState('');
   
   const [page, setPage] = useState(1);
-  const [hasMore, setHasMore] = useState(false);
 
-  const fetchAllData = async (pageNum = 1, isReset = false) => {
-    try {
-      setLoading(true);
-      const [loansData, customersData] = await Promise.all([
-        loanService.getLoans({ 
-          page: pageNum, 
-          page_size: 10,
-          search: debouncedSearch,
-          status: filterStatus !== 'ALL' ? filterStatus : undefined
-        }),
-        loanService.getCustomers({ page_size: 1000 })
-      ]);
+  const { data: loansData, isLoading: loansLoading } = useLoans({ 
+    page, 
+    page_size: 10,
+    search: debouncedSearch,
+    status: filterStatus !== 'ALL' ? filterStatus : undefined
+  });
 
-      const loansList = loansData.results || loansData || [];
-      const customersList = customersData.results || customersData || [];
-      
-      setHasMore(!!loansData.next);
+  const { data: customersData } = useCustomers({ page_size: 1000 });
 
-      const customerMap = customersList.reduce((acc, c) => {
-        acc[c.id] = c;
-        return acc;
-      }, {});
+  const loans = loansData?.results || loansData || [];
+  const hasMore = !!loansData?.next;
+  const loading = loansLoading;
 
-      setCustomers(customerMap);
-      
-      if (isReset) {
-        setLoans(loansList);
-      } else {
-        setLoans(prev => [...prev, ...loansList]);
-      }
-    } catch (err) {
-      console.error("Error fetching loans:", err);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    setPage(1);
-    fetchAllData(1, true);
-  }, [debouncedSearch, filterStatus, activeTab]);
+  const customers = useMemo(() => {
+    const list = customersData?.results || customersData || [];
+    return list.reduce((acc, c) => {
+      acc[c.id] = c;
+      return acc;
+    }, {});
+  }, [customersData]);
 
   const handleStatusUpdate = async (loanId, newStatus) => {
     setUpdatingId(loanId);
     try {
       await loanService.api.patch(`/loans/${loanId}/`, { status: newStatus });
-      await fetchAllData(); // Refresh
+      invalidateLoans(); // Refresh using React Query
     } catch (err) {
       alert("Failed to update status: " + (err.response?.data?.error || err.message));
     } finally {
@@ -95,7 +142,7 @@ const AdminLoans = () => {
       // The backend now returns a message on success and handles the status update
       if (response.data.message || response.data.status === 'success' || response.data.ResponseCode === '0' || response.data.status === 'MOCK_SUCCESS') {
         alert(response.data.message || "Disbursement initiated successfully!");
-        await fetchAllData();
+        invalidateLoans();
       } else {
         alert("Disbursement Error: " + (response.data.ResponseDescription || response.data.error || "Unknown error"));
       }
@@ -106,25 +153,46 @@ const AdminLoans = () => {
     }
   };
 
-  const filteredLoans = loans.filter(loan => {
-    // Filter by Tab
-    const isDisbursed = ['DISBURSED', 'ACTIVE', 'OVERDUE', 'CLOSED', 'REPAID'].includes(loan.status);
-    const isPending = ['UNVERIFIED', 'VERIFIED', 'APPROVED', 'PENDING'].includes(loan.status);
-    const isRejected = loan.status === 'REJECTED';
+  const processedLoans = useMemo(() => {
+    let result = loans.filter(loan => {
+      // Filter by Tab
+      const isDisbursed = ['DISBURSED', 'ACTIVE', 'OVERDUE', 'CLOSED', 'REPAID'].includes(loan.status);
+      const isPending = ['UNVERIFIED', 'VERIFIED', 'APPROVED', 'PENDING'].includes(loan.status);
+      const isRejected = loan.status === 'REJECTED';
 
-    if (activeTab === 'ACTIVE' && !isDisbursed) return false;
-    if (activeTab === 'PENDING' && !isPending) return false;
-    if (activeTab === 'REJECTED' && !isRejected) return false;
+      if (activeTab === 'ACTIVE' && !isDisbursed) return false;
+      if (activeTab === 'PENDING' && !isPending) return false;
+      if (activeTab === 'REJECTED' && !isRejected) return false;
 
-    const matchesStatus = filterStatus === 'ALL' || loan.status === filterStatus;
-    const matchesProduct = filterProduct === 'ALL' || loan.product_name === filterProduct;
-    const customer = customers[loan.user] || {};
-    const customerName = customer.full_name || '';
-    const matchesSearch = customerName.toLowerCase().includes(debouncedSearch.toLowerCase()) || 
-                         loan.id.toString().includes(debouncedSearch) ||
-                         (loan.product_name || '').toLowerCase().includes(debouncedSearch.toLowerCase());
-    return matchesStatus && matchesProduct && matchesSearch;
-  });
+      const matchesStatus = filterStatus === 'ALL' || loan.status === filterStatus;
+      const matchesProduct = filterProduct === 'ALL' || loan.product_name === filterProduct;
+      const customer = customers[loan.user] || {};
+      const customerName = customer.full_name || '';
+      const matchesSearch = customerName.toLowerCase().includes(debouncedSearch.toLowerCase()) || 
+                          loan.id.toString().includes(debouncedSearch) ||
+                          (loan.product_name || '').toLowerCase().includes(debouncedSearch.toLowerCase());
+      
+      // Date filter
+      if (startDate && new Date(loan.created_at) < new Date(startDate)) return false;
+      if (endDate) {
+        const end = new Date(endDate);
+        end.setHours(23, 59, 59, 999);
+        if (new Date(loan.created_at) > end) return false;
+      }
+
+      return matchesStatus && matchesProduct && matchesSearch;
+    });
+
+    // Sorting: Rule [A] for Pending/Unverified -> Oldest First
+    if (activeTab === 'PENDING') {
+      result.sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
+    } else {
+      // Newest First for others
+      result.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+    }
+
+    return result;
+  }, [loans, activeTab, filterStatus, filterProduct, debouncedSearch, customers, startDate, endDate]);
 
   const getTotals = (loansList) => {
     return loansList.reduce((acc, loan) => {
@@ -134,7 +202,7 @@ const AdminLoans = () => {
     }, { principal: 0, repayable: 0 });
   };
 
-  const totals = getTotals(filteredLoans);
+  const totals = getTotals(processedLoans);
 
   const getStatusColor = (status) => {
     switch (status) {
@@ -171,7 +239,7 @@ const AdminLoans = () => {
       const failCount = (response.data.results?.length || 0) - successCount;
       
       alert(`Bulk Disbursement Complete!\nSuccessful: ${successCount}\nFailed: ${failCount}`);
-      await fetchAllData();
+      invalidateLoans();
     } catch (err) {
       alert("Bulk Disbursement Error: " + (err.response?.data?.error || err.message));
     } finally {
@@ -189,14 +257,16 @@ const AdminLoans = () => {
           <p className="text-sm text-slate-500">Track lifecycle from verification to disbursement</p>
         </div>
         <div className="flex gap-2">
-           <Button 
-             variant="primary" 
-             className="bg-emerald-600 hover:bg-emerald-700 flex items-center gap-2 shadow-lg shadow-emerald-500/20 px-6 py-2"
-             onClick={handleBulkDisbursement}
-           >
-              <FileCheck className="w-4 h-4" /> 
-              Bulk Disburse (Queue)
-           </Button>
+           {(user?.role === 'FINANCIAL_OFFICER' || user?.role === 'FINANCE_OFFICER' || user?.god_mode_enabled) && (
+             <Button 
+               variant="primary" 
+               className="bg-emerald-600 hover:bg-emerald-700 flex items-center gap-2 shadow-lg shadow-emerald-500/20 px-6 py-2"
+               onClick={handleBulkDisbursement}
+             >
+                <FileCheck className="w-4 h-4" /> 
+                Bulk Disburse (Queue)
+             </Button>
+           )}
            <Button 
              variant="primary" 
              className="bg-orange-600 hover:bg-orange-700 flex items-center gap-2 shadow-lg shadow-orange-500/20 px-6 py-2"
@@ -240,59 +310,26 @@ const AdminLoans = () => {
         ))}
       </div>
 
-      <Card className="p-0 overflow-hidden border-none shadow-sm dark:bg-slate-900">
-        <div className="p-6 border-b border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/20 flex flex-col md:flex-row gap-4">
-          <div className="relative flex-1">
-            <Search className="absolute left-3 top-2.5 w-4 h-4 text-slate-400" />
-            <input 
-              className="pl-10 pr-4 py-2 w-full border rounded-lg text-sm bg-white dark:bg-slate-800 dark:border-slate-700 dark:text-white focus:ring-2 focus:ring-primary-500 outline-none transition-all" 
-              placeholder={`Search in ${activeTab.toLowerCase()} loans...`} 
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-            />
-          </div>
-          <div className="flex items-center gap-2">
-            <Filter className="w-4 h-4 text-slate-400" />
-            <select 
-              className="border rounded-lg px-3 py-2 text-sm bg-white dark:bg-slate-800 dark:border-slate-700 dark:text-white outline-none focus:ring-2 focus:ring-primary-500 font-bold"
-              value={filterProduct}
-              onChange={(e) => setFilterProduct(e.target.value)}
-            >
-              <option value="ALL">ALL PRODUCTS</option>
-              {uniqueProducts.map(p => (
-                <option key={p} value={p}>{p.toUpperCase()}</option>
-              ))}
-            </select>
-            <select 
-              className="border rounded-lg px-3 py-2 text-sm bg-white dark:bg-slate-800 dark:border-slate-700 dark:text-white outline-none focus:ring-2 focus:ring-primary-500 font-bold"
-              value={filterStatus}
-              onChange={(e) => setFilterStatus(e.target.value)}
-            >
-              <option value="ALL">ALL STATUSES</option>
-              {activeTab === 'ACTIVE' && (
-                <>
-                  <option value="DISBURSED">DISBURSED</option>
-                  <option value="ACTIVE">ACTIVE</option>
-                  <option value="OVERDUE">OVERDUE</option>
-                </>
-              )}
-              {activeTab === 'PENDING' && (
-                <>
-                  <option value="UNVERIFIED">UNVERIFIED</option>
-                  <option value="VERIFIED">VERIFIED</option>
-                  <option value="APPROVED">APPROVED</option>
-                </>
-              )}
-              {activeTab === 'REJECTED' && <option value="REJECTED">REJECTED</option>}
-            </select>
-          </div>
-        </div>
-      </Card>
+      <FilterBar 
+        searchTerm={searchTerm}
+        setSearchTerm={setSearchTerm}
+        filterProduct={filterProduct}
+        setFilterProduct={setFilterProduct}
+        filterStatus={filterStatus}
+        setFilterStatus={setFilterStatus}
+        uniqueProducts={uniqueProducts}
+        activeTab={activeTab}
+        startDate={startDate}
+        setStartDate={setStartDate}
+        endDate={endDate}
+        setEndDate={setEndDate}
+      />
 
       <Card className="p-0 overflow-hidden">
         <Table
-          headers={['Loan ID', 'Customer Profile', 'Product', 'Principal', 'Repayable', 'Overdue By', 'Status', 'Actions']}
-          data={filteredLoans}
+          headers={['Loan ID', 'Customer Profile', 'Product', 'Principal', 'Repayable', 'Submitted', 'Status', 'Actions']}
+          data={processedLoans}
+          initialCount={10}
           maxHeight="max-h-[500px]"
           renderRow={(loan) => (
             <tr key={loan.id} className="hover:bg-slate-50/80 dark:hover:bg-slate-800/30 transition-colors group">
@@ -318,8 +355,8 @@ const AdminLoans = () => {
               <td className="px-6 py-4 text-sm font-bold text-emerald-600 dark:text-emerald-400">
                 KES {Number(loan.total_repayable_amount).toLocaleString()}
               </td>
-              <td className="px-6 py-4 text-xs font-black text-rose-600">
-                {loan.overdue_duration || '-'}
+              <td className="px-6 py-4 text-xs font-black text-slate-500 uppercase">
+                {new Date(loan.created_at).toLocaleDateString([], { day: '2-digit', month: 'short' })}
               </td>
               <td className="px-6 py-4">
                 <span className={`px-2.5 py-1 rounded-full text-[9px] font-black uppercase tracking-tight ${getStatusColor(loan.status)}`}>
@@ -355,7 +392,7 @@ const AdminLoans = () => {
                           APPROVE
                         </button>
                       )}
-                        {loan.status === 'APPROVED' && (
+                        {loan.status === 'APPROVED' && user?.god_mode_enabled && (
                         <button 
                           onClick={() => handleDisbursement(loan.id)}
                           className="p-1 px-2 text-[10px] font-bold bg-purple-50 text-purple-600 rounded hover:bg-purple-600 hover:text-white transition-colors border border-purple-200"
@@ -395,7 +432,6 @@ const AdminLoans = () => {
               onClick={() => {
                 const nextPage = page + 1;
                 setPage(nextPage);
-                fetchAllData(nextPage);
               }}
               disabled={loading}
               className="px-8 font-black uppercase tracking-widest text-xs"
@@ -441,7 +477,7 @@ const AdminLoans = () => {
           isOpen={isHistoryOpen}
           customer={selectedCustomer}
           loanToVerify={selectedLoan}
-          onVerified={fetchAllData}
+          onVerified={invalidateLoans}
           onClose={() => {
             setIsHistoryOpen(false);
             setSelectedCustomer(null);

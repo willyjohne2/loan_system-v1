@@ -28,6 +28,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { loanService } from '../../api/api';
+import { useBackgroundPolling } from '../../hooks/useQueries';
 import { clsx } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 import CollapsableSection from './CollapsableSection';
@@ -47,30 +48,8 @@ const Sidebar = ({ isOpen, onClose }) => {
   const { user, logout, activeRole, switchActiveRole } = useAuth();
   const navigate = useNavigate();
 
-  // Poll for new repayments every 15 seconds
-  const [newRepaymentCount, setNewRepaymentCount] = useState(0);
+  const { threatCount, newRepaymentCount } = useBackgroundPolling(user, activeRole);
   const lastRepaymentCheck = useRef(localStorage.getItem('last_repayment_check') || new Date().toISOString());
-
-  useEffect(() => {
-    if (activeRole !== 'FINANCIAL_OFFICER' && activeRole !== 'ADMIN' && activeRole !== 'SUPER_ADMIN') {
-      return;
-    }
-    const checkNewRepayments = async () => {
-      try {
-        const res = await loanService.api.get(
-          `/repayments/unmatched/?since=${lastRepaymentCheck.current}`
-        );
-        const count = res.data?.new_count || 0;
-        setNewRepaymentCount(count);
-      } catch (e) {
-        // Silent fail
-      }
-    };
-
-    checkNewRepayments();
-    const interval = setInterval(checkNewRepayments, 15000);
-    return () => clearInterval(interval);
-  }, [activeRole]);
 
   const getGuide = () => {
     if (activeRole === 'ADMIN' || activeRole === 'SUPER_ADMIN') return adminGuide;
@@ -85,7 +64,7 @@ const Sidebar = ({ isOpen, onClose }) => {
 
   const handleRoleSwitch = (role) => {
     switchActiveRole(role);
-    if (role === 'SUPER_ADMIN') navigate('/admin/super-admins');
+    if (role === 'SUPER_ADMIN') navigate('/admin/dashboard');
     else if (role === 'ADMIN') navigate('/admin/dashboard');
     else if (role === 'MANAGER') navigate('/manager/dashboard');
     else if (role === 'FINANCIAL_OFFICER') navigate('/finance/overview');
@@ -94,25 +73,30 @@ const Sidebar = ({ isOpen, onClose }) => {
     if (window.innerWidth < 1024) onClose();
   };
 
+  const isOwner = user?.is_owner || user?.role === 'OWNER';
+  const isSuperAdmin = activeRole === 'SUPER_ADMIN' || user?.is_super_admin;
+
+  const superAdminLinks = [
+    { to: '/admin/dashboard', icon: LayoutDashboard, label: 'Overview' },
+    { to: '/admin/customers', icon: Users, label: 'All Customers' },
+    { to: '/admin/loans', icon: Wallet, label: 'All Loans' },
+  ];
+
   const adminLinks = [
     { to: '/admin/dashboard', icon: LayoutDashboard, label: 'Overview' },
     { to: '/admin/customers', icon: Users, label: 'Customers' },
     { to: '/admin/loans', icon: Wallet, label: 'Loans' },
-    { to: '/admin/security-logs', icon: ShieldAlert, label: 'Security Logs' },
-    ...(user?.is_owner ? [{ to: '/admin/owner-audit', icon: Crown, label: 'Owner Audit' }] : []),
-    { to: '/admin/customer-communicator', icon: MessageSquare, label: 'Customer Comms' },
-    { to: '/admin/official-communicator', icon: Mail, label: 'Official Comms' },
   ];
 
   const managerLinks = [
     { to: '/manager/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
     { to: '/manager/officers', icon: Users2, label: 'Field Officers' },
     { to: '/manager/customers', icon: Users, label: 'Regional Customers' },
-    { to: '/manager/customer-communicator', icon: MessageSquare, label: 'Customer Communicator' },
-    { to: '/manager/official-communicator', icon: Mail, label: 'Official Communicator' },
+    { to: '/manager/customer-communicator', icon: MessageSquare, label: 'Customer Comms' },
+    { to: '/manager/official-communicator', icon: Mail, label: 'Official Comms' },
   ];
 
-  const officerLinks = [
+  const financeLinks = [
     { to: '/finance/overview', icon: LayoutDashboard, label: 'Overview' },
     { to: '/finance/disbursement', icon: Send, label: 'Disbursement Queue' },
     { to: '/finance/analytics', icon: BarChart3, label: 'Analytics' },
@@ -128,10 +112,16 @@ const Sidebar = ({ isOpen, onClose }) => {
     { to: '/field/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
   ];
 
-  const baseLinks = activeRole === 'ADMIN' ? adminLinks : 
-                activeRole === 'MANAGER' ? managerLinks : 
-                activeRole === 'FINANCIAL_OFFICER' ? officerLinks :
-                fieldLinks;
+  const getActiveLinks = () => {
+    if (activeRole === 'SUPER_ADMIN' || user?.is_owner) return superAdminLinks;
+    if (activeRole === 'ADMIN') return adminLinks;
+    if (activeRole === 'MANAGER') return managerLinks;
+    if (activeRole === 'FINANCIAL_OFFICER') return financeLinks;
+    if (activeRole === 'FIELD_OFFICER') return fieldLinks;
+    return [];
+  };
+
+  const baseLinks = getActiveLinks();
 
   return (
     <>
@@ -181,13 +171,14 @@ const Sidebar = ({ isOpen, onClose }) => {
                 <select 
                   value={activeRole}
                   onChange={(e) => handleRoleSwitch(e.target.value)}
-                  className="w-full pl-9 pr-4 py-2 bg-primary-600 text-white rounded-lg text-xs font-bold appearance-none cursor-pointer focus:outline-none focus:ring-2 focus:ring-primary-500/50 shadow-lg shadow-primary-500/20"
+                  className="w-full pl-9 pr-4 py-2 bg-primary-600 dark:bg-primary-700 text-white rounded-lg text-xs font-bold appearance-none cursor-pointer focus:outline-none focus:ring-2 focus:ring-primary-500/50 shadow-lg shadow-primary-500/20"
                 >
                   <option value="ADMIN">God Mode: Admin</option>
                   <option value="SUPER_ADMIN">View: Super Admin</option>
                   <option value="MANAGER">View: Branch Manager</option>
                   <option value="FINANCIAL_OFFICER">View: Finance Officer</option>
                   <option value="FIELD_OFFICER">View: Field Officer</option>
+                  {isOwner && <option value="OWNER">View: Owner Panel</option>}
                 </select>
                 <ShieldCheck className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-primary-200" />
                 <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-3 h-3 text-primary-200 pointer-events-none" />
@@ -196,7 +187,7 @@ const Sidebar = ({ isOpen, onClose }) => {
           )}
         </div>
 
-        <nav className="flex-1 px-4 space-y-1 overflow-y-auto pt-2 no-scrollbar">
+        <nav className="flex-1 px-4 space-y-1 overflow-y-auto pt-2 custom-scrollbar">
           {/* Main Navigation Links */}
           {baseLinks.map((link) => (
             <NavLink
@@ -205,19 +196,18 @@ const Sidebar = ({ isOpen, onClose }) => {
               onClick={() => {
                 if (window.innerWidth < 1024) onClose();
                 if (link.badge) {
-                  setNewRepaymentCount(0);
                   localStorage.setItem('last_repayment_check', new Date().toISOString());
                 }
               }}
               className={({ isActive }) => cn(
-                "flex items-center px-4 py-2.5 text-sm font-medium rounded-lg transition-colors justify-between",
+                "flex items-center px-4 py-2 text-sm font-medium rounded-lg transition-colors justify-between",
                 isActive 
-                  ? "bg-primary-50 text-primary-600 dark:bg-primary-900/20 dark:text-primary-400" 
+                  ? "bg-primary-50 text-primary-600 dark:bg-primary-900/20 dark:text-primary-400 font-bold" 
                   : "text-slate-600 hover:bg-slate-50 dark:text-slate-400 dark:hover:bg-slate-800"
               )}
             >
               <div className="flex items-center">
-                <link.icon className="w-5 h-5 mr-3" />
+                <link.icon className="w-4 h-4 mr-3" />
                 {link.label}
               </div>
               {link.badge && newRepaymentCount > 0 && (
@@ -225,80 +215,87 @@ const Sidebar = ({ isOpen, onClose }) => {
                   {newRepaymentCount > 99 ? '99+' : newRepaymentCount}
                 </span>
               )}
+              {link.threatBadge && threatCount > 0 && (
+                <span className="bg-red-500 text-white text-[9px] font-black px-1.5 py-0.5 rounded-full min-w-[18px] text-center">
+                  {threatCount > 99 ? '99+' : threatCount}
+                </span>
+              )}
             </NavLink>
           ))}
-        </nav>
-
-        <div className="flex-1 px-4 space-y-1 overflow-y-auto pt-2 no-scrollbar">
-          {activeRole === 'ADMIN' && (
-            <div className="pt-4 space-y-1">
-              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-3 mb-2">Staff</p>
+          
+          {(activeRole === 'ADMIN' || isSuperAdmin || isOwner) && (activeRole !== 'MANAGER' && activeRole !== 'FINANCIAL_OFFICER' && activeRole !== 'FIELD_OFFICER') && (
+            <div className="pt-2 space-y-1">
+              {/* Staff Management Section */}
+              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-3 mb-1 mt-2">Staff Control</p>
               <CollapsableSection 
                 icon={Users} 
                 label="Officials" 
                 setSidebarOpen={(val) => { if (!val && window.innerWidth < 1024) onClose(); }}
-                activeClass="bg-primary-50 text-primary-600 dark:bg-primary-900/20 dark:text-primary-400"
+                activeClass="bg-primary-50 text-primary-600 dark:bg-primary-900/20 dark:text-primary-400 font-bold"
                 links={[
                   { to: '/admin/field-officers', label: 'Field Officers', icon: Users2 },
                   { to: '/admin/managers', label: 'Managers', icon: Building2 },
                   { to: '/admin/finance-officers', label: 'Finance Officers', icon: Briefcase },
-                  { to: '/admin/accounts', label: 'Admins', icon: ShieldCheck },
-                  ...((user?.is_owner || user?.is_super_admin) ? [{ to: '/admin/super-admins', label: 'Super Admins', icon: ShieldCheck }] : []),
+                  ...((isOwner || isSuperAdmin) ? [{ to: '/admin/accounts', label: 'Admins', icon: ShieldCheck }] : []),
+                  ...(isOwner ? [{ to: '/admin/super-admins', label: 'Super Admins', icon: ShieldCheck }] : []),
                 ]}
               />
 
-              <div className="pt-2">
+              {/* Communication Section */}
+              <div className="pt-1">
+                <CollapsableSection 
+                  icon={Mail} 
+                  label="Comms" 
+                  setSidebarOpen={(val) => { if (!val && window.innerWidth < 1024) onClose(); }}
+                  activeClass="bg-primary-50 text-primary-600 dark:bg-primary-900/20 dark:text-primary-400 font-bold"
+                  links={[
+                    { to: '/admin/customer-communicator', icon: MessageSquare, label: 'Customer' },
+                    { to: '/admin/official-communicator', icon: Mail, label: 'Official' },
+                  ]}
+                />
+              </div>
+
+              {/* Security & System Section */}
+              <div className="pt-1">
+                <CollapsableSection 
+                  icon={ShieldAlert} 
+                  label="System Intel" 
+                  setSidebarOpen={(val) => { if (!val && window.innerWidth < 1024) onClose(); }}
+                  activeClass="bg-primary-50 text-primary-600 dark:bg-primary-900/20 dark:text-primary-400 font-bold"
+                  links={[
+                    { to: '/admin/security-logs', icon: ShieldAlert, label: 'Security Logs' },
+                    ...((isOwner || isSuperAdmin) ? [{ to: '/admin/security-threats', icon: ShieldAlert, label: 'Security Threats', threatBadge: true }] : []),
+                    ...(isOwner ? [{ to: '/admin/owner-audit', icon: Crown, label: 'Owner Audit' }] : []),
+                    { to: '/admin/audit', icon: ClipboardList, label: 'Audit Logs' },
+                    { to: '/admin/deactivations', icon: Lock, label: 'Security Requests' },
+                  ]}
+                />
+              </div>
+
+              {/* Settings Section */}
+              <div className="pt-1">
                 <CollapsableSection 
                     icon={Settings} 
                     label="Settings" 
                     setSidebarOpen={(val) => { if (!val && window.innerWidth < 1024) onClose(); }}
-                    activeClass="bg-primary-50 text-primary-600 dark:bg-primary-900/20 dark:text-primary-400"
+                    activeClass="bg-primary-50 text-primary-600 dark:bg-primary-900/20 dark:text-primary-400 font-bold"
                     links={[
-                        ...((user?.is_owner || user?.is_super_admin) ? [
-                            { to: '/admin/settings/mpesa', icon: Wallet, label: 'M-Pesa' },
-                            { to: '/admin/settings/sms', icon: MessageSquare, label: 'SMS' },
+                        ...((isOwner || isSuperAdmin) ? [
+                            { to: '/admin/settings/mpesa', icon: Wallet, label: 'M-Pesa Config' },
+                            { to: '/admin/settings/sms', icon: MessageSquare, label: 'SMS Gateway' },
                         ] : []),
-                        { to: '/admin/settings/system', icon: Sliders, label: 'System' },
-                        ...(user?.is_owner ? [{ to: '/admin/settings/security', icon: Lock, label: 'Security' }] : []),
-                        { to: '/admin/settings/branches', icon: Building2, label: 'Branches' },
+                        { to: '/admin/settings/system', icon: Sliders, label: 'System Logic' },
+                        ...(isOwner ? [{ to: '/admin/settings/security', icon: Lock, label: 'Access Control' }] : []),
+                        { to: '/admin/settings/branches', icon: Building2, label: 'Branch Network' },
                     ]}
                 />
               </div>
-
-              <div className="pt-2">
-                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-3 mb-2">Monitoring</p>
-                <NavLink
-                  to="/admin/audit"
-                  className={({ isActive }) => cn(
-                    "flex items-center px-4 py-2.5 text-sm font-medium rounded-lg transition-colors",
-                    isActive 
-                      ? "bg-primary-50 text-primary-600 font-bold" 
-                      : "text-slate-600 hover:bg-slate-50 dark:text-slate-400 dark:hover:bg-slate-800"
-                  )}
-                >
-                  <ClipboardList className="w-5 h-5 mr-3" />
-                  Audit Logs
-                </NavLink>
-                
-                <NavLink
-                  to="/admin/deactivations"
-                  className={({ isActive }) => cn(
-                    "flex items-center px-4 py-2.5 text-sm font-medium rounded-lg transition-colors",
-                    isActive 
-                      ? "bg-primary-50 text-primary-600 font-bold" 
-                      : "text-slate-600 hover:bg-slate-50 dark:text-slate-400 dark:hover:bg-slate-800"
-                  )}
-                >
-                  <Lock className="w-5 h-5 mr-3" />
-                  Security Requests
-                </NavLink>
-              </div>
             </div>
           )}
-        </div>
+        </nav>
 
-        {/* Help Guide Button */}
-        <div className="px-4 pb-2">
+        {/* Support & Quick Stats Section */}
+        <div className="px-4 pb-2 pt-2 space-y-2">
           <button
             onClick={openGuide}
             className="w-full flex items-center gap-2 px-3 py-2.5 text-sm font-medium text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 rounded-lg transition-colors border border-dashed border-slate-200 dark:border-slate-700"

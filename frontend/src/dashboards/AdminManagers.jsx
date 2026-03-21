@@ -1,5 +1,7 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import { loanService } from '../api/api';
+import { useAdmins, useInvalidate } from '../hooks/useQueries';
+import { useAuth } from '../context/AuthContext';
 import { Table, Button, Card, Badge } from '../components/ui/Shared';
 import { UserPlus, Mail, Phone, CheckCircle, Edit, MapPin, XCircle, Save, Loader2, Activity, Send } from 'lucide-react';
 import AdminActivityModal from '../components/ui/AdminActivityModal';
@@ -7,9 +9,9 @@ import BulkInviteModal from '../components/forms/BulkInviteModal';
 import DirectEmailModal from '../components/ui/DirectEmailModal';
 
 const AdminManagers = () => {
-  const [managers, setManagers] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
+  const { user } = useAuth();
+  const isSuperAdminOrOwner = user?.is_super_admin || user?.is_owner || user?.role === 'SUPER_ADMIN' || user?.role === 'OWNER';
+  const { invalidateAdmins } = useInvalidate();
   const [editingManager, setEditingManager] = useState(null);
   const [isInviting, setIsInviting] = useState(false);
   const [showActivity, setShowActivity] = useState(false);
@@ -27,34 +29,28 @@ const AdminManagers = () => {
   });
   
   const [page, setPage] = useState(1);
-  const [hasMore, setHasMore] = useState(false);
+
+  const { data: adminsData, isLoading: loading, error } = useAdmins({ role: 'MANAGER' });
+  const managers = useMemo(() => {
+    const data = adminsData?.results || adminsData || [];
+    return Array.isArray(data) ? data.filter(a => a.role === 'MANAGER') : [];
+  }, [adminsData]);
 
   const branches = [
     'Kagio', 'Embu', 'Thika', 'Naivasha'
   ];
 
-  useEffect(() => {
-    fetchManagers(1, true);
-  }, []);
-
-  const fetchManagers = async (pageNum = 1, isReset = false) => {
+  const handleUpdate = async (e) => {
+    e.preventDefault();
+    setSaving(true);
     try {
-      setLoading(true);
-      const data = await loanService.getManagers({ page: pageNum, page_size: 10 });
-      const managersList = data.results || data || [];
-      setHasMore(!!data.next);
-
-      if (isReset) {
-        setManagers(managersList);
-      } else {
-        setManagers(prev => [...prev, ...managersList]);
-      }
-      setError('');
+      await loanService.updateAdmin(editingManager.id, formData);
+      setEditingManager(null);
+      invalidateAdmins();
     } catch (err) {
-      console.error('[AdminManagers] Error fetching managers:', err);
-      setError(`Failed to load managers: ${err.response?.data?.error || err.message}`);
+      alert('Failed to update manager: ' + (err.response?.data?.error || err.message));
     } finally {
-      setLoading(false);
+      setSaving(false);
     }
   };
 
@@ -68,26 +64,13 @@ const AdminManagers = () => {
     });
   };
 
-  const handleUpdate = async (e) => {
-    e.preventDefault();
-    setSaving(true);
-    try {
-      await loanService.updateAdmin(editingManager.id, formData);
-      setEditingManager(null);
-      fetchManagers();
-    } catch (err) {
-      alert('Failed to update manager: ' + (err.response?.data?.error || err.message));
-    } finally {
-      setSaving(false);
-    }
-  };
-
   if (loading) return <div className="flex items-center justify-center h-64 text-slate-500">Loading managers...</div>
+
 
   if (error) {
     return (
       <div className="p-4 bg-red-50 border border-red-200 text-red-700 rounded-lg">
-        {error}
+        {error.message || 'Error loading managers'}
       </div>
     );
   }
@@ -101,17 +84,26 @@ const AdminManagers = () => {
         </div>
         <div className="flex items-center gap-4">
           <Button 
-            variant="secondary"
             className="flex items-center"
-            onClick={() => {
-              setEmailTargets(managers);
-              setBulkEmail(true);
-              setShowEmail(true);
-            }}
+            onClick={() => setIsInviting(true)}
           >
-            <Send className="w-4 h-4 mr-2" />
-            Bulk Email
+            <UserPlus className="w-4 h-4 mr-2" />
+            Invite Manager
           </Button>
+          {isSuperAdminOrOwner && (
+            <Button 
+              variant="secondary"
+              className="flex items-center"
+              onClick={() => {
+                setEmailTargets(managers);
+                setBulkEmail(true);
+                setShowEmail(true);
+              }}
+            >
+              <Send className="w-4 h-4 mr-2" />
+              Bulk Email
+            </Button>
+          )}
           <div className="flex items-center gap-2">
             <MapPin className="w-4 h-4 text-slate-400" />
             <select 
@@ -125,13 +117,6 @@ const AdminManagers = () => {
               ))}
             </select>
           </div>
-          <Button 
-            className="flex items-center"
-            onClick={() => setIsInviting(true)}
-          >
-            <UserPlus className="w-4 h-4 mr-2" />
-            Invite Manager
-          </Button>
         </div>
       </div>
 
@@ -144,6 +129,7 @@ const AdminManagers = () => {
           <Table
             headers={['Name', 'Contact', 'Branch', 'Status', 'Actions']}
             data={managers.filter(m => filterBranch === 'All' || m.branch === filterBranch)}
+            initialCount={10}
             maxHeight="max-h-[500px]"
             renderRow={(manager) => (
               <tr key={manager.id} className="hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors border-b">

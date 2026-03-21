@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { 
   AlertCircle, 
   Search, 
@@ -13,12 +13,15 @@ import {
   Filter
 } from 'lucide-react';
 import { loanService } from '../../api/api';
+import { useUnmatchedRepayments, useInvalidate } from '../../hooks/useQueries';
 import { Card, Button, Badge } from '../../components/ui/Shared';
 import toast from 'react-hot-toast';
 
 const UnmatchedRepayments = () => {
-  const [loading, setLoading] = useState(true);
-  const [repayments, setRepayments] = useState([]);
+  const { data: repaymentsData, isLoading: loading } = useUnmatchedRepayments();
+  const { invalidateRepayments } = useInvalidate();
+  const repayments = useMemo(() => repaymentsData || [], [repaymentsData]);
+
   const [searchTerm, setSearchTerm] = useState('');
   
   // Modal for assigning
@@ -28,20 +31,7 @@ const UnmatchedRepayments = () => {
   const [loanResults, setLoanResults] = useState([]);
   const [submitting, setSubmitting] = useState(false);
 
-  const fetchData = async () => {
-    try {
-      setLoading(true);
-      const data = await loanService.api.get('/repayments/unmatched/');
-      setRepayments(data.data);
-    } catch (e) {
-      toast.error('Failed to load unmatched payments');
-    } finally {
-      setLoading(false);
-    }
-  };
-
   useEffect(() => {
-    fetchData();
     // Clear the sidebar badge
     localStorage.setItem('last_repayment_check', new Date().toISOString());
   }, []);
@@ -78,7 +68,7 @@ const UnmatchedRepayments = () => {
       });
       toast.success('Payment assigned successfully');
       setShowAssignModal(false);
-      fetchData();
+      invalidateRepayments();
     } catch (e) {
       toast.error(e.response?.data?.error || 'Assignment failed');
     } finally {
@@ -95,7 +85,7 @@ const UnmatchedRepayments = () => {
       });
       toast.success('SMS sent to customer');
       // Mark as contact attempted locally or refresh
-      fetchData();
+      invalidateRepayments();
     } catch (e) {
       toast.error('Failed to send SMS');
     }

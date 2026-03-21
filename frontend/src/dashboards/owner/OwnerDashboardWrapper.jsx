@@ -4,6 +4,7 @@ import OwnerLayout from './OwnerLayout';
 import OwnerHome from './OwnerHome';
 import OwnerAuditPage from './OwnerAuditPage';
 import SecurityLogsPage from './SecurityLogsPage';
+import SecurityThreatsPage from '../SecurityThreatsPage';
 import OwnershipPage from './OwnershipPage';
 import OfficialCommunicator from '../OfficialCommunicator';
 import AdminSettings from '../AdminSettings';
@@ -27,6 +28,7 @@ const OwnerDashboardWrapper = () => {
         <Route index element={<OwnerHome />} />
         <Route path="dashboard" element={<OwnerHome />} />
         <Route path="audit" element={<OwnerAuditPage />} />
+        <Route path="security-threats" element={<SecurityThreatsPage />} />
         <Route path="security-logs" element={<SecurityLogsPage />} />
         <Route path="ownership" element={<OwnershipPage />} />
         <Route path="communications" element={<OfficialCommunicator />} />
@@ -37,6 +39,7 @@ const OwnerDashboardWrapper = () => {
         <Route path="settings/sms" element={<AdminSettings defaultTab="sms" />} />
         <Route path="settings/system" element={<AdminSettings defaultTab="system" />} />
         <Route path="settings/security" element={<AdminSettings defaultTab="security" />} />
+        <Route path="settings/loans" element={<AdminSettings defaultTab="loans" />} />
         <Route path="settings/branches" element={<BranchManagement />} />
 
         {/* Officials — owner views staff directly under /owner/ */}

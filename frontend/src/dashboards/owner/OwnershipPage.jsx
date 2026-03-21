@@ -18,13 +18,15 @@ import {
 import { loanService } from '../../api/api';
 import { Card, Button, Badge } from '../../components/ui/Shared';
 import { useAuth } from '../../context/AuthContext';
+import { useOwnership, useInvalidate } from '../../hooks/useQueries';
 import toast from 'react-hot-toast';
 import BulkInviteModal from '../../components/forms/BulkInviteModal';
 
 const OwnershipPage = () => {
   const { user } = useAuth();
-  const [owners, setOwners] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const { data: owners = [], isLoading: loading } = useOwnership();
+  const { invalidateOwnership } = useInvalidate();
+  
   const [activeTab, setActiveTab] = useState('grant'); // 'grant' or 'handover'
   const [subTab, setSubTab] = useState('existing'); // 'existing' or 'new'
   
@@ -43,22 +45,6 @@ const OwnershipPage = () => {
   const [modalConfig, setModalConfig] = useState({ type: '', description: '' });
   const [confirmPassword, setConfirmPassword] = useState('');
   const [submitting, setSubmitting] = useState(false);
-
-  const fetchData = async () => {
-    try {
-      setLoading(true);
-      const data = await loanService.getOwnership();
-      setOwners(data);
-    } catch (e) {
-      toast.error('Failed to load ownership data');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    fetchData();
-  }, []);
 
   const handleSearch = async (query) => {
     setSearchQuery(query);
@@ -128,7 +114,7 @@ const OwnershipPage = () => {
         // Force logout or redirect since they are no longer owner
         window.location.href = '/dashboard';
       } else {
-        fetchData();
+        invalidateOwnership();
         setSelectedStaff(null);
         setNewAccount({ full_name: '', email: '', password: '', confirm_password: '' });
       }

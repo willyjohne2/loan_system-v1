@@ -208,6 +208,7 @@ const SignupPage = () => {
                   onChange={(e) => setFormData({...formData, role: e.target.value})}
                   className={`w-full pl-10 pr-4 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/20 dark:bg-slate-800 dark:border-slate-700 dark:text-white ${inviteToken ? 'bg-slate-100 cursor-not-allowed' : 'bg-slate-50'}`}
                 >
+                  {formData.role === 'SUPER_ADMIN' && <option value="SUPER_ADMIN">System Super Admin</option>}
                   {formData.role === 'ADMIN' && <option value="ADMIN">Administrator</option>}
                   <option value="MANAGER">Manager</option>
                   <option value="FINANCIAL_OFFICER">Financial Officer</option>
@@ -282,42 +283,7 @@ const SignupPage = () => {
               {loading ? 'Creating Account...' : 'Create Account'}
             </Button>
           </form>
-
-          <p className="mt-6 text-center text-sm text-slate-500">
-            Already have an account?{' '}
-            <Link to="/login/admin" className="text-primary-600 font-medium hover:underline">Sign in</Link>
-          </p>
         </Card>
-
-        <div className="mt-4 p-4 bg-white rounded-lg border border-slate-200 dark:bg-slate-900 dark:border-slate-800">
-          <p className="text-xs font-medium text-slate-600 dark:text-slate-400 mb-3">Quick login links:</p>
-          <div className="grid grid-cols-2 gap-2">
-            <Link
-              to="/login/admin"
-              className="text-center px-3 py-2 rounded-md text-sm font-medium bg-primary-50 text-primary-700 hover:bg-primary-100 dark:bg-primary-900/20 dark:text-primary-200 dark:hover:bg-primary-900/40 transition"
-            >
-              Admin Login
-            </Link>
-            <Link
-              to="/login/manager"
-              className="text-center px-3 py-2 rounded-md text-sm font-medium bg-emerald-50 text-emerald-700 hover:bg-emerald-100 dark:bg-emerald-900/20 dark:text-emerald-200 dark:hover:bg-emerald-900/40 transition"
-            >
-              Manager Login
-            </Link>
-            <Link
-              to="/login/finance"
-              className="text-center px-3 py-2 rounded-md text-sm font-medium bg-indigo-50 text-indigo-700 hover:bg-indigo-100 dark:bg-indigo-900/20 dark:text-indigo-200 dark:hover:bg-indigo-900/40 transition"
-            >
-              Finance Officer
-            </Link>
-            <Link
-              to="/login/field"
-              className="text-center px-3 py-2 rounded-md text-sm font-medium bg-orange-50 text-orange-700 hover:bg-orange-100 dark:bg-orange-900/20 dark:text-orange-200 dark:hover:bg-orange-900/40 transition"
-            >
-              Field Officer
-            </Link>
-          </div>
-        </div>
       </div>
     </div>
   );

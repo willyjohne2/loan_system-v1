@@ -1,7 +1,9 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import { loanService } from '../api/api';
+import { useCustomers, useInvalidate } from '../hooks/useQueries';
 import { Table, StatCard, Button, Pagination, Card } from '../components/ui/Shared';
-import { Search, Filter, UserPlus, Trash2, Lock, Unlock, MessageSquare, Send, X } from 'lucide-react';
+import { Search, Filter, UserPlus, Trash2, Lock, Unlock, MessageSquare, Send, X, AlertTriangle } from 'lucide-react';
+import { useAuth } from '../context/AuthContext';
 import CustomerRegistrationForm from '../components/forms/CustomerRegistrationForm';
 import CustomerHistoryModal from '../components/ui/CustomerHistoryModal';
 import ChecklistModal from '../components/ui/ChecklistModal';
@@ -72,89 +74,46 @@ const DirectSMSModal = ({ customer, isOpen, onClose }) => {
 };
 
 const AdminCustomers = () => {
-  const [customers, setCustomers] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const { user } = useAuth();
+  const { invalidateCustomers } = useInvalidate();
   const [error, setError] = useState('');
   const [isRegistering, setIsRegistering] = useState(false);
   const [selectedCustomer, setSelectedCustomer] = useState(null);
   const [showHistory, setShowHistory] = useState(false);
   const [showSMS, setShowSMS] = useState(false);
   const [showPreRegChecklist, setShowPreRegChecklist] = useState(false);
+  const [showRoleWarning, setShowRoleWarning] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
-  const debouncedSearch = useDebounce(searchTerm, 500);
+
+  const { data: customersData, isLoading: loading } = useCustomers({ page_size: 5000 });
   
-  const [page, setPage] = useState(1);
-  const [hasMore, setHasMore] = useState(false);
+  const customers = useMemo(() => {
+    return customersData?.results || customersData || [];
+  }, [customersData]);
 
-  useEffect(() => {
-    // Reset when search changes
-    setCustomers([]);
-    setPage(1);
-    fetchData(1, debouncedSearch, true);
-  }, [debouncedSearch]);
+  const processedCustomers = useMemo(() => {
+    let result = [...customers];
+    
+    if (searchTerm) {
+      const lower = searchTerm.toLowerCase();
+      result = result.filter(c => 
+        c.full_name?.toLowerCase().includes(lower) || 
+        c.phone?.includes(searchTerm) ||
+        c.id?.includes(searchTerm)
+      );
+    }
 
-  const fetchData = async (pageNum = 1, search = '', isReset = false) => {
-    setLoading(true);
-    const parseAmount = (val) => {
-      const num = Number(val);
-      return Number.isFinite(num) ? num : 0;
-    };
+    // Default: Newest first
+    result.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+    
+    return result;
+  }, [customers, searchTerm]);
 
-    try {
-      console.log(`[AdminCustomers] Fetching customers page ${pageNum}...`);
-      const [usersData, loansData, repaymentsData] = await Promise.all([
-        loanService.getCustomers({ page: pageNum, search, page_size: 10 }),
-        loanService.getLoans({ limit: 1000 }), 
-        loanService.getRepayments({ limit: 1000 })
-      ]);
-
-      const users = usersData.results || usersData || [];
-      setHasMore(!!usersData.next);
-      
-      const loans = loansData.results || loansData || [];
-      const repayments = repaymentsData.results || repaymentsData || [];
-
-      const repaidByLoanId = repayments.reduce((acc, r) => {
-        const loanId = r.loan;
-        acc[loanId] = (acc[loanId] || 0) + parseAmount(r.amount_paid);
-        return acc;
-      }, {});
-
-      const loansByUser = loans.reduce((acc, loan) => {
-        const userId = loan.user;
-        if (!acc[userId]) acc[userId] = [];
-        acc[userId].push(loan);
-        return acc;
-      }, {});
-
-      const customersWithTotals = users.map((user) => {
-        const userLoans = loansByUser[user.id] || [];
-        const totalBorrowed = userLoans.reduce(
-          (sum, loan) => sum + parseAmount(loan.principal_amount),
-          0
-        );
-        const totalRepaid = userLoans.reduce(
-          (sum, loan) => sum + (repaidByLoanId[loan.id] || 0),
-          0
-        );
-        return {
-          ...user,
-          totalBorrowed,
-          totalRepaid,
-        };
-      });
-
-      if (isReset) {
-        setCustomers(customersWithTotals);
-      } else {
-        setCustomers(prev => [...prev, ...customersWithTotals]);
-      }
-      setError('');
-    } catch (err) {
-      console.error('[AdminCustomers] Failed to load customers:', err);
-      setError(`Failed to load customers: ${err.response?.data?.error || err.message}`);
-    } finally {
-      setLoading(false);
+  const handleStartRegistration = () => {
+    if (user?.role !== 'FIELD_OFFICER') {
+      setShowRoleWarning(true);
+    } else {
+      setShowPreRegChecklist(true);
     }
   };
 
@@ -162,11 +121,16 @@ const AdminCustomers = () => {
     if (window.confirm(`Are you sure you want to "delete" ${customer.full_name}? This will lock their account and keep their records for legal reference.`)) {
       try {
         await loanService.deleteCustomer(customer.id);
-        fetchData();
+        invalidateCustomers();
       } catch (err) {
         alert("Failed to lock customer: " + (err.response?.data?.error || err.message));
       }
     }
+  };
+
+  const onSuccess = () => {
+    setIsRegistering(false);
+    invalidateCustomers();
   };
 
   if (isRegistering) {
@@ -177,10 +141,7 @@ const AdminCustomers = () => {
           <Button variant="secondary" onClick={() => setIsRegistering(false)}>Back to List</Button>
         </div>
         <CustomerRegistrationForm 
-          onSuccess={() => {
-            setIsRegistering(false);
-            fetchData();
-          }}
+          onSuccess={onSuccess}
           onCancel={() => setIsRegistering(false)}
         />
       </div>
@@ -215,10 +176,12 @@ const AdminCustomers = () => {
           <p className="text-sm text-slate-500">Full list of customers with their loan statuses.</p>
         </div>
         <div className="flex items-center gap-3">
-          <Button onClick={() => setShowPreRegChecklist(true)} className="flex items-center gap-2">
-            <UserPlus className="w-4 h-4" />
-            Register Customer
-          </Button>
+          {(user?.role === 'MANAGER' || user?.role === 'FIELD_OFFICER' || user?.god_mode_enabled) && (
+            <Button onClick={handleStartRegistration} className="flex items-center gap-2">
+              <UserPlus className="w-4 h-4" />
+              Register Customer
+            </Button>
+          )}
           <div className="flex gap-2">
             <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
@@ -253,9 +216,49 @@ const AdminCustomers = () => {
           confirmText="Proceed to Registration"
           note="Incomplete information will cause delays in loan processing. Ensure all items are ready before proceeding."
         />
+
+        {showRoleWarning && (
+          <div className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-slate-900/80 backdrop-blur-md">
+            <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl w-full max-w-md overflow-hidden animate-in fade-in zoom-in duration-300">
+              <div className="p-8 text-center">
+                <div className="w-16 h-16 bg-amber-100 dark:bg-amber-900/30 rounded-full flex items-center justify-center mx-auto mb-6">
+                  <AlertTriangle className="w-8 h-8 text-amber-600 dark:text-amber-500" />
+                </div>
+                <h3 className="text-xl font-black text-slate-900 dark:text-white mb-2 uppercase tracking-tight">System Policy Warning</h3>
+                <p className="text-slate-600 dark:text-slate-400 text-sm leading-relaxed mb-6">
+                  Customer registration is primarily a <span className="font-bold text-amber-600">Field Officer</span> responsibility. 
+                  By continuing, you are performing a role outside your primary designation.
+                </p>
+                <div className="bg-slate-50 dark:bg-slate-800/50 p-4 rounded-xl mb-8 text-left border border-slate-100 dark:border-slate-800">
+                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">Requirement:</p>
+                  <p className="text-xs text-slate-600 dark:text-slate-300 font-medium">
+                    If you proceed, you <span className="text-primary-600">must</span> assign a Field Officer to this customer after registration to manage their loan applications and verification.
+                  </p>
+                </div>
+                <div className="flex flex-col gap-3">
+                  <button 
+                    onClick={() => {
+                        setShowRoleWarning(false);
+                        setShowPreRegChecklist(true);
+                    }}
+                    className="w-full bg-amber-600 hover:bg-amber-700 text-white font-bold h-12 rounded-xl transition-colors"
+                  >
+                    I Understand, Continue
+                  </button>
+                  <button 
+                    onClick={() => setShowRoleWarning(false)}
+                    className="w-full bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 font-bold h-12 rounded-xl hover:bg-slate-200 transition-colors"
+                  >
+                    Cancel & Return
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
 
-      {customers.length === 0 ? (
+      {processedCustomers.length === 0 ? (
         <div className="p-8 text-center text-slate-500 bg-slate-50 rounded-lg border border-slate-200 dark:bg-slate-900 dark:border-slate-800">
           <p>{searchTerm ? 'No results matching your search' : 'No customers registered yet'}</p>
         </div>
@@ -263,10 +266,11 @@ const AdminCustomers = () => {
         <Card className="overflow-hidden">
           <Table
             headers={['Customer', 'Borrowed', 'Paid', 'Balance', 'Status', 'Actions']}
-            data={customers}
+            data={processedCustomers}
+            initialCount={10}
             maxHeight="max-h-[500px]"
             renderRow={(customer) => {
-              const balance = customer.totalBorrowed - customer.totalRepaid;
+              const balance = (customer.totalBorrowed || 0) - (customer.totalRepaid || 0);
               return (
                 <tr key={customer.id} className={`hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors ${customer.is_locked ? 'opacity-60 bg-red-50/50 dark:bg-red-950/10' : ''}`}>
                   <td className="px-6 py-4">
@@ -276,8 +280,8 @@ const AdminCustomers = () => {
                     </div>
                     <p className="text-[10px] text-slate-500 uppercase">ID: {customer.id.slice(0, 8)}</p>
                   </td>
-                  <td className="px-6 py-4 text-slate-900 dark:text-white font-medium">KES {customer.totalBorrowed.toLocaleString()}</td>
-                  <td className="px-6 py-4 text-emerald-600 font-medium">KES {customer.totalRepaid.toLocaleString()}</td>
+                  <td className="px-6 py-4 text-slate-900 dark:text-white font-medium">KES {(customer.totalBorrowed || 0).toLocaleString()}</td>
+                  <td className="px-6 py-4 text-emerald-600 font-medium">KES {(customer.totalRepaid || 0).toLocaleString()}</td>
                   <td className="px-6 py-4 text-rose-600 font-semibold">KES {balance.toLocaleString()}</td>
                   <td className="px-6 py-4">
                     {customer.is_locked ? (
@@ -326,22 +330,6 @@ const AdminCustomers = () => {
               );
             }}
           />
-          {hasMore && (
-            <div className="p-4 border-t border-slate-100 dark:border-slate-800 flex justify-center">
-              <Button 
-                variant="secondary" 
-                onClick={() => {
-                  const nextPage = page + 1;
-                  setPage(nextPage);
-                  fetchData(nextPage, debouncedSearch);
-                }}
-                disabled={loading}
-                className="px-8 font-bold uppercase tracking-widest text-xs"
-              >
-                {loading ? 'Processing...' : 'Load More Customers'}
-              </Button>
-            </div>
-          )}
         </Card>
       )}
 

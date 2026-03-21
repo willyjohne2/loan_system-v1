@@ -1,50 +1,24 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import { loanService } from '../api/api';
+import { useAuditLogs, useFinancialAnalytics } from '../hooks/useQueries';
 import { Card, Table, Button } from '../components/ui/Shared';
 import { History, Search, Filter, TrendingUp } from 'lucide-react';
 import { clsx } from 'clsx';
 
 const AdminAuditLogs = () => {
-  const [logs, setLogs] = useState([]);
-  const [dailyAudit, setDailyAudit] = useState([]);
-  const [loading, setLoading] = useState(true);
   const [filterType, setFilterType] = useState('');
-  
   const [page, setPage] = useState(1);
-  const [hasMore, setHasMore] = useState(false);
 
-  const fetchData = async (pageNum = 1, isReset = false) => {
-    setLoading(true);
-    try {
-      const params = { page: pageNum, page_size: 10 };
-      if (filterType) params.type = filterType;
-      
-      const [logsData, analyticsData] = await Promise.all([
-        loanService.getAuditLogs(params),
-        loanService.getFinancialAnalytics()
-      ]);
+  const { data: auditData, isLoading: auditLoading } = useAuditLogs({ page, page_size: 10, type: filterType || undefined });
+  const { data: analyticsData, isLoading: analyticsLoading } = useFinancialAnalytics();
 
-      setHasMore(!!logsData.next);
+  const logs = useMemo(() => auditData?.results || auditData || [], [auditData]);
+  const dailyAudit = useMemo(() => analyticsData?.daily_disbursements || [], [analyticsData]);
+  const hasMore = !!auditData?.next;
+  const loading = (auditLoading && logs.length === 0) || (analyticsLoading && dailyAudit.length === 0);
 
-      if (isReset) {
-        setLogs(logsData.results || logsData || []);
-      } else {
-        setLogs(prev => [...prev, ...(logsData.results || logsData || [])]);
-      }
-      setDailyAudit(analyticsData.daily_disbursements || []);
-    } catch (err) {
-      console.error("Fetch audit data error:", err);
-    } finally {
-      setLoading(false);
-    }
-  };
+  if (loading) return (
 
-  useEffect(() => {
-    setPage(1);
-    fetchData(1, true);
-  }, [filterType]);
-
-  if (loading && logs.length === 0) return (
     <div className="flex items-center justify-center min-h-[400px]">
       <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600"></div>
     </div>

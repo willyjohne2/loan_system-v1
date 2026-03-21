@@ -1,6 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { loanService } from '../api/api';
 import { Card, Button, Input, Badge } from '../components/ui/Shared';
+import { useBranches, useInvalidate } from '../hooks/useQueries';
 import { 
   Building2, 
   Plus, 
@@ -19,8 +20,9 @@ import {
 import { clsx } from 'clsx';
 
 const BranchManagement = () => {
-  const [branches, setBranches] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const { data: branchesData, isLoading: loading } = useBranches();
+  const invalidateBranches = useInvalidate('branches');
+  
   const [searchTerm, setSearchTerm] = useState('');
   const [showModal, setShowModal] = useState(false);
   const [editingBranch, setEditingBranch] = useState(null);
@@ -32,23 +34,10 @@ const BranchManagement = () => {
     is_active: true
   });
 
-  const fetchBranches = async () => {
-    try {
-      setLoading(true);
-      const data = await loanService.getBranches();
-      // data might be wrapped in a pagination object { results: [], count: 0 }
-      setBranches(Array.isArray(data) ? data : (data.results || []));
-    } catch (err) {
-      console.error("Failed to fetch branches", err);
-      setBranches([]);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    fetchBranches();
-  }, []);
+  const branches = useMemo(() => {
+    const data = branchesData?.results || branchesData || [];
+    return Array.isArray(data) ? data : [];
+  }, [branchesData]);
 
   const handleOpenModal = (branch = null) => {
     if (branch) {
@@ -80,7 +69,7 @@ const BranchManagement = () => {
         await loanService.createBranch(formData);
       }
       setShowModal(false);
-      fetchBranches();
+      invalidateBranches();
     } catch (err) {
       alert(err.response?.data?.detail || "Failed to save branch");
     }
@@ -90,7 +79,7 @@ const BranchManagement = () => {
     if (!window.confirm("Are you sure you want to delete this branch? It must not have any associated records.")) return;
     try {
       await loanService.deleteBranch(id);
-      fetchBranches();
+      invalidateBranches();
     } catch (err) {
       alert(err.response?.data?.[0] || "Failed to delete branch");
     }

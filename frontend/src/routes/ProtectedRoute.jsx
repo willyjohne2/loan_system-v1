@@ -14,9 +14,14 @@ export const ProtectedRoute = ({ allowedRoles }) => {
   if (user.god_mode_enabled) return <Outlet />;
 
   if (allowedRoles && !allowedRoles.includes(activeRole)) {
-    if (user.role === 'MANAGER') return <Navigate to="/manager/dashboard" replace />;
-    if (user.role === 'FINANCIAL_OFFICER') return <Navigate to="/finance/overview" replace />;
-    if (user.role === 'FIELD_OFFICER') return <Navigate to="/field/dashboard" replace />;
+    // Determine target based on activeRole first, then fallback to user.role
+    const roleToRedirect = activeRole || user.role;
+    
+    if (roleToRedirect === 'SUPER_ADMIN' || roleToRedirect === 'ADMIN') return <Navigate to="/admin/dashboard" replace />;
+    if (roleToRedirect === 'MANAGER') return <Navigate to="/manager/dashboard" replace />;
+    if (roleToRedirect === 'FINANCIAL_OFFICER') return <Navigate to="/finance/overview" replace />;
+    if (roleToRedirect === 'FIELD_OFFICER') return <Navigate to="/field/dashboard" replace />;
+    
     return <Navigate to="/login" replace />;
   }
 

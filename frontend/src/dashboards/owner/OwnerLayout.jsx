@@ -50,12 +50,14 @@ const settingsLinks = [
   { to: '/owner/settings/sms',      icon: MessageSquare, label: 'SMS' },
   { to: '/owner/settings/system',   icon: Sliders,       label: 'System' },
   { to: '/owner/settings/security', icon: Lock,          label: 'Security' },
+  { to: '/owner/settings/loans',    icon: Sliders,       label: 'Loan Products' },
   { to: '/owner/settings/branches', icon: Building2,     label: 'Branches' },
 ];
 
 const coreLinks = [
     { to: '/owner/dashboard', icon: LayoutDashboard, label: 'Overview' },
     { to: '/owner/audit', icon: History, label: 'Operations Audit' },
+    { to: '/owner/security-threats', icon: ShieldAlert, label: 'Security Threats', threatBadge: true },
     { to: '/owner/security-logs', icon: ShieldAlert, label: 'Security Logs' },
     { to: '/owner/communications', icon: MessageSquare, label: 'Official Comms' },
     { to: '/owner/ownership', icon: Crown, label: 'Ownership' }
@@ -66,6 +68,20 @@ const OwnerLayout = ({ children }) => {
   const { logout, user } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
+
+  const [threatCount, setThreatCount] = useState(0);
+
+  useEffect(() => {
+    const fetch = async () => {
+      try {
+        const res = await loanService.api.get('/security-threats/');
+        setThreatCount(res.data?.summary?.total_threats || 0);
+      } catch (e) {}
+    };
+    fetch();
+    const interval = setInterval(fetch, 60000);
+    return () => clearInterval(interval);
+  }, []);
 
   const handleLogout = () => {
     if (window.confirm('Are you sure you want to sign out?')) {
@@ -117,7 +133,12 @@ const OwnerLayout = ({ children }) => {
                             {({ isActive }) => (
                                 <>
                                     <link.icon className={cn("w-5 h-5", isActive ? "text-white" : "text-slate-400 group-hover:text-indigo-600")} />
-                                    {link.label}
+                                    <span className="flex-1">{link.label}</span>
+                                    {link.threatBadge && threatCount > 0 && (
+                                        <span className="bg-red-500 text-white text-[9px] font-black px-1.5 py-0.5 rounded-full min-w-[18px] text-center">
+                                            {threatCount > 99 ? '99+' : threatCount}
+                                        </span>
+                                    )}
                                 </>
                             )}
                         </NavLink>

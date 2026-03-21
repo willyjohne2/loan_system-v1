@@ -2,7 +2,7 @@ import axios from 'axios';
 
 const api = axios.create({
   baseURL: import.meta.env.VITE_API_URL || 'http://localhost:8000/api',
-  timeout: 15000, // 15 second timeout
+  timeout: 15000,
   headers: {
     'Content-Type': 'application/json',
   },
@@ -10,7 +10,6 @@ const api = axios.create({
 
 api.interceptors.request.use((config) => {
   const savedUser = localStorage.getItem('loan_user');
-  
   if (savedUser) {
     try {
       const parsed = JSON.parse(savedUser);
@@ -18,8 +17,7 @@ api.interceptors.request.use((config) => {
       if (access) {
         config.headers.Authorization = `Bearer ${access}`;
       }
-    } catch (e) {
-    }
+    } catch (e) {}
   }
   return config;
 });
@@ -31,14 +29,12 @@ api.interceptors.response.use(
       return Promise.reject({
         ...error,
         response: {
-          data: { error: 'Request timed out. The server might be waking up, please try again in a few seconds.' }
+          data: { error: 'Request timed out. Please try again.' }
         }
       });
     }
     if (error.response && error.response.status === 401) {
-      console.warn('Unauthorized request! Clearing local storage and redirecting to login...');
       localStorage.removeItem('loan_user');
-      // Only redirect if we're not already on a login page to avoid loops
       if (!window.location.pathname.includes('/login')) {
         window.location.href = '/login';
       }
@@ -47,95 +43,7 @@ api.interceptors.response.use(
   }
 );
 
-export const loanService = {
-  login: async (credentials) => {
-    const res = await api.post('/auth/login/', credentials);
-    return res.data;
-  },
-  verify2FA: async (data) => {
-    const res = await api.post('/auth/2fa/verify/', data);
-    return res.data;
-  },
-  enable2FA: async () => {
-    const res = await api.post('/auth/2fa/enable/');
-    return res.data;
-  },
-  verifyEnable2FA: async (data) => {
-    const res = await api.post('/auth/2fa/verify-enable/', data);
-    return res.data;
-  },
-  disable2FA: async (data) => {
-    const res = await api.post('/auth/2fa/disable/', data);
-    return res.data;
-  },
-  getManagers: async (params) => {
-    const res = await api.get('/admins/', { params: { ...params, role: 'MANAGER' } });
-    return res.data;
-  },
-  updateAdmin: async (id, data) => {
-    const res = await api.patch(`/admins/${id}/`, data);
-    return res.data;
-  },
-  getOfficers: async (params) => {
-    const res = await api.get('/admins/', { params: { ...params, role: 'FIELD_OFFICER' } });
-    return res.data;
-  },
-  getFieldOfficers: async (params) => {
-    const res = await api.get('/admins/', { params: { ...params, role: 'FIELD_OFFICER' } });
-    return res.data;
-  },
-  getFinanceOfficers: async (params) => {
-    const res = await api.get('/admins/', { params: { ...params, role: 'FINANCIAL_OFFICER' } });
-    return res.data;
-  },
-  getLoans: async (params) => {
-    const res = await api.get('/loans/', { params });
-    return res.data;
-  },
-  getLoanProducts: async (params) => {
-    const res = await api.get('/loan-products/', { params });
-    return res.data;
-  },
-  updateLoanProduct: async (id, data) => {
-    const res = await api.patch(`/loan-products/${id}/`, data);
-    return res.data;
-  },
-  updateLoan: async (id, data) => {
-    const res = await api.patch(`/loans/${id}/`, data);
-    return res.data;
-  },
-  getCustomers: async (params) => {
-    const res = await api.get('/users/', { params });
-    return res.data;
-  },
-  getAuditLogs: async (params) => {
-    const res = await api.get('/audit-logs/', { params });
-    return res.data;
-  },
-  updateCustomer: async (id, data) => {
-    const res = await api.patch(`/users/${id}/`, data);
-    return res.data;
-  },
-  deleteCustomer: async (id) => {
-    const res = await api.delete(`/users/${id}/`);
-    return res.data;
-  },
-  getRepayments: async () => {
-    const res = await api.get('/repayments/');
-    return res.data;
-  },
-  createRepayment: async (data) => {
-    const res = await api.post('/repayments/', data);
-    return res.data;
-  },
-  initiateMpesaRepayment: async (data) => {
-    const res = await api.post('/payments/mpesa/', data);
-    return res.data;
-  },
-  getAuditLogs: async (params = {}) => {
-    const res = await api.get('/audit-logs/', { params });
-    return res.data;
-  },
+export const branchService = {
   getBranches: async (params = {}) => {
     const res = await api.get('/branches/', { params });
     return res.data;
@@ -151,53 +59,37 @@ export const loanService = {
   deleteBranch: async (id) => {
     const res = await api.delete(`/branches/${id}/`);
     return res.data;
+  }
+};
+
+export const loanService = {
+  api: api,
+  login: async (credentials) => {
+    const res = await api.post('/auth/login/', credentials);
+    return res.data;
+  },
+  verify2FA: async (data) => {
+    const res = await api.post('/auth/2fa/verify/', data);
+    return res.data;
+  },
+  getLoans: async (params = {}) => {
+    const res = await api.get('/loans/', { params: { limit: 20, ...params } });
+    return res.data;
+  },
+  getCustomers: async (params = {}) => {
+    const res = await api.get('/users/', { params: { limit: 20, ...params } });
+    return res.data;
+  },
+  getRepayments: async (params = {}) => {
+    const res = await api.get('/repayments/', { params: { limit: 20, ...params } });
+    return res.data;
   },
   getFinancialAnalytics: async () => {
     const res = await api.get('/finance/analytics/');
     return res.data;
   },
-  sendDirectSMS: async (data) => {
-    const res = await api.post('/loans/direct-sms/', data);
-    return res.data;
-  },
-  sendEmailNotification: async (data) => {
-    const res = await api.post('/notifications/send-email/', data);
-    return res.data;
-  },
-  getDeactivationRequests: async () => {
-    const res = await api.get('/deactivation-requests/');
-    return res.data;
-  },
-  createDeactivationRequest: async (data) => {
-    const res = await api.post('/deactivation-requests/', data);
-    return res.data;
-  },
-  updateDeactivationRequest: async (id, data) => {
-    const res = await api.patch(`/deactivation-requests/${id}/`, data);
-    return res.data;
-  },
-  getLoanProducts: async () => {
-    const res = await api.get('/loan-products/');
-    return res.data;
-  },
-  getAdminProfile: async (id) => {
-    const res = await api.get(`/admins/${id}/`);
-    return res.data;
-  },
-  getAllAdmins: async () => {
-    const res = await api.get('/admins/');
-    return res.data;
-  },
   getSettings: async () => {
     const res = await api.get('/settings/');
-    return res.data;
-  },
-  inviteAdmin: async (data) => {
-    const res = await api.post('/admins/invite/', data);
-    return res.data;
-  },
-  updateSettings: async (settings) => {
-    const res = await api.post('/settings/', settings);
     return res.data;
   },
   getSecureSettings: async (group = '') => {
@@ -213,35 +105,95 @@ export const loanService = {
     return res.data;
   },
   scheduleMaintenance: async (data) => {
-    // We send time and active status as secure settings
-    await api.post('/settings/secure/', { 
-      key: 'maintenance_schedule_time', 
-      encrypted_value: data.time, 
-      setting_group: 'SECURITY' 
-    });
-    const res = await api.post('/settings/secure/', { 
-      key: 'maintenance_mode_active', 
-      encrypted_value: data.active ? 'true' : 'false', 
-      setting_group: 'SECURITY' 
-    });
+    await api.post('/settings/secure/', { key: 'maintenance_schedule_time', encrypted_value: data.time, setting_group: 'SECURITY' });
+    const res = await api.post('/settings/secure/', { key: 'maintenance_mode_active', encrypted_value: data.active ? 'true' : 'false', setting_group: 'SECURITY' });
     return res.data;
   },
-  testMpesaConnection: async () => {
-    const res = await api.post('/settings/test-mpesa/');
+  getSecurityLogs: async (params = {}) => {
+    const res = await api.get('/security-logs/', { params });
     return res.data;
   },
-  testSMSSend: async (phone, message) => {
-    const res = await api.post('/settings/test-sms/', { phone, message });
+  getAuditLogs: async (params = {}) => {
+    const res = await api.get('/owner-audit/', { params });
     return res.data;
   },
-  register: async (full_name, email, phone, role, password, invitation_token = null, branch = null) => {
-    const res = await api.post('/auth/register/', { 
-      full_name, 
-      email, 
-      phone, 
-      role, 
+  getOwnerAuditLogs: async (params = {}) => {
+    const res = await api.get('/owner-audit/', { params });
+    return res.data;
+  },
+  getEmailLogs: async (params = {}) => {
+    const res = await api.get('/notifications/email-logs/', { params });
+    return res.data;
+  },
+  getOwnership: async () => {
+    const res = await api.get('/ownership/');
+    return res.data;
+  },
+  getAllAdmins: async () => {
+    const res = await api.get('/admins/');
+    return res.data;
+  },
+  getManagers: async (params = {}) => {
+    const res = await api.get('/admins/', { params: { ...params, role: 'ADMIN' } });
+    return res.data;
+  },
+  getFinanceOfficers: async (params = {}) => {
+    const res = await api.get('/admins/', { params: { ...params, role: 'FINANCIAL_OFFICER' } });
+    return res.data;
+  },
+  getFieldOfficers: async (params = {}) => {
+    const res = await api.get('/admins/', { params: { ...params, role: 'FIELD_OFFICER' } });
+    return res.data;
+  },
+  updateAdmin: async (id, data) => {
+    const res = await api.patch(`/admins/${id}/`, data);
+    return res.data;
+  },
+  getAdminProfile: async (id) => {
+    const res = await api.get(`/admins/${id}/`);
+    return res.data;
+  },
+  getAnalytics: async (branch = '') => {
+    const res = await api.get('/finance/analytics/', { params: { branch } });
+    return res.data;
+  },
+  updateLoan: async (id, data) => {
+    const res = await api.patch(`/loans/${id}/`, data);
+    return res.data;
+  },
+  inviteAdmin: async (data) => {
+    const res = await api.post('/admins/invite/', data);
+    return res.data;
+  },
+  // Loan Products
+  getLoanProducts: async () => {
+    const res = await api.get('/loan-products/');
+    return res.data;
+  },
+  createLoanProduct: async (data) => {
+    const res = await api.post('/loan-products/', data);
+    return res.data;
+  },
+  updateLoanProduct: async (id, data) => {
+    const res = await api.patch(`/loan-products/${id}/`, data);
+    return res.data;
+  },
+  deleteLoanProduct: async (id) => {
+    const res = await api.delete(`/loan-products/${id}/`);
+    return res.data;
+  },
+  getSMSLogs: async (params = {}) => {
+    const res = await api.get('/sms-logs/', { params });
+    return res.data;
+  },
+  register: async (fullName, email, phone, role, password, token, branch) => {
+    const res = await api.post('/auth/register/', {
+      full_name: fullName,
+      email,
+      phone,
+      role,
       password,
-      invitation_token,
+      invitation_token: token,
       branch
     });
     return res.data;
@@ -250,47 +202,25 @@ export const loanService = {
     const res = await api.post('/auth/verify-email/', { email, code });
     return res.data;
   },
-  deleteAdmin: async (admin_id) => {
-    const res = await api.delete(`/admins/${admin_id}/delete/`);
+  createDeactivationRequest: async (data) => {
+    const res = await api.post('/deactivation-requests/', data);
     return res.data;
   },
-  sendBulkSMS: async (type = 'DEFAULTERS', message = '') => {
-    const res = await api.post('/loans/bulk-sms-defaulters/', { type, message });
+  sendEmailNotification: async (data) => {
+    const res = await api.post('/notifications/send-email/', data);
     return res.data;
   },
-  getSMSLogs: async (params) => {
-    const res = await api.get('/sms-logs/', { params });
+  sendBulkSMS: async (data) => {
+    const res = await api.post('/loans/bulk-sms-defaulters/', data);
     return res.data;
   },
-  getOwnership: async () => {
-    const res = await api.get('/ownership/');
+  sendDirectSMS: async (data) => {
+    const res = await api.post('/loans/direct-sms/', data);
     return res.data;
   },
-  grantOwnership: async (data) => {
-    const res = await api.post('/ownership/grant/', data);
-    return res.data;
-  },
-  relinquishOwnership: async (data) => {
-    const res = await api.post('/ownership/relinquish/', data);
-    return res.data;
-  },
-  handoverOwnership: async (data) => {
-    const res = await api.post('/ownership/handover/', data);
-    return res.data;
-  },
-  getOwnerAuditLogs: async (params) => {
-    const res = await api.get('/owner-audit/', { params });
-    return res.data;
-  },
-  getEmailLogs: async (params) => {
-    const res = await api.get('/notifications/email-logs/', { params });
-    return res.data;
-  },
-  getAnalytics: async (branch = '') => {
-    const res = await api.get(`/loans/analytics/?branch=${branch}`);
-    return res.data;
-  },
-  api // Export raw axios instance for custom calls
+  // Mapping branch methods into loanService for backward compatibility with old components
+  getBranches: branchService.getBranches,
+  createBranch: branchService.createBranch,
+  updateBranch: branchService.updateBranch,
+  deleteBranch: branchService.deleteBranch
 };
-
-export default api;

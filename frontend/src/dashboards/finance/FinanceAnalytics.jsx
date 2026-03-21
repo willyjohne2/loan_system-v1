@@ -1,41 +1,22 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { 
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, 
   BarChart, Bar, PieChart, Pie, Cell, Legend
 } from 'recharts';
 import { Card } from '../../components/ui/Shared';
+import { useFinancialAnalytics } from '../../hooks/useQueries';
 import { loanService } from '../../api/api';
 import toast from 'react-hot-toast';
 
 const FinanceAnalytics = () => {
-  const [loading, setLoading] = useState(true);
-  const [data, setData] = useState({
-    history: [],
-    weekly_disbursed: [],
-    weekly_repaid: [],
-    product_distribution: []
-  });
-
-  const fetchData = async () => {
-    setLoading(true);
-    try {
-      const analytics = await loanService.getFinancialAnalytics();
-      setData({
-        history: analytics.history || [],
-        weekly_disbursed: analytics.weekly_disbursed || [],
-        weekly_repaid: analytics.weekly_repaid || [],
-        product_distribution: analytics.product_distribution || []
-      });
-    } catch (err) {
-      toast.error('Failed to load portfolio analytics');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    fetchData();
-  }, []);
+  const { data: analyticsData, isLoading: loading } = useFinancialAnalytics();
+  
+  const data = useMemo(() => ({
+    history: analyticsData?.history || [],
+    weekly_disbursed: analyticsData?.weekly_disbursed || [],
+    weekly_repaid: analyticsData?.weekly_repaid || [],
+    product_distribution: analyticsData?.product_distribution || []
+  }), [analyticsData]);
 
   const PRODUCT_COLORS = {
     'Inuka': '#4f46e5',

@@ -12,6 +12,15 @@ const BulkInviteModal = ({ isOpen, onClose, defaultRole = 'FIELD_OFFICER', branc
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
+  // Static branch list with IDs for backend consistency
+  const systemBranches = [
+    { id: 'f965b38f-ae4f-44ee-8bc8-2e041b598a85', name: 'Kagio' },
+    { id: 'b1c20872-d391-4f97-a18b-e53be5dfc6b4', name: 'Sagana' },
+    { id: '5fa5be1b-ec4c-4d22-8af5-772cdbbf75f2', name: 'Embu' },
+    { id: '252a543e-6621-41a9-a975-5cfb58cd096c', name: 'Naivasha' },
+    { id: 'f9066564-55fe-4e7c-81f6-d58fe48006dc', name: 'Thika' }
+  ];
+
   // Sync role state with prop when modal opens/changes
   React.useEffect(() => {
     if (isOpen) {
@@ -53,12 +62,17 @@ const BulkInviteModal = ({ isOpen, onClose, defaultRole = 'FIELD_OFFICER', branc
       return;
     }
 
+    if (role === 'FIELD_OFFICER' && user?.role !== 'MANAGER' && !branch) {
+      setError('Please select a branch for the Field Officer(s).');
+      return;
+    }
+
     setLoading(true);
     try {
       await loanService.inviteAdmin({
         emails: validEmails,
         role,
-        branch: role === 'MANAGER' ? branch : null
+        branch: (role === 'MANAGER' || (role === 'FIELD_OFFICER' && user?.role !== 'MANAGER')) ? branch : null
       });
       alert('Invitations sent successfully!');
       onClose();
@@ -111,7 +125,7 @@ const BulkInviteModal = ({ isOpen, onClose, defaultRole = 'FIELD_OFFICER', branc
               </select>
             </div>
 
-            {role === 'MANAGER' && (
+            {(role === 'MANAGER' || (role === 'FIELD_OFFICER' && user?.role !== 'MANAGER')) && (
               <div className="space-y-1">
                 <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Branch</label>
                 <select 
@@ -121,7 +135,7 @@ const BulkInviteModal = ({ isOpen, onClose, defaultRole = 'FIELD_OFFICER', branc
                   required
                 >
                   <option value="">Select...</option>
-                  {branches.map(b => <option key={b} value={b}>{b}</option>)}
+                  {systemBranches.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
                 </select>
               </div>
             )}

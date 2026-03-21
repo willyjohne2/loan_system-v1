@@ -128,7 +128,10 @@ class EmailLogSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = EmailLog
-        fields = "__all__"
+        fields = [
+            'id', 'sender', 'sender_name', 'recipient_email', 'recipient_name',
+            'subject', 'message', 'status', 'created_at'
+        ]
 
 
 class AdminSerializer(serializers.ModelSerializer):
@@ -157,6 +160,30 @@ class AdminSerializer(serializers.ModelSerializer):
             "created_at",
             "ownership_granted_by_name",
         ]
+        read_only_fields = ["is_owner", "is_primary_owner", "is_verified", "created_at"]
+
+    def validate(self, data):
+        request = self.context.get("request")
+        if not request or not request.user.is_authenticated:
+            return data
+            
+        user = request.user
+        instance = self.instance
+        
+        # Only owners or super admins can change god_mode_enabled or is_super_admin
+        restricted_fields = ["god_mode_enabled", "is_super_admin", "is_blocked"]
+        
+        for field in restricted_fields:
+            if field in data and data[field] != getattr(instance, field, None):
+                # Super Admin cannot toggle God Mode for themselves or others
+                # ONLY an Owner or someone who already has God Mode (if that's the logic)
+                # But typically only the Owner should manage God Mode/Super Admins
+                if not (user.is_owner or user.role == "OWNER" or getattr(user, 'god_mode_enabled', False)):
+                    raise serializers.ValidationError({
+                        field: "Only the system owner or a god-mode administrator can modify this field."
+                    })
+                    
+        return data
 
     def get_ownership_granted_by_name(self, obj):
         return obj.ownership_granted_by.full_name if obj.ownership_granted_by else None

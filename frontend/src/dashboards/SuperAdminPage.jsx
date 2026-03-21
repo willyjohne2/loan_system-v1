@@ -1,61 +1,29 @@
-import React, { useState, useEffect } from 'react';
-import axios from 'axios';
-import { ShieldCheck, Zap, AlertCircle, Ban, ArrowDown, UserMinus, UserPlus, X, Mail, RefreshCw } from 'lucide-react';
+import React, { useState, useEffect, useMemo } from 'react';
+import { ShieldCheck, Zap, Ban, UserPlus, X, Mail, RefreshCw, ShieldAlert, UserMinus, ToggleLeft, ToggleRight } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { toast } from 'react-hot-toast';
 import { loanService } from '../api/api';
+import { useAdmins, useInvalidate } from '../hooks/useQueries';
+import BulkInviteModal from '../components/forms/BulkInviteModal';
 
 const SuperAdminPage = () => {
-  const { user } = useAuth();
-  const [admins, setAdmins] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const { user, activeRole } = useAuth();
+  const { invalidateAdmins } = useInvalidate();
+
+  // Consider as owner if role is OWNER or is_owner flag is true
+  const isOwner = user?.role === 'OWNER' || user?.is_owner === true || activeRole === 'OWNER';
 
   // Invitation state
   const [showInviteModal, setShowInviteModal] = useState(false);
-  const [inviteRole, setInviteRole] = useState('SUPER_ADMIN');
-  const [inviteEmail, setInviteEmail] = useState('');
-  const [inviteFullName, setInviteFullName] = useState('');
-  const [inviteLoading, setInviteLoading] = useState(false);
 
-  const handleInvite = async () => {
-    if (!inviteEmail || !inviteFullName) {
-      toast.error('Please fill in name and email');
-      return;
-    }
-    setInviteLoading(true);
-    try {
-      await loanService.api.post('/invitations/', {
-        email: inviteEmail,
-        full_name: inviteFullName,
-        role: inviteRole,
-      });
-      toast.success(`Invitation sent to ${inviteEmail}`);
-      setShowInviteModal(false);
-      setInviteEmail('');
-      setInviteFullName('');
-    } catch (err) {
-      toast.error(err.response?.data?.error || 'Failed to send invitation');
-    } finally {
-      setInviteLoading(false);
-    }
-  };
-
-  const fetchAdmins = async () => {
-    try {
-      const res = await loanService.api.get('/admins/?role=ADMIN');
-      // Handle paginated responses
-      const data = res.data.results || res.data;
-      setAdmins(Array.isArray(data) ? data : []);
-    } catch (err) {
-      toast.error("Failed to load super admins");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    fetchAdmins();
-  }, []);
+  const { data: adminsData, isLoading: loading } = useAdmins();
+  
+  const admins = useMemo(() => {
+    const data = adminsData?.results || adminsData || [];
+    return Array.isArray(data) 
+      ? data.filter(a => a.role === 'SUPER_ADMIN' && !a.is_owner)
+      : [];
+  }, [adminsData]);
 
   const handleSuspend = async (admin) => {
     const reason = window.prompt(`Reason for suspending ${admin.full_name}:`);
@@ -63,7 +31,7 @@ const SuperAdminPage = () => {
     try {
       await loanService.api.post(`/admins/${admin.id}/suspend/`, { reason });
       toast.success("Admin suspended");
-      fetchAdmins();
+      invalidateAdmins();
     } catch (err) {
       toast.error(err.response?.data?.error || "Action failed");
     }
@@ -73,20 +41,34 @@ const SuperAdminPage = () => {
     try {
       await loanService.api.post(`/admins/${admin.id}/unsuspend/`);
       toast.success("Admin unsuspended");
-      fetchAdmins();
+      invalidateAdmins();
     } catch (err) {
       toast.error(err.response?.data?.error || "Action failed");
     }
   };
 
+  const toggleGodMode = async (admin) => {
+    if (!isOwner) return;
+    try {
+      await loanService.api.patch(`/admins/${admin.id}/`, { 
+        god_mode_enabled: !admin.god_mode_enabled 
+      });
+      toast.success(`God Mode ${!admin.god_mode_enabled ? 'enabled' : 'disabled'} for ${admin.full_name}`);
+      invalidateAdmins();
+    } catch (err) {
+      toast.error("Failed to update God Mode");
+    }
+  };
+
+
   return (
     <div className="space-y-6">
       {/* Invite buttons — Owner only */}
-      {user?.is_owner && (
+      {isOwner && (
         <div className="flex flex-col sm:flex-row gap-3 mb-6">
           <button
-            onClick={() => { setInviteRole('SUPER_ADMIN'); setShowInviteModal(true); }}
-            className="flex items-center gap-2 px-4 py-2.5 bg-purple-600 hover:bg-purple-700 text-white text-sm font-bold rounded-lg transition-colors"
+            onClick={() => { setShowInviteModal(true); }}
+            className="flex items-center gap-2 px-4 py-2.5 bg-purple-600 hover:bg-purple-700 text-white text-sm font-bold rounded-lg transition-colors shadow-sm"
           >
             <UserPlus className="w-4 h-4" />
             Invite Super Admin
@@ -95,154 +77,109 @@ const SuperAdminPage = () => {
       )}
 
       {/* Invite Modal */}
-      {showInviteModal && (
-        <div className="fixed inset-0 bg-slate-900/50 z-50 flex items-center justify-center p-4">
-          <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl w-full max-w-md p-6">
-            <div className="flex items-center justify-between mb-6">
-              <div>
-                <h3 className="text-lg font-bold text-slate-900 dark:text-white">
-                  Invite {inviteRole === 'SUPER_ADMIN' ? 'Super Admin' : 'Admin'}
-                </h3>
-                <p className="text-xs text-slate-500 mt-1">They will receive an email with a signup link</p>
-              </div>
-              <button
-                onClick={() => setShowInviteModal(false)}
-                className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg"
-              >
-                <X className="w-4 h-4 text-slate-500" />
-              </button>
-            </div>
-            <div className="space-y-4">
-              <div>
-                <label className="text-sm font-medium text-slate-700 dark:text-slate-300 block mb-1">Full Name</label>
-                <input
-                  type="text"
-                  value={inviteFullName}
-                  onChange={(e) => setInviteFullName(e.target.value)}
-                  placeholder="John Doe"
-                  className="w-full px-3 py-2 border border-slate-200 dark:border-slate-700 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-purple-500 dark:bg-slate-800"
-                />
-              </div>
-              <div>
-                <label className="text-sm font-medium text-slate-700 dark:text-slate-300 block mb-1">Email Address</label>
-                <input
-                  type="email"
-                  value={inviteEmail}
-                  onChange={(e) => setInviteEmail(e.target.value)}
-                  placeholder="john@example.com"
-                  className="w-full px-3 py-2 border border-slate-200 dark:border-slate-700 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-purple-500 dark:bg-slate-800"
-                />
-              </div>
-              <div className="p-3 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 rounded-lg">
-                <p className="text-xs text-amber-700 dark:text-amber-400">
-                  {inviteRole === 'SUPER_ADMIN'
-                    ? 'Super Admins can manage M-Pesa settings, SMS, and all staff below Admin level.'
-                    : 'Admins can manage customers, loans, managers, and branches.'}
-                </p>
-              </div>
-              <div className="flex gap-3 pt-2">
-                <button
-                  onClick={handleInvite}
-                  disabled={inviteLoading}
-                  className="flex-1 flex items-center justify-center gap-2 py-2.5 bg-purple-600 hover:bg-purple-700 disabled:bg-purple-300 text-white text-sm font-bold rounded-lg transition-colors"
-                >
-                  {inviteLoading
-                    ? <RefreshCw className="w-4 h-4 animate-spin" />
-                    : <Mail className="w-4 h-4" />}
-                  {inviteLoading ? 'Sending...' : 'Send Invitation'}
-                </button>
-                <button
-                  onClick={() => setShowInviteModal(false)}
-                  className="px-4 py-2.5 border border-slate-200 text-slate-600 text-sm font-medium rounded-lg hover:bg-slate-50 transition-colors"
-                >
-                  Cancel
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
+      <BulkInviteModal 
+        isOpen={showInviteModal}
+        onClose={() => setShowInviteModal(false)}
+        defaultRole="SUPER_ADMIN"
+      />
 
       <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 overflow-hidden shadow-sm">
-        <div className="p-6 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between bg-slate-50/50 dark:bg-slate-800/50">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-purple-100 dark:bg-purple-900/30 flex items-center justify-center text-purple-600 dark:text-purple-400">
-              <ShieldCheck className="w-6 h-6" />
-            </div>
-            <div>
-              <h2 className="text-lg font-bold text-slate-900 dark:text-white">System Admins</h2>
-              <p className="text-xs text-slate-500 font-medium">Core staff management</p>
-            </div>
+        <div className="p-6 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
+          <div className="flex items-center gap-4">
+            <ShieldCheck className="w-8 h-8 text-purple-600" />
+            <h2 className="text-xl font-bold dark:text-white">System Administrators</h2>
           </div>
+          <button onClick={() => invalidateAdmins()} className="p-2 hover:bg-slate-100 rounded-lg">
+            <RefreshCw className={`w-5 h-5 ${loading ? 'animate-spin' : ''}`} />
+          </button>
         </div>
 
-        <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead>
-              <tr className="bg-slate-50 dark:bg-slate-800/50 text-left border-b border-slate-200 dark:border-slate-800">
-                <th className="px-6 py-4 text-[10px] font-black text-slate-500 uppercase tracking-widest">Administrator</th>
-                <th className="px-6 py-4 text-[10px] font-black text-slate-500 uppercase tracking-widest">Branch</th>
-                <th className="px-6 py-4 text-[10px] font-black text-slate-500 uppercase tracking-widest">Status</th>
-                <th className="px-6 py-4 text-[10px] font-black text-slate-500 uppercase tracking-widest text-right">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-              {loading ? (
-                <tr><td colSpan="4" className="p-12 text-center text-slate-400 animate-pulse">Scanning records...</td></tr>
-              ) : admins.length === 0 ? (
-                <tr><td colSpan="4" className="p-12 text-center text-slate-400">No administrators found</td></tr>
-              ) : admins.map(admin => (
-                <tr key={admin.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition-colors">
-                  <td className="px-6 py-4">
-                    <div className="flex items-center gap-3">
-                      <div className="w-9 h-9 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-600 dark:text-slate-400 font-bold text-xs">
-                        {admin.full_name?.charAt(0)}
-                      </div>
-                      <div>
-                        <p className="text-sm font-bold text-slate-900 dark:text-white">{admin.full_name}</p>
-                        <p className="text-[10px] text-slate-400 font-medium">{admin.email}</p>
-                      </div>
-                    </div>
-                  </td>
-                  <td className="px-6 py-4">
-                    <span className="text-xs font-bold text-slate-600 dark:text-slate-400 bg-slate-100 dark:bg-slate-800 px-2 py-1 rounded">
-                      {admin.branch_details?.name || 'Central Board'}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4">
-                    {admin.is_active ? (
-                      <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-full text-[10px] font-black bg-emerald-100 text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-400 uppercase">
-                        <Zap className="w-3 h-3 fill-current" /> Active
-                      </span>
-                    ) : (
-                      <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-full text-[10px] font-black bg-red-100 text-red-700 dark:bg-red-900/20 dark:text-red-400 uppercase">
-                        <Ban className="w-3 h-3 fill-current" /> Suspended
-                      </span>
-                    )}
-                  </td>
-                  <td className="px-6 py-4 text-right">
-                    <div className="flex items-center justify-end gap-2">
-                      {admin.is_active ? (
-                        <button 
-                          onClick={() => handleSuspend(admin)}
-                          className="p-2 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors border border-transparent hover:border-red-100"
-                        >
-                          <UserMinus className="w-4 h-4" />
-                        </button>
-                      ) : (
-                        <button 
-                          onClick={() => handleUnsuspend(admin)}
-                          className="p-2 text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-900/20 rounded-lg transition-colors border border-transparent hover:border-emerald-100"
-                        >
-                          <Zap className="w-4 h-4" />
-                        </button>
-                      )}
-                    </div>
-                  </td>
+        <div className="overflow-x-auto text-sm">
+          {loading ? (
+            <div className="p-12 text-center text-slate-400 font-medium italic">Loading system officials...</div>
+          ) : admins.length === 0 ? (
+            <div className="p-16 text-center">
+              <div className="w-16 h-16 bg-slate-100 dark:bg-slate-800 rounded-full flex items-center justify-center mx-auto mb-4">
+                <ShieldAlert className="w-8 h-8 text-slate-400" />
+              </div>
+              <p className="text-slate-500 dark:text-slate-400 font-bold">No officials registered yet.</p>
+              <p className="text-xs text-slate-400 mt-1 mb-6">Start by inviting a Super Admin to manage the system.</p>
+              {isOwner && (
+                <button
+                  onClick={() => { setShowInviteModal(true); }}
+                  className="inline-flex items-center gap-2 px-5 py-2.5 bg-purple-600 hover:bg-purple-700 text-white text-sm font-bold rounded-xl transition-all shadow-md active:scale-95"
+                >
+                  <UserPlus className="w-4 h-4" />
+                  Invite Your First Super Admin
+                </button>
+              )}
+            </div>
+          ) : (
+            <table className="w-full">
+              <thead className="bg-slate-50 dark:bg-slate-800/50">
+                <tr className="text-left border-b dark:border-slate-800">
+                  <th className="px-6 py-4">Administrator</th>
+                  <th className="px-6 py-4">Role</th>
+                  <th className="px-6 py-4">Status</th>
+                  {isOwner && <th className="px-6 py-4 text-center">God Mode</th>}
+                  <th className="px-6 py-4 text-right">Actions</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody className="divide-y dark:divide-slate-800">
+                {admins.map(admin => (
+                  <tr key={admin.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/20">
+                    <td className="px-6 py-4 font-medium dark:text-white">{admin.full_name}<br/><span className="text-xs text-slate-500">{admin.email}</span></td>
+                    <td className="px-6 py-4">
+                      <div className="flex flex-col gap-1">
+                        <span className="px-2 py-1 rounded-md text-[10px] bg-slate-100 dark:bg-slate-800 font-bold w-fit">{admin.role}</span>
+                        {admin.god_mode_enabled && (
+                          <span className="flex items-center gap-1 px-1.5 py-0.5 bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-400 rounded text-[9px] font-black uppercase tracking-tighter w-fit">
+                            <ShieldAlert className="w-2.5 h-2.5" /> God Mode
+                          </span>
+                        )}
+                      </div>
+                    </td>
+                    <td className="px-6 py-4">
+                      {admin.suspended_at ? (
+                        <span className="inline-flex items-center gap-1 text-rose-600 bg-rose-50 dark:bg-rose-900/10 px-2 py-1 rounded font-bold text-[10px] uppercase">
+                          <Ban className="w-3 h-3" /> Suspended
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1 text-emerald-600 bg-emerald-50 dark:bg-emerald-900/10 px-2 py-1 rounded font-bold text-[10px] uppercase">
+                          <Zap className="w-3 h-3" /> Active
+                        </span>
+                      )}
+                    </td>
+                    {isOwner && (
+                      <td className="px-6 py-4 text-center">
+                        <button 
+                          onClick={() => toggleGodMode(admin)}
+                          className={`p-1.5 rounded-lg transition-all ${admin.god_mode_enabled ? 'text-purple-600 bg-purple-50 dark:bg-purple-900/20' : 'text-slate-400 hover:bg-slate-100'}`}
+                        >
+                          {admin.god_mode_enabled ? <ToggleRight className="w-6 h-6" /> : <ToggleLeft className="w-6 h-6" />}
+                        </button>
+                      </td>
+                    )}
+                    <td className="px-6 py-4 text-right">
+                      {isOwner && admin.role !== 'OWNER' && (
+                        <div className="flex justify-end gap-2">
+                          {admin.suspended_at ? (
+                            <button onClick={() => handleUnsuspend(admin)} className="p-2 text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors border border-emerald-100">
+                              <Zap className="w-4 h-4" />
+                            </button>
+                          ) : (
+                            <button onClick={() => handleSuspend(admin)} className="p-2 text-rose-600 hover:bg-rose-50 rounded-lg transition-colors border border-rose-100">
+                              <UserMinus className="w-4 h-4" />
+                            </button>
+                          )}
+                        </div>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
         </div>
       </div>
     </div>

@@ -2,32 +2,18 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { Search, MapPin, Calendar, FileText } from 'lucide-react';
 import { Card, Table, Input } from '../../components/ui/Shared';
 import { loanService } from '../../api/api';
+import { useRepayments } from '../../hooks/useQueries';
 import toast from 'react-hot-toast';
 
 const FinanceLedger = () => {
-  const [repayments, setRepayments] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const { data: repaymentsData, isLoading: loading } = useRepayments({ page_size: 1000 });
+  const repayments = useMemo(() => repaymentsData?.results || repaymentsData || [], [repaymentsData]);
+
   const [filters, setFilters] = useState({
     startDate: '',
     endDate: '',
     branch: 'All Branches'
   });
-
-  const fetchRepayments = async () => {
-    setLoading(true);
-    try {
-      const data = await loanService.getRepayments();
-      setRepayments(Array.isArray(data) ? data : (data?.results || []));
-    } catch (err) {
-      toast.error('Failed to fetch repayment history');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    fetchRepayments();
-  }, []);
 
   const branches = useMemo(() => {
     if (!Array.isArray(repayments)) return ['All Branches'];

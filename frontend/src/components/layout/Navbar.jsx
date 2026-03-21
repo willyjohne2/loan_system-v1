@@ -27,7 +27,7 @@ const Navbar = ({ title, onMenuClick, isSidebarOpen }) => {
     try {
       const endpoint = user?.is_owner 
         ? '/owner-notifications/' 
-        : user?.role === 'SUPER_ADMIN' || user?.role === 'ADMIN'
+        : user?.is_super_admin
           ? '/security-logs/'
           : '/notifications/';
       const response = await loanService.api.get(endpoint);
@@ -119,7 +119,7 @@ const Navbar = ({ title, onMenuClick, isSidebarOpen }) => {
             <div className="absolute right-0 mt-2 w-72 md:w-80 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-xl z-30 transition-all">
               <div className="p-4 border-b border-slate-100 dark:border-slate-700 flex justify-between items-center">
                 <h4 className="font-bold text-sm">
-                    {user?.is_owner ? 'Owner Activity' : user?.role === 'ADMIN' ? 'Security Alerts' : 'Notifications'}
+                    {user?.is_owner ? 'Owner Activity' : user?.is_super_admin ? 'Security Alerts' : 'Notifications'}
                 </h4>
                 <span className="text-[10px] bg-primary-100 text-primary-600 px-2 py-1 rounded-full font-bold">
                   {notifications.filter(n => !n.is_read).length} NEW

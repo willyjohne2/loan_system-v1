@@ -450,6 +450,7 @@ class EmailLog(models.Model):
     subject = models.CharField(max_length=255)
     message = models.TextField()
     status = models.CharField(max_length=20, default="SENT")
+    error_details = models.TextField(blank=True, null=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:

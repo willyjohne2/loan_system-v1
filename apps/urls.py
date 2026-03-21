@@ -20,7 +20,7 @@ from .views import (
     AdminSuspendView,
     AdminUnsuspendView,
     AdminRevokeView,
-    CapitalBalanceView,
+    SystemCapitalBalanceView as CapitalBalanceView,
     RegisterAdminView,
     VerifyEmailView,
     RequestPasswordResetView,
@@ -65,6 +65,7 @@ from .views import (
     OwnershipGrantView,
     OwnershipRelinquishView,
     OwnershipHandoverView,
+    SecurityThreatsView,
 )
 
 urlpatterns = [
@@ -124,6 +125,7 @@ urlpatterns = [
         "finance/analytics/", FinanceAnalyticsView.as_view(), name="finance-analytics"
     ),
     path("auth/login/", LoginView.as_view(), name="login"),
+    path("security-threats/", SecurityThreatsView.as_view(), name="security-threats"),
     path("auth/register/", RegisterAdminView.as_view(), name="register"),
     path("auth/verify-email/", VerifyEmailView.as_view(), name="verify-email"),
     path(

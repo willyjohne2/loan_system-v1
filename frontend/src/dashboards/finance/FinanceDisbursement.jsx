@@ -1,64 +1,75 @@
-import React, { useState, useEffect, useMemo } from 'react';
-import { Send, MapPin, Search, CheckCircle2, AlertTriangle, X } from 'lucide-react';
-import { Card, Table, Button, Input } from '../../components/ui/Shared';
+import React, { useState, useMemo } from 'react';
+import { Send, MapPin, Search, CheckCircle2, AlertTriangle, X, Clock, Wallet, Phone } from 'lucide-react';
+import { Card, Table, Button, Input, StatCard } from '../../components/ui/Shared';
 import { loanService } from '../../api/api';
 import toast from 'react-hot-toast';
+import { useLoans, useInvalidate } from '../../hooks/useQueries';
+import { format } from 'date-fns';
 
 const FinanceDisbursement = () => {
-  const [loans, setLoans] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const { data: loansData, isLoading: loading } = useLoans({ status: 'APPROVED' });
+  const { invalidateLoans, invalidateCapital } = useInvalidate();
+  const loans = useMemo(() => loansData?.results || loansData || [], [loansData]);
+
   const [disbursing, setDisbursing] = useState(false);
   const [selectedBranch, setSelectedBranch] = useState('All Branches');
+  const [search, setSearch] = useState('');
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [currentLoan, setCurrentLoan] = useState(null);
   const [disburseNote, setDisburseNote] = useState('');
   const [mpesaNumber, setMpesaNumber] = useState('');
-
-  const fetchApprovedLoans = async () => {
-    setLoading(true);
-    try {
-      const data = await loanService.getLoans({ status: 'APPROVED', ordering: 'updated_at' });
-      const results = Array.isArray(data) ? data : (data?.results || []);
-      // Sort oldest first
-      const sorted = [...results].sort((a, b) => new Date(a.updated_at) - new Date(b.updated_at));
-      setLoans(sorted);
-    } catch (err) {
-      toast.error('Failed to fetch approval queue');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    fetchApprovedLoans();
-  }, []);
 
   const branches = useMemo(() => {
     const unique = ['All Branches', ...new Set(loans.map(l => l.branch_name))];
     return unique;
   }, [loans]);
 
-  const filteredLoans = useMemo(() => {
-    return selectedBranch === 'All Branches' 
-      ? loans 
-      : loans.filter(l => l.branch_name === selectedBranch);
-  }, [loans, selectedBranch]);
+  const processedData = useMemo(() => {
+    let result = [...loans];
+
+    // 1. Sort - Oldest first
+    result.sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
+
+    // 2. Search
+    if (search.trim()) {
+      const q = search.toLowerCase();
+      result = result.filter(item => 
+        (item.customer_name || '').toLowerCase().includes(q) ||
+        (item.customer_id_number || '').toLowerCase().includes(q) ||
+        (item.national_id || '').toLowerCase().includes(q) ||
+        (item.id || '').toString().includes(q)
+      );
+    }
+
+    // 3. Dropdown filters
+    if (selectedBranch !== 'All Branches') {
+      result = result.filter(item => item.branch_name === selectedBranch);
+    }
+
+    // 4. Date range
+    if (dateFrom) result = result.filter(item => new Date(item.created_at) >= new Date(dateFrom));
+    if (dateTo) result = result.filter(item => new Date(item.created_at) <= new Date(dateTo + 'T23:59:59'));
+
+    return result;
+  }, [loans, search, selectedBranch, dateFrom, dateTo]);
 
   const totalAmount = useMemo(() => {
-    return filteredLoans.reduce((sum, l) => sum + parseFloat(l.principal_amount), 0);
-  }, [filteredLoans]);
+    return processedData.reduce((sum, l) => sum + parseFloat(l.principal_amount), 0);
+  }, [processedData]);
 
   const handleDisburse = async (loanId) => {
     setDisbursing(true);
     try {
-      // Logic for audit logging if mpesa number changed could be added here
       await loanService.api.post('/payments/disburse/', { 
         loan_id: loanId,
         mpesa_phone: mpesaNumber
       });
       toast.success('Disbursement successful');
       setShowConfirmModal(false);
-      fetchApprovedLoans(); // Refresh queue
+      invalidateLoans();
+      invalidateCapital();
     } catch (err) {
       toast.error(err.response?.data?.error || 'Disbursement failed');
     } finally {
@@ -67,21 +78,30 @@ const FinanceDisbursement = () => {
   };
 
   const handleBulkDisburse = async () => {
-    if (!window.confirm(`You are about to disburse ${filteredLoans.length} loans totalling KES ${totalAmount.toLocaleString()}. This cannot be reversed. Proceed?`)) return;
+    if (!window.confirm(`You are about to disburse ${processedData.length} loans totalling KES ${totalAmount.toLocaleString()}. This cannot be reversed. Proceed?`)) return;
     
     setDisbursing(true);
-    try {
-      // Need a bulk endpoint on backend or loop
-      for (const loan of filteredLoans) {
-        await loanService.api.post('/payments/disburse/', { loan_id: loan.id });
-      }
-      toast.success('Bulk disbursement complete');
-      fetchApprovedLoans();
-    } catch (err) {
-      toast.error('Some disbursements failed. Please check the queue.');
-    } finally {
-      setDisbursing(false);
+    let successCount = 0;
+    let failCount = 0;
+
+    const results = await Promise.allSettled(
+      processedData.map(loan => loanService.api.post('/payments/disburse/', { loan_id: loan.id }))
+    );
+
+    results.forEach(res => {
+      if (res.status === 'fulfilled') successCount++;
+      else failCount++;
+    });
+
+    if (failCount === 0) {
+      toast.success(`Bulk disbursement complete: All ${successCount} succeeded`);
+    } else {
+      toast.error(`Bulk disbursement finished: ${successCount} succeeded, ${failCount} failed`);
     }
+    
+    invalidateLoans();
+    invalidateCapital();
+    setDisbursing(false);
   };
 
   const openDisburseModal = (loan) => {
@@ -94,148 +114,248 @@ const FinanceDisbursement = () => {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-        <div>
-          <h2 className="text-xl md:text-2xl font-bold text-slate-900">Disbursement Queue</h2>
-          <p className="text-sm text-slate-500 mt-0.5">Approved loans awaiting disbursement</p>
-        </div>
+      {/* Stat Cards Section */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <StatCard
+          icon={Clock}
+          label="Loans Awaiting Disbursement"
+          value={processedData.length}
+          variant="indigo"
+          className="bg-indigo-50 text-indigo-700"
+          iconClassName="bg-indigo-100"
+        />
+        <StatCard
+          icon={Wallet}
+          label="Total to Disburse"
+          value={formatKES(totalAmount)}
+          variant="emerald"
+          className="bg-emerald-50 text-emerald-700"
+          iconClassName="bg-emerald-100"
+        />
+        <StatCard
+          icon={MapPin}
+          label="Branches in Queue"
+          value={new Set(processedData.map(l => l.branch_name)).size}
+          variant="blue"
+          className="bg-blue-50 text-blue-700"
+          iconClassName="bg-blue-100"
+        />
       </div>
 
-      <Card className="flex flex-col lg:flex-row gap-4 items-stretch lg:items-center justify-between p-4">
-        <div className="flex flex-col sm:flex-row gap-3 items-stretch sm:items-center w-full lg:w-auto">
-          <div className="relative w-full sm:w-64">
+      {/* Filter Bar Redesign */}
+      <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-4 shadow-sm space-y-4">
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+          <div>
+            <h2 className="text-xl font-bold text-slate-900 dark:text-slate-100">Disbursement Queue</h2>
+            <p className="text-xs text-slate-500">Approved loans pending M-Pesa transfer</p>
+          </div>
+          {processedData.length > 0 && (
+            <Button 
+              className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-5 py-2.5 rounded-xl flex items-center gap-2 shadow-sm"
+              onClick={handleBulkDisburse}
+              disabled={disbursing}
+            >
+              <CheckCircle2 className="w-5 h-5" />
+              Bulk Disburse {formatKES(totalAmount)}
+            </Button>
+          )}
+        </div>
+
+        <div className="flex flex-wrap items-end gap-4">
+          <div className="relative w-full sm:w-56">
+            <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+            <input
+              placeholder="Search name, ID, loan number..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 pl-9 py-2 text-sm focus:ring-2 focus:ring-primary-500/20 outline-none"
+            />
+          </div>
+
+          <div className="relative w-full sm:w-44">
+            <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
             <select
               value={selectedBranch}
               onChange={(e) => setSelectedBranch(e.target.value)}
-              className="w-full pl-10 pr-4 py-2 bg-white border border-slate-200 rounded-lg text-sm appearance-none focus:ring-2 focus:ring-primary-500/20"
+              className="w-full pl-9 pr-4 py-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm appearance-none focus:ring-2 focus:ring-primary-500/20 outline-none"
             >
               {branches.map(b => <option key={b} value={b}>{b}</option>)}
             </select>
-            <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
           </div>
-          <div className="inline-flex items-center self-start sm:self-auto bg-indigo-50 text-indigo-700 px-3 py-1 rounded-full text-xs font-bold">
-            {filteredLoans.length} Pending
+
+          <div className="flex flex-col gap-1">
+            <label className="text-[10px] font-bold text-slate-400 uppercase ml-1">From</label>
+            <input 
+              type="date" 
+              value={dateFrom} 
+              onChange={(e) => setDateFrom(e.target.value)} 
+              className="px-3 py-2 text-sm rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 focus:ring-2 focus:ring-primary-500/20 outline-none" 
+            />
+          </div>
+
+          <div className="flex flex-col gap-1">
+            <label className="text-[10px] font-bold text-slate-400 uppercase ml-1">To</label>
+            <input 
+              type="date" 
+              value={dateTo} 
+              onChange={(e) => setDateTo(e.target.value)} 
+              className="px-3 py-2 text-sm rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 focus:ring-2 focus:ring-primary-500/20 outline-none" 
+            />
+          </div>
+
+          <div className="bg-indigo-100 text-indigo-700 font-black text-xs px-3 py-1.5 rounded-full whitespace-nowrap mb-1">
+            {processedData.length} Pending
           </div>
         </div>
+      </div>
 
-        {filteredLoans.length > 0 && (
-          <Button 
-            variant="primary" 
-            className="bg-emerald-600 hover:bg-emerald-700 w-full sm:w-auto text-sm py-2 px-4 flex items-center justify-center gap-2"
-            onClick={handleBulkDisburse}
-            disabled={disbursing}
-          >
-            <CheckCircle2 className="w-4 h-4" />
-            Bulk Disburse {formatKES(totalAmount)}
-          </Button>
-        )}
-      </Card>
-
-      <Card className="p-0 overflow-hidden">
-        <div className="overflow-x-auto scrollbar-thin scrollbar-thumb-slate-200">
-          <Table
-            headers={['Customer', 'M-Pesa Number', 'Principal', 'Branch', 'Date Approved', 'Action']}
-            data={filteredLoans}
-            loading={loading}
-            renderRow={(loan) => (
-              <tr key={loan.id} className="hover:bg-slate-50 border-b border-slate-100 last:border-0 whitespace-nowrap text-sm">
-                <td className="px-6 py-4">
-                  <div className="flex flex-col">
-                    <span className="font-bold text-slate-900 leading-tight">
-                      {loan.customer_name}
-                    </span>
-                    <span className="text-[10px] text-slate-400 font-mono mt-0.5">
-                      ID: {loan.customer_id_number || loan.national_id || 'N/A'}
-                    </span>
-                  </div>
-                </td>
-                <td className="px-6 py-4 text-slate-600 font-medium">{loan.customer_phone}</td>
-                <td className="px-6 py-4 font-bold text-emerald-700">{formatKES(loan.principal_amount)}</td>
-                <td className="px-6 py-4">
-                  <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-700">
-                    {loan.branch_name}
-                  </span>
-                </td>
-                <td className="px-6 py-4 text-slate-500">{new Date(loan.updated_at).toLocaleDateString()}</td>
-                <td className="px-6 py-4">
-                  <Button 
-                    variant="primary" 
-                    size="sm"
-                    className="flex items-center gap-2"
-                    onClick={() => openDisburseModal(loan)}
-                  >
-                    <Send className="w-3.5 h-3.5" />
-                    Disburse
-                  </Button>
-                </td>
+      <Card className="p-0 overflow-hidden min-w-0">
+        <div className="overflow-x-auto scrollbar-thin scrollbar-thumb-slate-200 w-full">
+          <table className="w-full text-left border-collapse">
+            <thead>
+              <tr className="bg-slate-50 dark:bg-slate-800/90 text-slate-500 dark:text-slate-400 text-xs font-bold uppercase tracking-wider">
+                <th className="px-6 py-3">Customer</th>
+                <th className="px-6 py-3">M-Pesa Number</th>
+                <th className="px-6 py-3">Principal</th>
+                <th className="px-6 py-3">Branch</th>
+                <th className="px-6 py-3">Date Approved</th>
+                <th className="px-4 py-3 bg-slate-50 dark:bg-slate-800/90 sticky right-0 border-l border-slate-100 dark:border-slate-800">Action</th>
               </tr>
-            )}
-          />
+            </thead>
+            <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+              {loading ? (
+                <tr>
+                  <td colSpan="6" className="px-6 py-10 text-center text-slate-500">Loading disbursement queue...</td>
+                </tr>
+              ) : processedData.length === 0 ? (
+                <tr>
+                  <td colSpan="6" className="px-6 py-10 text-center text-slate-500">No pending disbursements found</td>
+                </tr>
+              ) : (
+                processedData.map((loan, idx) => (
+                  <tr key={loan.id || idx} className="group hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors relative">
+                    <td className="px-6 py-4 border-l-4 border-l-transparent group-hover:border-l-emerald-500 transition-all">
+                      <div className="flex flex-col">
+                        <span className="font-semibold text-slate-900 dark:text-slate-100 text-sm">
+                          {loan.customer_name}
+                        </span>
+                        <span className="font-mono text-[11px] bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded text-slate-500 inline-block mt-0.5 w-fit">
+                          {loan.customer_id_number || loan.national_id || 'N/A'}
+                        </span>
+                      </div>
+                    </td>
+                    <td className="px-6 py-4">
+                      <div className="bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-400 font-mono text-xs px-2 py-1 rounded-lg inline-flex items-center gap-1">
+                        <Phone className="w-3 h-3" />
+                        {loan.customer_phone}
+                      </div>
+                    </td>
+                    <td className="px-6 py-4">
+                      <div className="flex flex-col">
+                        <span className="text-[10px] text-slate-400 uppercase font-bold">KES</span>
+                        <span className="font-black text-emerald-700 text-sm">
+                          {parseFloat(loan.principal_amount).toLocaleString()}
+                        </span>
+                      </div>
+                    </td>
+                    <td className="px-6 py-4">
+                      <span className="bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 text-xs font-bold px-3 py-1 rounded-full whitespace-nowrap">
+                        {loan.branch_name}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4">
+                      <div className="flex flex-col">
+                        <span className="font-medium text-slate-700 dark:text-slate-300 text-sm">
+                          {format(new Date(loan.updated_at), 'dd MMM yyyy')}
+                        </span>
+                        <span className="text-[11px] text-slate-400">
+                          {format(new Date(loan.updated_at), 'HH:mm')}
+                        </span>
+                      </div>
+                    </td>
+                    <td className="px-4 py-4 sticky right-0 bg-white dark:bg-slate-900 border-l border-slate-100 dark:border-slate-800 shadow-[-4px_0_8px_rgba(0,0,0,0.04)]">
+                      <Button 
+                        className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs px-4 py-2 rounded-xl flex items-center gap-1.5 shadow-sm hover:shadow-emerald-500/20 transition-all"
+                        onClick={() => openDisburseModal(loan)}
+                      >
+                        <Send className="w-3.5 h-3.5" />
+                        Disburse
+                      </Button>
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
         </div>
       </Card>
 
       {/* Confirmation Modal */}
       {showConfirmModal && currentLoan && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <Card className="max-w-md w-full animate-in zoom-in-95 duration-200">
-            <div className="flex justify-between items-center mb-6">
-              <h3 className="text-xl font-bold text-slate-900">Confirm Disbursement</h3>
-              <button 
-                onClick={() => setShowConfirmModal(false)}
-                className="text-slate-400 hover:text-slate-600"
-              >
-                <X className="w-5 h-5" />
-              </button>
+          <Card className="max-w-md w-full animate-in zoom-in-95 duration-200 p-6 rounded-2xl">
+            <div className="w-14 h-14 bg-emerald-100 rounded-full flex items-center justify-center mx-auto mb-4">
+              <Send className="w-7 h-7 text-emerald-600" />
+            </div>
+
+            <h3 className="text-xl font-black text-slate-900 text-center mb-4">
+              {currentLoan.customer_name}
+            </h3>
+
+            <div className="bg-slate-50 dark:bg-slate-800 rounded-xl p-4 space-y-3 mb-4">
+              <div className="flex justify-between items-center">
+                <span className="text-xs font-bold text-slate-400 uppercase">Principal Amount</span>
+                <span className="text-sm font-bold text-slate-900 dark:text-slate-100">{formatKES(currentLoan.principal_amount)}</span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-xs font-bold text-slate-400 uppercase">Loan Product</span>
+                <span className="text-sm font-bold text-slate-900 dark:text-slate-100">{currentLoan.product_name}</span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-xs font-bold text-slate-400 uppercase">Branch</span>
+                <span className="text-sm font-bold text-slate-900 dark:text-slate-100">{currentLoan.branch_name}</span>
+              </div>
+              {currentLoan.total_repayable_amount && (
+                <div className="flex justify-between items-center">
+                  <span className="text-xs font-bold text-slate-400 uppercase">Total Repayable</span>
+                  <span className="text-sm font-bold text-slate-900 dark:text-slate-100">{formatKES(currentLoan.total_repayable_amount)}</span>
+                </div>
+              )}
             </div>
 
             <div className="space-y-4">
               <div>
-                <label className="text-xs font-bold text-slate-400 uppercase">Customer</label>
-                <p className="text-lg font-bold text-slate-900">{currentLoan.customer_name}</p>
-              </div>
-
-              <div>
-                <label className="text-xs font-bold text-slate-400 uppercase">Principal</label>
-                <p className="text-lg font-bold text-emerald-600">{formatKES(currentLoan.principal_amount)}</p>
-              </div>
-
-              <div>
-                <label className="text-xs font-bold text-slate-400 uppercase">M-Pesa Phone Number</label>
+                <label className="text-xs font-bold text-slate-400 uppercase ml-1">M-Pesa Phone Number</label>
                 <Input
                   value={mpesaNumber}
                   onChange={(e) => setMpesaNumber(e.target.value)}
                   placeholder="Enter M-Pesa Number"
-                  className="mt-1"
+                  className="mt-1 rounded-xl"
                 />
               </div>
 
-              <div>
-                <label className="text-xs font-bold text-slate-400 uppercase">Branch</label>
-                <p className="font-medium text-slate-700">{currentLoan.branch_name}</p>
-              </div>
-
-              <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg flex gap-3">
+              <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl flex gap-3">
                 <AlertTriangle className="w-5 h-5 text-amber-600 flex-shrink-0" />
-                <p className="text-xs text-amber-700">
+                <p className="text-xs text-amber-700 leading-relaxed">
                   Ensure the phone number above belongs to the customer. Disbursements cannot be reversed once processed.
                 </p>
               </div>
 
-              <div className="flex gap-3 pt-4">
-                <Button 
-                  variant="secondary" 
-                  className="flex-1"
-                  onClick={() => setShowConfirmModal(false)}
-                >
-                  Cancel
-                </Button>
+              <div className="flex flex-col gap-3 pt-2">
                 <Button 
                   variant="primary" 
-                  className="flex-1 bg-emerald-600 hover:bg-emerald-700"
+                  className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl py-3"
                   onClick={() => handleDisburse(currentLoan.id)}
                   loading={disbursing}
                 >
                   Disburse Now
+                </Button>
+                <Button 
+                  variant="secondary" 
+                  className="w-full font-bold rounded-xl py-3"
+                  onClick={() => setShowConfirmModal(false)}
+                >
+                  Cancel
                 </Button>
               </div>
             </div>

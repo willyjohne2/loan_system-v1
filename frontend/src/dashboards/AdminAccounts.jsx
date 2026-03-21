@@ -1,5 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { loanService } from '../api/api';
+import { useAdmins, useInvalidate } from '../hooks/useQueries';
 import { Trash2, AlertCircle, CheckCircle, UserPlus, Mail, Shield, Send } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import BulkInviteModal from '../components/forms/BulkInviteModal';
@@ -8,8 +9,8 @@ import { Button, Card, Table } from '../components/ui/Shared';
 
 const AdminAccounts = () => {
   const { user } = useAuth();
-  const [admins, setAdmins] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const isSuperAdminOrOwner = user?.is_super_admin || user?.is_owner || user?.role === 'SUPER_ADMIN' || user?.role === 'OWNER';
+  const { invalidateAdmins } = useInvalidate();
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [deletingId, setDeletingId] = useState(null);
@@ -20,38 +21,17 @@ const AdminAccounts = () => {
   const [emailTargets, setEmailTargets] = useState(null);
   const [bulkEmail, setBulkEmail] = useState(false);
   const [page, setPage] = useState(1);
-  const [hasMore, setHasMore] = useState(false);
 
-  useEffect(() => {
-    fetchAdmins(1, true);
-  }, []);
+  const { data: adminsData, isLoading: loading } = useAdmins({ page, page_size: 10 });
+  
+  const hasMore = useMemo(() => !!adminsData?.next, [adminsData]);
 
-  const fetchAdmins = async (pageNum = 1, isReset = false) => {
-    try {
-      setLoading(true);
-      const data = await loanService.getAllAdmins({ page: pageNum, page_size: 10 });
-      console.log('Admin accounts loaded:', data);
-      
-      const adminList = data.results || data || [];
-      setHasMore(!!data.next);
-
-      if (isReset) {
-        setAdmins(adminList);
-      } else {
-        setAdmins(prev => [...prev, ...adminList]);
-      }
-      setError('');
-    } catch (err) {
-      console.error('Error fetching admins:', err);
-      setError(`Failed to load admin accounts: ${err.response?.data?.error || err.message}`);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleDeleteClick = (admin) => {
-    setConfirmDelete(admin);
-  };
+  const admins = useMemo(() => {
+    const adminList = adminsData?.results || adminsData || [];
+    return Array.isArray(adminList) 
+      ? adminList.filter(a => a.role === 'ADMIN' && !a.is_owner)
+      : [];
+  }, [adminsData]);
 
   const confirmDeleteAdmin = async () => {
     if (!confirmDelete) return;
@@ -60,7 +40,7 @@ const AdminAccounts = () => {
     try {
       await loanService.deleteAdmin(confirmDelete.id);
       setSuccess(`Admin account (${confirmDelete.email}) deleted successfully!`);
-      setAdmins(admins.filter(a => a.id !== confirmDelete.id));
+      invalidateAdmins();
       setConfirmDelete(null);
       setTimeout(() => setSuccess(''), 4000);
     } catch (err) {
@@ -70,6 +50,7 @@ const AdminAccounts = () => {
       setDeletingId(null);
     }
   };
+
 
   const cancelDelete = () => {
     setConfirmDelete(null);
@@ -103,25 +84,29 @@ const AdminAccounts = () => {
           <p className="text-sm text-slate-500">System access control and user management</p>
         </div>
         <div className="flex gap-3">
-          <Button 
-            variant="secondary"
-            className="flex items-center"
-            onClick={() => {
-              setEmailTargets(admins);
-              setBulkEmail(true);
-              setShowEmail(true);
-            }}
-          >
-            <Send className="w-4 h-4 mr-2" />
-            Bulk Email
-          </Button>
-          <Button 
-            onClick={() => setShowInviteModal(true)}
-            className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg font-medium transition-all shadow-md active:scale-95"
-          >
-            <UserPlus className="w-4 h-4" />
-            Invite Admin
-          </Button>
+          {isSuperAdminOrOwner && (
+            <Button 
+              variant="secondary"
+              className="flex items-center"
+              onClick={() => {
+                setEmailTargets(admins);
+                setBulkEmail(true);
+                setShowEmail(true);
+              }}
+            >
+              <Send className="w-4 h-4 mr-2" />
+              Bulk Email
+            </Button>
+          )}
+          {isSuperAdminOrOwner && (
+            <Button 
+              onClick={() => setShowInviteModal(true)}
+              className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg font-medium transition-all shadow-md active:scale-95"
+            >
+              <UserPlus className="w-4 h-4" />
+              Invite Admin
+            </Button>
+          )}
         </div>
       </div>
 
@@ -188,6 +173,7 @@ const AdminAccounts = () => {
           <Table
             headers={['Name', 'Email/Phone', 'Role', 'Status', 'Actions']}
             data={admins}
+            initialCount={10}
             maxHeight="max-h-[500px]"
             renderRow={(admin) => (
               <tr key={admin.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
@@ -250,7 +236,6 @@ const AdminAccounts = () => {
                 onClick={() => {
                   const nextPage = page + 1;
                   setPage(nextPage);
-                  fetchAdmins(nextPage);
                 }}
                 disabled={loading}
                 className="px-8 font-black uppercase tracking-widest text-xs"

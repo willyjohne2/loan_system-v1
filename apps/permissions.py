@@ -15,7 +15,20 @@ class IsAdminUser(permissions.BasePermission):
         return bool(
             request.user
             and request.user.is_authenticated
-            and request.user.role == "ADMIN"
+            and (request.user.role == "ADMIN" or request.user.is_owner or request.user.is_super_admin)
+        )
+
+
+class IsOwnerOrCoOwner(permissions.BasePermission):
+    """
+    Allows access only to users with role 'OWNER' or 'CO_OWNER'.
+    """
+
+    def has_permission(self, request, view):
+        return bool(
+            request.user
+            and request.user.is_authenticated
+            and (request.user.role == "OWNER" or request.user.role == "CO_OWNER" or getattr(request.user, "is_owner", False))
         )
 
 

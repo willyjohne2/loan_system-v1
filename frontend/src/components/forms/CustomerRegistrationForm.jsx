@@ -375,7 +375,9 @@ const CustomerRegistrationForm = ({ onSuccess, onApplyLoan, onCancel, initialCus
         });
       }
 
-      setRegisteredUser(userRes.data);
+      const responseData = userRes.data?.data || userRes.data;
+      console.log('Registered User Payload:', responseData);
+      setRegisteredUser(responseData);
       setIsFinished(true);
     } catch (err) {
       let errorMessage = 'Failed to process registration';

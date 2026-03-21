@@ -1,11 +1,14 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import { loanService } from '../api/api';
 import { useAuth } from '../context/AuthContext';
 import { Table, Button, Card, StatCard, Badge } from '../components/ui/Shared';
+import { useLoans, useRepayments, useFieldOfficers, useCustomers, useInvalidate } from '../hooks/useQueries';
 import CustomerRegistrationForm from '../components/forms/CustomerRegistrationForm';
 import RepaymentModal from '../components/ui/RepaymentModal';
 import BulkCustomerSMSModal from '../components/ui/BulkCustomerSMSModal';
 import CustomerHistoryModal from '../components/ui/CustomerHistoryModal';
+import AdminOfficers from './AdminOfficers';
+import BulkInviteModal from '../components/forms/BulkInviteModal';
 import { 
   Users, 
   TrendingUp, 
@@ -31,7 +34,9 @@ import {
   BarChart3,
   ExternalLink,
   MessageSquareShare,
-  ShieldOff
+  ShieldOff,
+  UserCircle,
+  Search
 } from 'lucide-react';
 import { 
   BarChart, 
@@ -51,6 +56,17 @@ import DeactivationRequestModal from '../components/ui/DeactivationRequestModal'
 
 const ManagerDashboard = () => {
   const { user, updateUser } = useAuth();
+  
+  const { data: loansData, isLoading: loansLoading } = useLoans();
+  const { data: repaymentsData, isLoading: repaymentsLoading } = useRepayments();
+  const { data: officersData, isLoading: officersLoading } = useFieldOfficers();
+  const { data: customersData, isLoading: customersLoading } = useCustomers();
+
+  const { invalidateLoans, invalidateRepayments, invalidateCustomers } = useInvalidate();
+
+  const loadingStats = loansLoading || repaymentsLoading;
+  const loadingTables = officersLoading || customersLoading;
+
   const [selectedBranch, setSelectedBranch] = useState('Kagio');
   
   const availableBranches = [
@@ -94,10 +110,11 @@ const ManagerDashboard = () => {
     }
   }, [user]);
 
-  const [officers, setOfficers] = useState([]);
-  const [customers, setCustomers] = useState([]);
-  const [unverifiedCustomers, setUnverifiedCustomers] = useState([]);
-  const [loans, setLoans] = useState([]);
+  const loans = useMemo(() => loansData?.results || loansData || [], [loansData]);
+  const repayments = useMemo(() => repaymentsData?.results || repaymentsData || [], [repaymentsData]);
+  const officersRaw = useMemo(() => officersData?.results || officersData || [], [officersData]);
+  const customers = useMemo(() => customersData?.results || customersData || [], [customersData]);
+
   const [isRegistering, setIsRegistering] = useState(false);
   const [selectedLoan, setSelectedLoan] = useState(null);
   const [showRepaymentModal, setShowRepaymentModal] = useState(false);
@@ -111,8 +128,161 @@ const ManagerDashboard = () => {
   const [reviewingLoan, setReviewingLoan] = useState(null);
   const [updating, setUpdating] = useState(false);
   const [activeTab, setActiveTab] = useState('ACTIVE');
+  const [search, setSearch] = useState('');
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
+  const [displayCount, setDisplayCount] = useState(10);
+  const [showInviteModal, setShowInviteModal] = useState(false);
+
+  const parseAmount = (val) => {
+    const num = Number(val);
+    return Number.isFinite(num) ? num : 0;
+  };
+
+  const isBranchFilterActive = selectedBranch && selectedBranch !== 'All' && selectedBranch !== 'Azariah Credit' && selectedBranch !== 'All Branches';
+
+  const branchFilteredCustomers = useMemo(() => {
+    if (!isBranchFilterActive) return customers;
+    return customers.filter(c => c.profile?.branch === selectedBranch);
+  }, [customers, selectedBranch, isBranchFilterActive]);
+
+  const branchFilteredLoans = useMemo(() => {
+    if (!isBranchFilterActive) return loans;
+    const validCustomerIds = new Set(branchFilteredCustomers.map(c => c.id));
+    return loans.filter(l => validCustomerIds.has(l.user));
+  }, [loans, branchFilteredCustomers, isBranchFilterActive]);
+
+  const branchFilteredRepayments = useMemo(() => {
+    if (!isBranchFilterActive) return repayments;
+    const validLoanIds = new Set(branchFilteredLoans.map(l => l.id));
+    return repayments.filter(r => validLoanIds.has(r.loan));
+  }, [repayments, branchFilteredLoans, isBranchFilterActive]);
+
+  const stats = useMemo(() => {
+    const disbursedStatuses = ['DISBURSED', 'ACTIVE', 'OVERDUE', 'CLOSED', 'REPAID'];
+    const issued = branchFilteredLoans
+      .filter(l => disbursedStatuses.includes((l.status || '').toUpperCase()))
+      .reduce((acc, l) => acc + parseAmount(l.principal_amount), 0);
+    const repaid = branchFilteredRepayments.reduce((acc, r) => acc + parseAmount(r.amount_paid), 0);
+    const repaymentRate = issued > 0 ? Math.round((repaid / issued) * 100) : 0;
+    const unverifiedLoans = branchFilteredLoans.filter(l => (l.status || '').toUpperCase() === 'UNVERIFIED').length;
+    
+    return {
+      served: branchFilteredCustomers.length,
+      issued,
+      repaid,
+      pending: issued - repaid,
+      activeOfficers: officersRaw.length,
+      repaymentRate,
+      unverifiedLoans
+    };
+  }, [branchFilteredLoans, branchFilteredRepayments, branchFilteredCustomers, officersRaw]);
+
+  const officers = useMemo(() => {
+    return officersRaw.map(officer => {
+      const officerCustomers = customers.filter(c => c.created_by === officer.id).length;
+      const officerLoans = loans.filter(l => l.created_by === officer.id);
+      const officerVolume = officerLoans.reduce((sum, l) => sum + parseAmount(l.principal_amount), 0);
+      
+      return {
+        ...officer,
+        customersCount: officerCustomers,
+        loansCount: officerLoans.length,
+        volume: officerVolume
+      };
+    });
+  }, [officersRaw, customers, loans]);
+
+  const unverifiedCustomers = useMemo(() => {
+    return branchFilteredCustomers.filter(c => !c.is_verified);
+  }, [branchFilteredCustomers]);
+
+  const statusDistribution = useMemo(() => {
+    const statuses = loans.reduce((acc, l) => {
+      const s = (l.status || 'PENDING').toUpperCase();
+      acc[s] = (acc[s] || 0) + 1;
+      return acc;
+    }, {});
+
+    return Object.entries(statuses)
+      .map(([name, value]) => ({ name, value }))
+      .sort((a, b) => b.value - a.value);
+  }, [loans]);
+
+  const chartData = useMemo(() => {
+    const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    const last6Months = [];
+    for (let i = 5; i >= 0; i--) {
+      const d = new Date();
+      d.setMonth(d.getMonth() - i);
+      last6Months.push(monthNames[d.getMonth()]);
+    }
+
+    const monthlyData = branchFilteredLoans.reduce((acc, loan) => {
+      const status = (loan.status || '').toUpperCase();
+      const disbursedStatuses = ['DISBURSED', 'ACTIVE', 'OVERDUE', 'CLOSED', 'REPAID'];
+      
+      if (disbursedStatuses.includes(status)) {
+        const month = new Date(loan.created_at).toLocaleString('default', { month: 'short' });
+        acc[month] = (acc[month] || 0) + parseAmount(loan.principal_amount);
+      }
+      return acc;
+    }, {});
+
+    const formattedData = last6Months.map(month => ({
+      name: month,
+      amount: monthlyData[month] || 0
+    }));
+
+    const totalVolume = formattedData.reduce((sum, item) => sum + item.amount, 0);
+
+    if (totalVolume === 0) {
+      return [
+        { name: 'Jan', amount: 80000 },
+        { name: 'Feb', amount: 165000 },
+        { name: 'Mar', amount: 148000 },
+        { name: 'Apr', amount: 210000 },
+        { name: 'May', amount: 290000 },
+        { name: 'Jun', amount: 250000 }
+      ];
+    }
+    return formattedData;
+  }, [branchFilteredLoans]);
+
+  const isChartPlaceholder = useMemo(() => {
+    return chartData.every(d => d.amount === 0) || (chartData[0]?.amount === 80000); 
+  }, [chartData]);
 
   // Logic for filtered totals
+  const processedLoans = useMemo(() => {
+    let result = (branchFilteredLoans || []).filter(l => {
+      const s = (l.status || '').toUpperCase();
+      if (activeTab === 'ACTIVE') return ['DISBURSED', 'ACTIVE', 'OVERDUE', 'CLOSED', 'REPAID'].includes(s);
+      if (activeTab === 'QUEUE') return ['UNVERIFIED', 'FIELD_VERIFIED', 'PENDING'].includes(s);
+      if (activeTab === 'VERIFIED') return ['VERIFIED', 'APPROVED'].includes(s);
+      return s === 'REJECTED';
+    });
+
+    // 1. Sort - Oldest first
+    result.sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
+
+    // 2. Search
+    if (search.trim()) {
+      const q = search.toLowerCase();
+      result = result.filter(item => 
+        (item.customer_name || '').toLowerCase().includes(q) ||
+        (item.customer_id_number || '').toLowerCase().includes(q) ||
+        (item.id || '').toString().includes(q)
+      );
+    }
+
+    // 3. Date Range
+    if (dateFrom) result = result.filter(item => new Date(item.created_at) >= new Date(dateFrom));
+    if (dateTo) result = result.filter(item => new Date(item.created_at) <= new Date(dateTo + 'T23:59:59'));
+
+    return result;
+  }, [branchFilteredLoans, activeTab, search, dateFrom, dateTo]);
+
   const getTotals = (loansList) => {
     return (loansList || []).reduce((acc, l) => ({
       repayable: acc.repayable + Number(l.total_repayable_amount || 0),
@@ -120,31 +290,7 @@ const ManagerDashboard = () => {
     }), { repayable: 0, principal: 0 });
   };
 
-  const filteredLoansForTotals = (loans || []).filter(l => {
-    const s = l.status;
-    if (activeTab === 'ACTIVE') return ['DISBURSED', 'ACTIVE', 'OVERDUE', 'CLOSED', 'REPAID'].includes(s);
-    if (activeTab === 'QUEUE') return ['UNVERIFIED', 'FIELD_VERIFIED', 'PENDING'].includes(s);
-    if (activeTab === 'VERIFIED') return ['VERIFIED', 'APPROVED'].includes(s);
-    return s === 'REJECTED';
-  });
-
-  const totals = getTotals(filteredLoansForTotals);
-
-  const [loadingStats, setLoadingStats] = useState(true);
-  const [loadingTables, setLoadingTables] = useState(true);
-  const [chartData, setChartData] = useState([]);
-  const [isChartPlaceholder, setIsChartPlaceholder] = useState(false);
-  const [statusDistribution, setStatusDistribution] = useState([]);
-  const [stats, setStats] = useState({
-    served: 0,
-    issued: 0,
-    repaid: 0,
-    pending: 0,
-    activeOfficers: 0,
-    repaymentRate: 0,
-    defaultRate: 0,
-    unverifiedLoans: 0
-  });
+  const totals = getTotals(processedLoans);
 
   const [analytics, setAnalytics] = useState({ monthly_disbursements: [], status_breakdown: [] });
 
@@ -156,161 +302,6 @@ const ManagerDashboard = () => {
       }
     } catch (err) {
       console.error('Error fetching analytics:', err);
-    }
-  };
-
-  const parseAmount = (val) => {
-    const num = Number(val);
-    return Number.isFinite(num) ? num : 0;
-  };
-
-  const fetchSecondaryData = async (loansList, repaymentsList) => {
-     try {
-      setLoadingTables(true);
-      const [offData, custData] = await Promise.all([
-        loanService.getFieldOfficers(),
-        loanService.getCustomers()
-      ]);
-
-      const officersList = offData.results || offData;
-      let customersList = custData.results || custData;
-
-      // Apply Branch Filter if selected
-      const isFilterActive = selectedBranch && selectedBranch !== 'All' && selectedBranch !== 'Azariah Credit' && selectedBranch !== 'All Branches';
-      
-      if (isFilterActive) {
-          customersList = customersList.filter(c => c.profile?.branch === selectedBranch);
-          const validCustomerIds = new Set(customersList.map(c => c.id));
-          loansList = loansList.filter(l => validCustomerIds.has(l.user));
-          const validLoanIds = new Set(loansList.map(l => l.id));
-          
-          // Recalculate stats based on filtered data (only disbursed/active)
-          const disbursedStatuses = ['DISBURSED', 'ACTIVE', 'OVERDUE', 'CLOSED', 'REPAID'];
-          const issued = loansList
-            .filter(l => disbursedStatuses.includes((l.status || '').toUpperCase()))
-            .reduce((acc, l) => acc + parseAmount(l.principal_amount), 0);
-          const filteredRepayments = repaymentsList.filter(r => validLoanIds.has(r.loan));
-          const repaid = filteredRepayments.reduce((acc, r) => acc + parseAmount(r.amount_paid), 0);
-          
-          setStats(prev => ({
-            ...prev,
-            issued: issued,
-            repaid: repaid,
-            pending: issued - repaid,
-          }));
-      }
-
-      const officersWithPerformance = officersList.map(officer => {
-        const officerCustomers = customersList.filter(c => c.created_by === officer.id).length;
-        const officerLoans = loansList.filter(l => l.created_by === officer.id);
-        const officerVolume = officerLoans.reduce((sum, l) => sum + parseAmount(l.principal_amount), 0);
-        
-        return {
-          ...officer,
-          customersCount: officerCustomers,
-          loansCount: officerLoans.length,
-          volume: officerVolume
-        };
-      });
-
-      const unverifiedCust = customersList.filter(c => !c.is_verified);
-
-      setOfficers(officersWithPerformance);
-      setCustomers(customersList);
-      setUnverifiedCustomers(unverifiedCust);
-
-      setStats(prev => ({
-        ...prev,
-        served: customersList.length,
-        activeOfficers: officersList.length,
-      }));
-     } catch (err) {
-       console.error("Error fetching secondary manager data:", err);
-     } finally {
-       setLoadingTables(false);
-     }
-  };
-
-  const fetchCoreData = async () => {
-    try {
-      setLoadingStats(true);
-      const [loanData, repaymentData] = await Promise.all([
-        loanService.getLoans(),
-        loanService.getRepayments()
-      ]);
-
-      let loansList = loanData.results || loanData;
-      const repaymentsList = repaymentData.results || repaymentData;
-
-      const disbursedStatuses = ['DISBURSED', 'ACTIVE', 'OVERDUE', 'CLOSED', 'REPAID'];
-      const issued = loansList
-        .filter(l => disbursedStatuses.includes((l.status || '').toUpperCase()))
-        .reduce((acc, l) => acc + parseAmount(l.principal_amount), 0);
-      const repaid = repaymentsList.reduce((acc, r) => acc + parseAmount(r.amount_paid), 0);
-      const repaymentRate = issued > 0 ? Math.round((repaid / issued) * 100) : 0;
-      const unverifiedCount = loansList.filter(l => (l.status || '').toUpperCase() === 'UNVERIFIED').length;
-
-      // Process Chart Data (Monthly Disbursement)
-      // Process Chart Data: Show last 6 months
-      const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-      const last6Months = [];
-      for (let i = 5; i >= 0; i--) {
-        const d = new Date();
-        d.setMonth(d.getMonth() - i);
-        last6Months.push(monthNames[d.getMonth()]);
-      }
-
-      const monthlyData = loansList.reduce((acc, loan) => {
-        const status = (loan.status || '').toUpperCase();
-        const disbursedStatuses = ['DISBURSED', 'ACTIVE', 'OVERDUE', 'CLOSED', 'REPAID'];
-        
-        if (disbursedStatuses.includes(status)) {
-          const month = new Date(loan.created_at).toLocaleString('default', { month: 'short' });
-          acc[month] = (acc[month] || 0) + parseAmount(loan.principal_amount);
-        }
-        return acc;
-      }, {});
-
-      const formattedData = last6Months.map(month => ({
-        name: month,
-        amount: monthlyData[month] || 0
-      }));
-
-      const totalVolume = formattedData.reduce((sum, item) => sum + item.amount, 0);
-
-      if (totalVolume === 0) {
-        setIsChartPlaceholder(true);
-        const previewData = [
-          { name: 'Jan', amount: 80000 },
-          { name: 'Feb', amount: 165000 },
-          { name: 'Mar', amount: 148000 },
-          { name: 'Apr', amount: 210000 },
-          { name: 'May', amount: 290000 },
-          { name: 'Jun', amount: 250000 }
-        ];
-        setChartData(previewData);
-      } else {
-        setIsChartPlaceholder(false);
-        setChartData(formattedData);
-      }
-
-      setStats(prev => ({
-        ...prev,
-        issued: issued,
-        repaid: repaid,
-        pending: issued - repaid,
-        repaymentRate: repaymentRate,
-        unverifiedLoans: unverifiedCount
-      }));
-
-      setLoans(loansList);
-      setLoadingStats(false);
-      
-      // Fetch secondary
-      fetchSecondaryData(loansList, repaymentsList);
-    } catch (error) {
-      console.error("Error fetching core manager data:", error);
-      setLoadingStats(false);
     }
   };
 
@@ -333,16 +324,7 @@ const ManagerDashboard = () => {
   };
 
   useEffect(() => {
-    fetchCoreData();
     fetchAnalytics();
-    
-    // Auto-refresh every 60 seconds
-    const interval = setInterval(() => {
-      fetchCoreData();
-      fetchAnalytics();
-    }, 60000);
-    
-    return () => clearInterval(interval);
   }, [selectedBranch]);
 
   const getStatusColor = (status) => {
@@ -369,7 +351,7 @@ const ManagerDashboard = () => {
         status_change_reason: `Manager override to ${newStatus}`
       });
       // Refresh data without full page reload
-      fetchCoreData();
+      invalidateLoans();
       fetchAnalytics();
     } catch (err) {
       console.error("Failed to update loan status:", err);
@@ -383,7 +365,7 @@ const ManagerDashboard = () => {
     setUpdating(true);
     try {
       await loanService.updateCustomer(userId, { is_verified: true });
-      fetchCoreData();
+      invalidateCustomers();
       fetchAnalytics();
     } catch (err) {
       console.error("Failed to verify user:", err);
@@ -435,6 +417,14 @@ const ManagerDashboard = () => {
              </select>
              <ChevronDown className="w-4 h-4 absolute right-3 top-3 pointer-events-none text-slate-400" />
           </div>
+          <Button 
+            variant="secondary"
+            onClick={() => setShowInviteModal(true)} 
+            className="flex items-center gap-2"
+          >
+            <UserCircle className="w-4 h-4" />
+            Invite Field Officer
+          </Button>
           <Button onClick={() => setIsRegistering(true)} className="flex items-center gap-2">
             <UserPlus className="w-4 h-4" />
             Register Customer
@@ -442,10 +432,16 @@ const ManagerDashboard = () => {
         </div>
       </div>
 
+      <BulkInviteModal 
+        isOpen={showInviteModal}
+        onClose={() => setShowInviteModal(false)}
+        defaultRole="FIELD_OFFICER"
+      />
+
       {/* Branchal KPIs */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-6">
         <StatCard 
-          label="Customers Served" 
+          label="Branch Customers" 
           value={loadingTables ? "..." : stats.served.toString()} 
           icon={Users}
           trend="up"
@@ -453,7 +449,7 @@ const ManagerDashboard = () => {
           variant="primary"
         />
         <StatCard 
-          label="Amount Disbursed" 
+          label="Branch Disbursements" 
           value={loadingStats ? "..." : `KES ${stats.issued.toLocaleString()}`} 
           icon={TrendingUp}
           trend="up"
@@ -461,7 +457,7 @@ const ManagerDashboard = () => {
           variant="info"
         />
         <StatCard 
-          label="Amount Repaid" 
+          label="Branch Repayments" 
           value={loadingStats ? "..." : `KES ${stats.repaid.toLocaleString()}`} 
           icon={CheckCircle2}
           trend="up"
@@ -469,7 +465,7 @@ const ManagerDashboard = () => {
           variant="success"
         />
         <StatCard 
-          label="Actions Needed" 
+          label="Action Required" 
           value={loadingStats ? "..." : stats.unverifiedLoans.toString()} 
           icon={Clock}
           trend={stats.unverifiedLoans > 10 ? "up" : "down"}
@@ -722,7 +718,10 @@ const ManagerDashboard = () => {
              ].map(tab => (
                <button
                  key={tab.id}
-                 onClick={() => setActiveTab(tab.id)}
+                 onClick={() => {
+                   setActiveTab(tab.id);
+                   setDisplayCount(10);
+                 }}
                  className={`px-3 py-1.5 rounded-lg text-[10px] font-black transition-all ${
                    activeTab === tab.id 
                      ? 'bg-white dark:bg-slate-700 text-orange-600 shadow-sm' 
@@ -746,112 +745,100 @@ const ManagerDashboard = () => {
              </Button>
            </div>
         </div>
+
+        {/* Filter Bar */}
+        <div className="flex flex-wrap items-center gap-3 bg-slate-50 dark:bg-slate-800/50 p-3 rounded-xl border border-slate-100 dark:border-slate-800 mb-4">
+          <div className="relative flex-1 min-w-[200px]">
+            <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+            <input
+              placeholder="Search customer, ID, loan ID..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="w-full pl-9 pr-4 py-2 bg-white dark:bg-slate-900 border-none rounded-lg text-sm focus:ring-2 focus:ring-primary-500 shadow-sm"
+            />
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="text-[10px] font-black text-slate-400 uppercase">From:</span>
+            <input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} className="bg-white dark:bg-slate-900 border-none rounded-lg text-xs py-2 px-1 shadow-sm" />
+            <span className="text-[10px] font-black text-slate-400 uppercase">To:</span>
+            <input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} className="bg-white dark:bg-slate-900 border-none rounded-lg text-xs py-2 px-1 shadow-sm" />
+          </div>
+        </div>
         
-        <div className="overflow-x-auto -mx-6 md:mx-0 px-6 md:px-0 max-h-[450px] overflow-y-auto scrollbar-thin scrollbar-thumb-slate-200 dark:scrollbar-thumb-slate-800">
-          <table className="w-full text-left min-w-[700px]">
-            <thead className="sticky top-0 z-10">
-              <tr className="text-[10px] md:text-xs font-black text-slate-500 uppercase border-b border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900">
-                <th className="px-4 py-3">Loan ID</th>
-                <th className="px-4 py-3">Customer</th>
-                <th className="px-4 py-3">Product</th>
-                <th className="px-4 py-3 whitespace-nowrap">Total Repayable</th>
-                <th className="px-4 py-3">Principal</th>
-                <th className="px-4 py-3">Status</th>
-                <th className="px-4 py-3 text-right">Actions</th>
+        <div className="overflow-x-auto -mx-6 md:mx-0 px-6 md:px-0 scrollbar-thin scrollbar-thumb-slate-200 dark:scrollbar-thumb-slate-800">
+          <Table
+            headers={['Loan ID', 'Customer', 'Product', 'Total Repayable', 'Principal', 'Status', 'Actions']}
+            data={processedLoans}
+            loading={loadingStats}
+            initialCount={10}
+            renderRow={(loan) => (
+              <tr key={loan.id} className="text-[10px] md:text-sm hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors border-b border-slate-50 dark:border-slate-800/50 last:border-0 whitespace-nowrap">
+                <td className="px-4 py-3 font-mono font-bold text-slate-500">#{loan.id}</td>
+                <td className="px-4 py-3">
+                   <div className="flex flex-col">
+                      <span className="font-bold text-slate-900 dark:text-white leading-tight">{loan.customer_name}</span>
+                      <span className="text-[10px] text-slate-400 font-mono mt-0.5">ID: {loan.customer_id_number || loan.national_id || 'N/A'}</span>
+                   </div>
+                </td>
+                <td className="px-4 py-3">
+                   <span className="px-2 py-0.5 rounded text-[10px] font-black uppercase bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400">
+                      {loan.product_name}
+                   </span>
+                </td>
+                <td className="px-4 py-3 font-bold text-slate-900 dark:text-white">KES {parseAmount(loan.total_repayable_amount).toLocaleString()}</td>
+                <td className="px-4 py-3 font-medium text-slate-700 dark:text-slate-300">KES {parseAmount(loan.principal_amount).toLocaleString()}</td>
+                <td className="px-4 py-3">
+                   <Badge variant={getStatusColor(loan.status)} className="text-[9px] px-2 py-0.5">
+                      {loan.status}
+                   </Badge>
+                </td>
+                <td className="px-4 py-3 text-right">
+                   {(loan.status === 'UNVERIFIED' || loan.status === 'FIELD_VERIFIED' || loan.status === 'PENDING') && (
+                     <button 
+                       onClick={() => {
+                          const customerObj = customers.find(c => c.id === loan.user);
+                          setReviewingLoan(loan);
+                          setReviewingCustomer(customerObj);
+                          setIsReviewOpen(true);
+                       }}
+                       className="p-1 px-4 bg-orange-600 hover:bg-orange-700 text-white rounded-lg text-[10px] font-black uppercase transition-all shadow-sm hover:shadow-orange-500/20"
+                     >
+                       VERIFY LOAN
+                     </button>
+                   )}
+                   {(loan.status === 'VERIFIED' || loan.status === 'APPROVED') && (
+                     <button 
+                       onClick={() => {
+                         const customerObj = customers.find(c => c.id === loan.user);
+                         setReviewingLoan(loan);
+                         setReviewingCustomer(customerObj);
+                         setIsReviewOpen(true);
+                       }}
+                       className="flex items-center gap-1 justify-end w-full group cursor-pointer"
+                     >
+                        <span className="text-[10px] font-black text-emerald-600 uppercase group-hover:text-emerald-500">
+                           Pushed to Finance
+                        </span>
+                        <ArrowRight className="w-3 h-3 text-emerald-600 group-hover:translate-x-0.5 transition-transform" />
+                     </button>
+                   )}
+                   {['DISBURSED', 'ACTIVE', 'OVERDUE'].includes(loan.status) && (
+                     <Button 
+                       size="sm"
+                       variant="secondary"
+                       className="text-[10px] h-7 px-3 font-bold"
+                       onClick={() => {
+                         setSelectedLoan(loan);
+                         setShowRepaymentModal(true);
+                       }}
+                     >
+                       REPAYMENT
+                     </Button>
+                   )}
+                </td>
               </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-              {loans.filter(l => {
-                  const s = l.status;
-                  if (activeTab === 'ACTIVE') return ['DISBURSED', 'ACTIVE', 'OVERDUE', 'CLOSED', 'REPAID'].includes(s);
-                  if (activeTab === 'QUEUE') return ['UNVERIFIED', 'FIELD_VERIFIED', 'PENDING'].includes(s);
-                  if (activeTab === 'VERIFIED') return ['VERIFIED', 'APPROVED'].includes(s);
-                  return s === 'REJECTED';
-              }).length > 0 ? (
-                loans.filter(l => {
-                    const s = l.status;
-                    if (activeTab === 'ACTIVE') return ['DISBURSED', 'ACTIVE', 'OVERDUE', 'CLOSED', 'REPAID'].includes(s);
-                    if (activeTab === 'QUEUE') return ['UNVERIFIED', 'FIELD_VERIFIED', 'PENDING'].includes(s);
-                    if (activeTab === 'VERIFIED') return ['VERIFIED', 'APPROVED'].includes(s);
-                    return s === 'REJECTED';
-                }).map((loan) => (
-                  <tr key={loan.id} className="text-sm hover:bg-slate-50 dark:hover:bg-slate-800/20">
-                    <td className="px-4 py-4 font-mono text-xs text-slate-500">{loan.id.substring(0, 8)}...</td>
-                    <td className="px-4 py-4">
-                      <p className="font-bold text-slate-900 dark:text-white">
-                        {loan.customer_name || customers.find(c => c.id === loan.user)?.full_name || 'Loading...'}
-                      </p>
-                    </td>
-                    <td className="px-4 py-4">
-                      <span className="text-[10px] font-bold text-slate-500 uppercase border px-1.5 py-0.5 rounded">{loan.product_name}</span>
-                    </td>
-                    <td className="px-4 py-4 font-black text-emerald-600 dark:text-emerald-400">
-                      KES {Number(loan.total_repayable_amount).toLocaleString()}
-                    </td>
-                    <td className="px-4 py-4 font-semibold italic text-slate-700 dark:text-slate-300">
-                      KES {Number(loan.principal_amount).toLocaleString()}
-                    </td>
-                    <td className="px-4 py-4">
-                      <Badge variant={getStatusColor(loan.status)}>
-                        {loan.status}
-                      </Badge>
-                    </td>
-                    <td className="px-4 py-4 text-right">
-                      <div className="flex justify-end gap-2">
-                        {['UNVERIFIED', 'FIELD_VERIFIED', 'VERIFIED'].includes(loan.status) && (
-                          <Button 
-                            size="xs" 
-                            className={`${loan.status === 'VERIFIED' ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-blue-600 hover:bg-blue-700'} text-white font-bold whitespace-nowrap`}
-                            onClick={() => {
-                              setSelectedCustomer(customers.find(c => c.id === loan.user));
-                              setSelectedLoan(loan);
-                            }}
-                            disabled={updating}
-                          >
-                            {loan.status === 'FIELD_VERIFIED' ? 'Verify & Push' : (loan.status === 'VERIFIED' ? 'Re-Verify' : 'Verify')}
-                          </Button>
-                        )}
-                        <Button 
-                          size="xs" 
-                          variant="ghost"
-                          onClick={() => {
-                            setSelectedLoan(loan);
-                            // Also set customer so the modal can show history if needed
-                            setSelectedCustomer(customers.find(c => c.id === loan.user));
-                          }}
-                        >
-                          <Eye className="w-4 h-4" />
-                        </Button>
-                      </div>
-                    </td>
-                  </tr>
-                ))
-              ) : (
-                <tr>
-                   <td colSpan="7" className="px-4 py-12 text-center text-slate-400 italic">No {activeTab.toLowerCase()} loans found in this branch</td>
-                </tr>
-              )}
-            </tbody>
-            {loans.filter(l => {
-                  const s = l.status;
-                  if (activeTab === 'ACTIVE') return ['DISBURSED', 'ACTIVE', 'OVERDUE', 'CLOSED', 'REPAID'].includes(s);
-                  if (activeTab === 'PENDING') return ['UNVERIFIED', 'VERIFIED', 'APPROVED', 'PENDING'].includes(s);
-                  return s === 'REJECTED';
-              }).length > 0 && (
-              <tfoot className="sticky bottom-0 z-10 bg-slate-50 dark:bg-slate-900 font-bold border-t-2 border-slate-200 dark:border-slate-800">
-                <tr>
-                   <td colSpan="3" className="px-4 py-3 text-right text-[10px] font-black text-slate-500">BRANCH TOTALS:</td>
-                   <td className="px-4 py-3 text-sm font-black text-emerald-600 dark:text-emerald-400">
-                     KES {totals.repayable.toLocaleString()}
-                   </td>
-                   <td className="px-4 py-3 text-sm font-black text-slate-700 dark:text-slate-300">
-                     KES {totals.principal.toLocaleString()}
-                   </td>
-                   <td colSpan="2"></td>
-                </tr>
-              </tfoot>
             )}
-          </table>
+          />
         </div>
       </Card>
 
@@ -1146,7 +1133,8 @@ const ManagerDashboard = () => {
           onSuccess={() => {
             setShowRepaymentModal(false);
             setSelectedLoan(null);
-            fetchData();
+            invalidateRepayments();
+            invalidateLoans();
           }}
         />
       )}
@@ -1275,7 +1263,8 @@ const ManagerDashboard = () => {
           loanToVerify={reviewingLoan}
           onVerified={() => {
             setIsReviewOpen(false);
-            window.location.reload();
+            invalidateLoans();
+            invalidateCustomers();
           }}
           onClose={() => setIsReviewOpen(false)}
         />

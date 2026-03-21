@@ -1,44 +1,26 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Card, Button, Table } from '../components/ui/Shared';
 import { loanService } from '../api/api';
+import { useSMSLogs, useInvalidate } from '../hooks/useQueries';
 import { MessageSquare, Calendar, Phone, User, Tag, Search, Send, Bell } from 'lucide-react';
 import BulkCustomerSMSModal from '../components/ui/BulkCustomerSMSModal';
 import useDebounce from '../hooks/useDebounce';
 
 const CustomerCommunicator = () => {
-    const [logs, setLogs] = useState([]);
-    const [loading, setLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState('');
     const debouncedSearch = useDebounce(searchTerm, 500);
     const [isBulkModalOpen, setIsBulkModalOpen] = useState(false);
     const [page, setPage] = useState(1);
-    const [hasMore, setHasMore] = useState(false);
 
-    useEffect(() => {
-        setPage(1);
-        fetchLogs(1, true);
-    }, [debouncedSearch]);
+    const { data: logsData, isLoading: loading } = useSMSLogs({ 
+        page, 
+        page_size: 10,
+        search: debouncedSearch 
+    });
+    const { invalidateSMSLogs } = useInvalidate();
 
-    const fetchLogs = async (pageNum = 1, isReset = false) => {
-        try {
-            setLoading(true);
-            const params = { page: pageNum, page_size: 10 };
-            if (debouncedSearch) params.search = debouncedSearch;
-            
-            const data = await loanService.getSMSLogs(params);
-            
-            setHasMore(!!data.next);
-            if (isReset) {
-                setLogs(data.results || []);
-            } else {
-                setLogs(prev => [...prev, ...(data.results || [])]);
-            }
-        } catch (err) {
-            console.error('Error fetching SMS logs:', err);
-        } finally {
-            setLoading(false);
-        }
-    };
+    const logs = useMemo(() => logsData?.results || logsData || [], [logsData]);
+    const hasMore = !!logsData?.next;
 
     const getTypeColor = (type) => {
         switch (type) {
@@ -123,29 +105,28 @@ const CustomerCommunicator = () => {
                   <div className="p-4 border-t border-slate-100 dark:border-slate-800 flex justify-center bg-white dark:bg-slate-900">
                     <Button 
                       variant="outline" 
-                      onClick={() => {
-                        const nextPage = page + 1;
-                        setPage(nextPage);
-                        fetchLogs(nextPage);
-                      }}
-                      disabled={loading}
-                      className="px-8 font-black uppercase tracking-widest text-xs"
-                    >
-                      {loading ? 'Processing...' : 'Load More Logs'}
-                    </Button>
-                  </div>
-                )}
-            </Card>
-
-            <BulkCustomerSMSModal 
-                isOpen={isBulkModalOpen} 
-                onClose={() => {
-                    setIsBulkModalOpen(false);
-                    fetchLogs(1, true); // Refresh logs
-                }} 
-            />
-        </div>
-    );
-};
+                        onClick={() => {
+                          const nextPage = page + 1;
+                          setPage(nextPage);
+                        }}
+                        disabled={loading}
+                        className="px-8 font-black uppercase tracking-widest text-xs"
+                      >
+                        {loading ? 'Processing...' : 'Load More Logs'}
+                      </Button>
+                    </div>
+                  )}
+              </Card>
+  
+              <BulkCustomerSMSModal 
+                  isOpen={isBulkModalOpen} 
+                  onClose={() => {
+                      setIsBulkModalOpen(false);
+                      invalidateSMSLogs(); // Refresh logs
+                  }} 
+              />
+          </div>
+      );
+  };
 
 export default CustomerCommunicator;

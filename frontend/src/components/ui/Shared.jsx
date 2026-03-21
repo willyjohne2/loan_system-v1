@@ -67,30 +67,59 @@ export const Card = ({ className, children }) => (
 /**
  * Table Component
  */
-export const Table = ({ headers, data, renderRow, className, maxHeight = "max-h-[600px]" }) => (
-  <div className={cn("w-full overflow-hidden rounded-lg border border-slate-200 dark:border-slate-800", className)}>
-    <div className={cn("overflow-x-auto overflow-y-auto", maxHeight)}>
-      <table className="w-full text-sm md:text-base text-left min-w-[600px] border-collapse">
-        <thead className="bg-slate-50 text-slate-600 dark:bg-slate-800/50 dark:text-slate-400 font-medium sticky top-0 z-10">
-          <tr>
-            {headers.map((h, i) => <th key={i} className="px-4 md:px-6 py-3 md:py-4 bg-slate-50 dark:bg-slate-800/90">{h}</th>)}
-          </tr>
-        </thead>
-        <tbody className="divide-y divide-slate-200 dark:divide-slate-800">
-          {data && data.length > 0 ? (
-            data.map((item, i) => renderRow(item, i))
-          ) : (
+export const Table = ({ headers, data, renderRow, className, maxHeight = "max-h-[600px]", initialCount = 10 }) => {
+  const [displayCount, setDisplayCount] = React.useState(initialCount);
+  const hasMore = data && data.length > displayCount;
+  const showLess = displayCount > initialCount;
+
+  const visibleData = data ? data.slice(0, displayCount) : [];
+
+  return (
+    <div className={cn("w-full overflow-hidden rounded-lg border border-slate-200 dark:border-slate-800 flex flex-col", className)}>
+      <div className={cn("overflow-x-auto overflow-y-auto", maxHeight)}>
+        <table className="w-full text-sm md:text-base text-left min-w-[600px] border-collapse">
+          <thead className="bg-slate-50 text-slate-600 dark:bg-slate-800/50 dark:text-slate-400 font-medium sticky top-0 z-10">
             <tr>
-              <td colSpan={headers.length} className="px-6 py-8 text-center text-slate-500">
-                No data available
-              </td>
+              {headers.map((h, i) => <th key={i} className="px-4 md:px-6 py-3 md:py-4 bg-slate-50 dark:bg-slate-800/90">{h}</th>)}
             </tr>
+          </thead>
+          <tbody className="divide-y divide-slate-200 dark:divide-slate-800">
+            {visibleData && visibleData.length > 0 ? (
+              visibleData.map((item, i) => renderRow(item, i))
+            ) : (
+              <tr>
+                <td colSpan={headers.length} className="px-6 py-8 text-center text-slate-500 font-bold italic">
+                  No data available
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+      
+      {(hasMore || showLess) && (
+        <div className="p-3 border-t border-slate-100 dark:border-slate-800 bg-slate-50/30 dark:bg-slate-900/50 flex justify-center gap-4">
+          {hasMore && (
+            <button 
+              onClick={() => setDisplayCount(prev => prev + 10)}
+              className="text-xs font-black uppercase tracking-widest text-primary-600 hover:text-primary-700 dark:text-primary-400 flex items-center gap-2 px-4 py-2 rounded-lg hover:bg-primary-50 dark:hover:bg-primary-900/20 transition-all font-bold"
+            >
+              Show More (+10)
+            </button>
           )}
-        </tbody>
-      </table>
+          {showLess && (
+            <button 
+              onClick={() => setDisplayCount(prev => Math.max(initialCount, prev - 10))}
+              className="text-xs font-black uppercase tracking-widest text-slate-500 hover:text-slate-700 dark:text-slate-400 flex items-center gap-2 px-4 py-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-all font-bold"
+            >
+              Show Less (-10)
+            </button>
+          )}
+        </div>
+      )}
     </div>
-  </div>
-);
+  );
+};
 
 /**
  * Stat Card

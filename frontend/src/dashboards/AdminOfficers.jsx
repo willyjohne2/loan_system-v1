@@ -1,5 +1,6 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import { loanService } from '../api/api';
+import { useAdmins } from '../hooks/useQueries';
 import { Table, Button, Card } from '../components/ui/Shared';
 import { UserPlus, Shield, Activity, ShieldOff, Send } from 'lucide-react';
 import AdminActivityModal from '../components/ui/AdminActivityModal';
@@ -10,18 +11,19 @@ import { useAuth } from '../context/AuthContext';
 
 const AdminOfficers = ({ role = 'FINANCIAL_OFFICER' }) => {
   const { user } = useAuth();
-  const [officers, setOfficers] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const isSuperAdminOrOwner = user?.is_super_admin || user?.is_owner || user?.role === 'SUPER_ADMIN' || user?.role === 'OWNER';
+  const isManager = user?.role === 'MANAGER';
+  // Allow Managers only to invite Field Officers
+  const canInvite = isSuperAdminOrOwner || (isManager && role === 'FIELD_OFFICER');
+
   const [selectedAdmin, setSelectedAdmin] = useState(null);
   const [showActivity, setShowActivity] = useState(false);
   const [showEmail, setShowEmail] = useState(false);
   const [emailTargets, setEmailTargets] = useState(null);
   const [bulkEmail, setBulkEmail] = useState(false);
   const [isInviting, setIsInviting] = useState(false);
-  const [error, setError] = useState('');
   
   const [page, setPage] = useState(1);
-  const [hasMore, setHasMore] = useState(false);
 
   // Deactivation Request State
   const [isDeactivateModalOpen, setIsDeactivateModalOpen] = useState(false);
@@ -30,34 +32,14 @@ const AdminOfficers = ({ role = 'FINANCIAL_OFFICER' }) => {
 
   const userRole = user?.role || user?.admin?.role;
 
-  useEffect(() => {
-    fetchOfficers(1, true);
-  }, [role]);
+  const { data: adminsData, isLoading: loading, error } = useAdmins({ role, page, page_size: 10 });
+  
+  const hasMore = useMemo(() => !!adminsData?.next, [adminsData]);
 
-  const fetchOfficers = async (pageNum = 1, isReset = false) => {
-    try {
-      setLoading(true);
-      console.log(`[AdminOfficers] Fetching ${role} officers, page ${pageNum}...`);
-      const fetchFunc = role === 'FIELD_OFFICER' ? loanService.getFieldOfficers : loanService.getFinanceOfficers;
-      const data = await fetchFunc({ page: pageNum, page_size: 10 });
-      
-      const officersList = data.results || data || [];
-      setHasMore(!!data.next);
-
-      if (isReset) {
-        setOfficers(officersList);
-      } else {
-        setOfficers(prev => [...prev, ...officersList]);
-      }
-      setError('');
-    } catch (err) {
-      console.error(`[AdminOfficers] Error fetching ${role} officers:`, err);
-      setError(`Failed to load ${role === 'FIELD_OFFICER' ? 'field' : 'finance'} officers`);
-      setOfficers([]);
-    } finally {
-      setLoading(false);
-    }
-  };
+  const officers = useMemo(() => {
+    const data = adminsData?.results || adminsData || [];
+    return Array.isArray(data) ? data.filter(a => a.role === role) : [];
+  }, [adminsData, role]);
 
   const handleDeactivationSubmit = async (officerId, reason) => {
     setSubmittingDeactivation(true);
@@ -77,12 +59,16 @@ const AdminOfficers = ({ role = 'FINANCIAL_OFFICER' }) => {
     }
   };
 
+  const isAnyAdmin = user?.role === 'ADMIN' || user?.is_super_admin || user?.is_owner;
+  const canInviteAny = isAnyAdmin || (isManager && role === 'FIELD_OFFICER');
+
   if (loading) return <div className="flex items-center justify-center h-64 text-slate-500">Loading officers...</div>
+
 
   if (error) {
     return (
       <div className="p-4 bg-red-50 border border-red-200 text-red-700 rounded-lg">
-        {error}
+        {error.message || 'Error loading officers'}
       </div>
     );
   }
@@ -95,28 +81,32 @@ const AdminOfficers = ({ role = 'FINANCIAL_OFFICER' }) => {
           <p className="text-sm text-slate-500">View and manage all active {role === 'FIELD_OFFICER' ? 'field' : 'finance'} officers.</p>
         </div>
         <div className="flex items-center gap-4">
-          <Button 
-            variant="secondary"
-            className="flex items-center"
-            onClick={() => {
-              setEmailTargets(officers);
-              setBulkEmail(true);
-              setShowEmail(true);
-            }}
-          >
-            <Send className="w-4 h-4 mr-2" />
-            Bulk Email
-          </Button>
-          <Button 
-            className="flex items-center"
-            onClick={() => {
-              console.log('Opening invitation modal for:', role);
-              setIsInviting(true);
-            }}
-          >
-            <UserPlus className="w-4 h-4 mr-2" />
-            Invite {role === 'FIELD_OFFICER' ? 'Field Officer' : 'Finance Officer'}
-          </Button>
+          {(isSuperAdminOrOwner || (isManager && role === 'FIELD_OFFICER')) && (
+            <Button 
+              variant="secondary"
+              className="flex items-center"
+              onClick={() => {
+                setEmailTargets(officers);
+                setBulkEmail(true);
+                setShowEmail(true);
+              }}
+            >
+              <Send className="w-4 h-4 mr-2" />
+              Bulk Email
+            </Button>
+          )}
+          {canInviteAny && (
+            <Button 
+              className="flex items-center"
+              onClick={() => {
+                console.log('Opening invitation modal for:', role);
+                setIsInviting(true);
+              }}
+            >
+              <UserPlus className="w-4 h-4 mr-2" />
+              Invite {role === 'FIELD_OFFICER' ? 'Field Officer' : 'Finance Officer'}
+            </Button>
+          )}
         </div>
       </div>
 
@@ -129,6 +119,7 @@ const AdminOfficers = ({ role = 'FINANCIAL_OFFICER' }) => {
           <Table
             headers={['Name', 'Email', 'Phone', 'Status', 'Actions']}
             data={officers}
+            initialCount={10}
             maxHeight="max-h-[500px]"
             renderRow={(officer) => (
               <tr key={officer.id} className="hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
@@ -190,9 +181,7 @@ const AdminOfficers = ({ role = 'FINANCIAL_OFFICER' }) => {
               <Button 
                 variant="secondary" 
                 onClick={() => {
-                  const nextPage = page + 1;
-                  setPage(nextPage);
-                  fetchOfficers(nextPage);
+                  setPage(p => p + 1);
                 }}
                 disabled={loading}
                 className="px-8 font-black uppercase tracking-widest text-xs"

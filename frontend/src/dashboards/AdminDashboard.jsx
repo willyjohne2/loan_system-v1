@@ -16,6 +16,7 @@ import OfficialCommunicator from './OfficialCommunicator';
 import ProfileSettings from '../pages/ProfileSettings';
 import SuperAdminPage from './SuperAdminPage';
 import SecurityLogsPage from './SecurityLogsPage';
+import SecurityThreatsPage from './SecurityThreatsPage';
 import OwnerAuditPage from './owner/OwnerAuditPage';
 import { clsx } from 'clsx';
 import { useAuth } from '../context/AuthContext';
@@ -26,6 +27,16 @@ const AdminDashboard = () => {
   const location = useLocation();
   const { user } = useAuth();
   const navigate = useNavigate();
+
+  const isOwner = user?.is_owner || user?.role === 'OWNER';
+  const isSuperAdmin = user?.is_super_admin || user?.role === 'SUPER_ADMIN';
+  const isAnyAdmin = isOwner || isSuperAdmin || user?.role === 'ADMIN';
+
+  // Helper for role-protected routes
+  const RoleRoute = ({ children, allowed }) => {
+    if (allowed) return children;
+    return <Navigate to="/admin/dashboard" replace />;
+  };
 
   const getTitle = () => {
     if (location.pathname.includes('/managers')) return 'Manager Management';
@@ -40,11 +51,16 @@ const AdminDashboard = () => {
     if (location.pathname.includes('/customer-communicator')) return 'Customer Communication';
     if (location.pathname.includes('/official-communicator')) return 'Official Communication';
     if (location.pathname.includes('/super-admins')) return 'Super Admin Console';
+    if (location.pathname.includes('/security-threats')) return 'Real-time Security Threat Intel';
     if (location.pathname.includes('/security-logs')) return 'Security & Compliance';
     if (location.pathname.includes('/owner-audit')) return 'Owner Audit Trail';
     if (location.pathname.includes('/settings')) return 'System Financial Settings';
     if (location.pathname.includes('/profile')) return 'Account Profile';
-    return 'Admin Dashboard';
+    
+    // Dynamic Role Title
+    if (isOwner) return 'Owner High-Command Dashboard';
+    if (isSuperAdmin) return 'Super Admin Command Center';
+    return 'Administrator Control Panel';
   };
 
   return (
@@ -76,29 +92,54 @@ const AdminDashboard = () => {
         <Routes>
           <Route index element={<AdminOverview />} />
           <Route path="dashboard" element={<AdminOverview />} />
+          
+          {/* Owner/SuperAdmin Restricted */}
+          <Route path="super-admins" element={
+            <RoleRoute allowed={isOwner || isSuperAdmin}>
+              <SuperAdminPage />
+            </RoleRoute>
+          } />
+          <Route path="security-threats" element={
+            <RoleRoute allowed={isOwner || isSuperAdmin}>
+              <SecurityThreatsPage />
+            </RoleRoute>
+          } />
+          
+          {/* SuperAdmin/Owner Restricted (Admins can't see accounts) */}
+          <Route path="accounts" element={
+            <RoleRoute allowed={isOwner || isSuperAdmin}>
+              <AdminAccounts />
+            </RoleRoute>
+          } />
+          <Route path="settings" element={
+            <RoleRoute allowed={isOwner || isSuperAdmin}>
+              <AdminSettings />
+            </RoleRoute>
+          } />
+
+          {/* Owner Only */}
+          <Route path="owner-audit" element={
+            <RoleRoute allowed={isOwner}>
+              <OwnerAuditPage />
+            </RoleRoute>
+          } />
+
+          {/* Regular Admin+ Access */}
           <Route path="managers" element={<AdminManagers />} />
           <Route path="finance-officers" element={<AdminOfficers role="FINANCIAL_OFFICER" />} />
           <Route path="field-officers" element={<AdminOfficers role="FIELD_OFFICER" />} />
           <Route path="customers" element={<AdminCustomers />} />
           <Route path="loans" element={<AdminLoans />} />
-          <Route path="accounts" element={<AdminAccounts />} />
           <Route path="deactivations" element={<AdminDeactivations />} />
           <Route path="branches" element={<BranchManagement />} />
           <Route path="audit" element={<AdminAuditLogs />} />
-          <Route path="super-admins" element={
-            (user?.is_owner || user?.is_super_admin)
-              ? <SuperAdminPage />
-              : <Navigate to="/admin/dashboard" replace />
-          } />
-          <Route path="security-logs" element={<SecurityLogsPage />} />
-          <Route path="owner-audit" element={
-            user?.is_owner
-              ? <OwnerAuditPage />
-              : <Navigate to="/admin/dashboard" replace />
+          <Route path="security-logs" element={
+            <RoleRoute allowed={isOwner || isSuperAdmin}>
+              <SecurityLogsPage />
+            </RoleRoute>
           } />
           <Route path="customer-communicator" element={<CustomerCommunicator />} />
           <Route path="official-communicator" element={<OfficialCommunicator />} />
-          <Route path="settings" element={<AdminSettings />} />
           <Route path="profile" element={<ProfileSettings />} />
         </Routes>
       </div>
