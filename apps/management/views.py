@@ -216,9 +216,40 @@ class TestMpesaConnectionView(views.APIView):
         try:
             from ..utils.mpesa import MpesaHandler
             handler = MpesaHandler()
+            
+            # Helper to mask sensitive data
+            def mask(value):
+                if not value: return "[MISSING]"
+                if len(value) > 8: return f"{value[:4]}...{value[-4:]}"
+                return "****"
+
+            # 1. Config Info (Masked)
+            config = {
+                "consumer_key": mask(handler.consumer_key),
+                "consumer_secret": mask(handler.consumer_secret),
+                "shortcode": mask(handler.shortcode),
+                "passkey": mask(handler.passkey),
+                "b2c_shortcode": mask(handler.b2c_shortcode),
+                "initiator_name": mask(handler.initiator_name),
+                "callback_url": handler.callback_url,
+                "base_url": handler.base_url
+            }
+
+            # 2. Test Connection
             token = handler.get_access_token()
-            if token: return Response({"status": "success", "message": "Connected to Daraja successfully."})
-            return Response({"status": "error", "message": "Failed access token."}, status=400)
+            if token: 
+                return Response({
+                    "status": "success", 
+                    "message": "Connected to Daraja successfully.", 
+                    "token_preview": f"{token[:10]}...{token[-10:]}",
+                    "configuration": config
+                })
+            
+            return Response({
+                "status": "error", 
+                "message": "Failed access token.",
+                "configuration": config
+            }, status=400)
         except Exception as e: return Response({"status": "error", "message": str(e)}, status=500)
 
 class TestSMSSendView(views.APIView):
