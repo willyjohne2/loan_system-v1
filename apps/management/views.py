@@ -212,6 +212,12 @@ class SecureSettingsRevealView(views.APIView):
 class TestMpesaConnectionView(views.APIView):
     permission_classes = [permissions.IsAuthenticated, IsAdminUser]
 
+    def get(self, request):
+        return Response({
+            "message": "Send a POST request to test M-Pesa connection.",
+            "instructions": "Click the POST button below or send a POST request to this endpoint."
+        })
+
     def post(self, request):
         try:
             from ..utils.mpesa import MpesaHandler
