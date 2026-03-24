@@ -71,7 +71,11 @@ from .views import (
     SystemHealthView,
     OwnerExportView,
     HierarchicalSecurityAlertsView,
-    LogoutView,
+)
+
+from .management.staff_notification_views import (
+    StaffNotificationListView,
+    StaffNotificationMarkReadView,
 )
 
 urlpatterns = [
@@ -184,4 +188,6 @@ urlpatterns = [
     path("repayments/", RepaymentListCreateView.as_view(), name="repayments"),
     path("loan-documents/", LoanDocumentCreateView.as_view(), name="loan-documents"),
     path("audit-logs/", AuditLogListView.as_view(), name="audit-logs"),
+    path('staff-notifications/', StaffNotificationListView.as_view(), name='staff-notifications'),
+    path('staff-notifications/mark-read/', StaffNotificationMarkReadView.as_view(), name='staff-notifications-mark-read'),
 ]

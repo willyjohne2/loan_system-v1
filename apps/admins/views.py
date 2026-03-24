@@ -229,7 +229,9 @@ class DeactivationRequestListCreateView(generics.ListCreateAPIView):
 
     def perform_create(self, serializer):
         user = self.request.user
-        serializer.save(requested_by=user, status="PENDING")
+        req_obj = serializer.save(requested_by=user, status="PENDING")
+        from ..services import notify_deactivation_request
+        notify_deactivation_request(req_obj)
         AuditLogs.objects.create(
             admin=user, action=f"Requested deactivation for officer {serializer.validated_data['officer'].full_name}",
             log_type="MANAGEMENT", table_name="deactivation_requests", record_id=None

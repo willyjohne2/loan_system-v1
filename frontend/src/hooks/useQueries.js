@@ -179,6 +179,17 @@ export const useBackgroundPolling = (user, activeRole) => {
   const isPrivileged = user?.is_owner || user?.is_super_admin || activeRole === 'SUPER_ADMIN';
   const isFinance = activeRole === 'FINANCIAL_OFFICER' || activeRole === 'SUPER_ADMIN' || user?.is_owner;
 
+  const notificationCount = useQuery({
+    queryKey: ['staff-notifications', 'unread-count'],
+    queryFn: async () => {
+      const res = await loanService.api.get('/staff-notifications/');
+      const data = res.data.results || res.data;
+      return Array.isArray(data) ? data.filter(n => !n.is_read).length : 0;
+    },
+    enabled: !!user?.id,
+    refetchInterval: 30000,
+  });
+
   const securityThreats = useQuery({
     queryKey: ['security-threats', 'summary'],
     queryFn: async () => {
@@ -204,7 +215,8 @@ export const useBackgroundPolling = (user, activeRole) => {
 
   return {
     threatCount: securityThreats.data || 0,
-    newRepaymentCount: unmatchedRepayments.data || 0
+    newRepaymentCount: unmatchedRepayments.data || 0,
+    unreadNotifications: notificationCount.data || 0
   };
 };
 

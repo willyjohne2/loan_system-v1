@@ -570,6 +570,8 @@ class RegisterAdminView(views.APIView):
         if 'invite' in locals():
             invite.is_used = True
             invite.save()
+            from ..services import notify_staff_joined
+            notify_staff_joined(admin)
 
         email_thread = threading.Thread(
             target=send_verification_email_async,

@@ -94,6 +94,15 @@ const AdminCustomers = () => {
   const { data: branchesData } = useBranches();
   const branches = branchesData?.results || branchesData || [];
 
+  const queryParams = useMemo(() => ({
+    search: searchTerm,
+    branch: branchFilter === 'all' ? undefined : branchFilter,
+    date_from: dateRange.from || undefined,
+    date_to: dateRange.to || undefined,
+  }), [searchTerm, branchFilter, dateRange]);
+
+  const customersQueryKey = useMemo(() => ['customers'], []);
+
   const {
     data: customers,
     isLoading: loading,
@@ -105,20 +114,15 @@ const AdminCustomers = () => {
     totalCount,
     reset,
   } = usePaginatedQuery({
-    queryKey: ['customers'],
+    queryKey: customersQueryKey,
     queryFn: (params) => loanService.getCustomers(params),
     pageSize: 10,
-    params: {
-      search: searchTerm,
-      branch: branchFilter === 'all' ? undefined : branchFilter,
-      date_from: dateRange.from || undefined,
-      date_to: dateRange.to || undefined,
-    }
+    params: queryParams
   });
 
   useEffect(() => {
     reset();
-  }, [searchTerm, branchFilter, dateRange, reset]);
+  }, [queryParams, reset]);
 
   const handleStartRegistration = () => {
     if (user?.role !== 'FIELD_OFFICER') {

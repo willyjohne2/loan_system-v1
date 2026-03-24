@@ -36,6 +36,7 @@ import { loanService } from '../../api/api';
 import { cn } from '../../utils/cn';
 import { toast } from 'react-hot-toast';
 import BranchSelectorModal from '../../components/ui/BranchSelectorModal';
+import Navbar from '../../components/layout/Navbar';
 
 // Required for the sidebar links
 const Crown = ({ className }) => <ShieldCheck className={className} />;
@@ -366,13 +367,15 @@ const OwnerLayout = ({ children }) => {
           {/* User Profile Footer */}
           <div className="p-4 border-t border-slate-200 dark:border-slate-800">
              <div className="bg-slate-50 dark:bg-slate-800/50 rounded-2xl p-4">
-                <div className="flex items-center gap-3 mb-4">
-                    <div className="w-10 h-10 rounded-full bg-indigo-600 flex items-center justify-center text-white font-bold text-sm">
-                        {user?.full_name?.charAt(0) || 'O'}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                        <p className="text-sm font-bold text-slate-900 dark:text-white truncate">{user?.full_name}</p>
-                        <p className="text-[10px] text-indigo-600 font-bold uppercase tracking-widest">Owner Account</p>
+                <div className="flex items-center justify-between gap-2 mb-4">
+                    <div className="flex items-center gap-3 min-w-0">
+                        <div className="w-10 h-10 rounded-full bg-indigo-600 flex items-center justify-center text-white font-bold text-sm shrink-0">
+                            {user?.full_name?.charAt(0) || 'O'}
+                        </div>
+                        <div className="min-w-0">
+                            <p className="text-sm font-bold text-slate-900 dark:text-white truncate">{user?.full_name}</p>
+                            <p className="text-[10px] text-indigo-600 font-bold uppercase tracking-widest">Owner Account</p>
+                        </div>
                     </div>
                 </div>
                 <button 
@@ -389,18 +392,11 @@ const OwnerLayout = ({ children }) => {
 
       {/* Main Content Area */}
       <div className="flex-1 min-w-0 flex flex-col h-screen overflow-hidden">
-        {/* Mobile Navbar */}
-        <header className="lg:hidden bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 px-4 py-4 flex items-center justify-between">
-            <div className="flex items-center gap-3">
-                <button onClick={() => setIsSidebarOpen(true)} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg">
-                    <Menu className="w-6 h-6" />
-                </button>
-                <span className="font-black text-slate-900 dark:text-white tracking-tight">OWNER</span>
-            </div>
-            <div className="w-10 h-10 rounded-full bg-indigo-600 flex items-center justify-center text-white font-bold text-xs">
-                {user?.full_name?.charAt(0)}
-            </div>
-        </header>
+        <Navbar 
+            title="Owner Dashboard" 
+            onMenuClick={() => setIsSidebarOpen(!isSidebarOpen)}
+            isSidebarOpen={isSidebarOpen}
+        />
 
         <main className="flex-1 overflow-y-auto no-scrollbar">
           <div className="max-w-[1600px] mx-auto p-4 md:p-8">

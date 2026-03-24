@@ -13,6 +13,8 @@ class Command(BaseCommand):
                 old_status = loan.status
                 loan.status = 'OVERDUE'
                 loan.save()
+                from apps.services import notify_customer_overdue
+                notify_customer_overdue(loan)
                 AuditLogs.objects.create(
                     action=f"Loan {loan.id.hex[:8]} automatically marked OVERDUE",
                     log_type="STATUS",

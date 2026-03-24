@@ -59,7 +59,8 @@ export const usePaginatedQuery = ({
     setPage(1);
     setAllResults([]);
     queryClient.invalidateQueries(queryKey);
-  }, [queryKey, queryClient]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [JSON.stringify(queryKey), queryClient]);
 
   return {
     data: allResults,

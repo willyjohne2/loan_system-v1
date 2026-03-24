@@ -238,6 +238,13 @@ class Loans(models.Model):
         Admins, models.SET_NULL, null=True, blank=True, related_name="modified_loans"
     )
     disbursed_at = models.DateTimeField(null=True, blank=True)
+    mpesa_originator_id = models.CharField(max_length=100, blank=True, null=True, db_index=True)
+    mpesa_receipt_number = models.CharField(max_length=50, blank=True, null=True)
+    mpesa_disbursement_status = models.CharField(
+        max_length=20,
+        choices=[('PENDING', 'Pending'), ('SUCCESS', 'Success'), ('FAILED', 'Failed'), ('TIMEOUT', 'Timeout')],
+        blank=True, null=True
+    )
     created_at = models.DateTimeField(default=timezone.now, null=True, db_index=True)
     updated_at = models.DateTimeField(auto_now=True, null=True)
 
@@ -391,6 +398,52 @@ class Notifications(models.Model):
     class Meta:
         managed = True
         db_table = "notifications"
+
+class StaffNotification(models.Model):
+    NOTIFICATION_TYPES = (
+        ('CAPITAL_LOW', 'Capital Low Warning'),
+        ('CAPITAL_CRITICAL', 'Capital Critically Low'),
+        ('LARGE_DISBURSEMENT', 'Large Disbursement Alert'),
+        ('VERIFICATION_BACKLOG', 'Verification Queue Backlog'),
+        ('LOANS_STUCK', 'Loans Stuck In Pipeline'),
+        ('OVERDUE_SPIKE', 'Overdue Loans Spike'),
+        ('UNMATCHED_REPAYMENTS', 'Unmatched Repayments Sitting'),
+        ('DISBURSEMENT_QUEUE', 'Disbursement Queue Alert'),
+        ('STAFF_JOINED', 'New Staff Joined'),
+        ('DEACTIVATION_REQUEST', 'Deactivation Request Submitted'),
+        ('LOAN_REJECTED', 'Loan Rejected'),
+        ('CUSTOMER_OVERDUE', 'Customer Gone Overdue'),
+        ('SECURITY_THREAT', 'Security Threat Detected'),
+        ('OFFICER_INACTIVE', 'Field Officer Inactive'),
+        ('GOD_MODE_ACT', 'God Mode Act Session Started'),
+        ('OWNERSHIP_CHANGE', 'Ownership Change'),
+        ('STAFF_SUSPENDED', 'Staff Suspended'),
+    )
+
+    PRIORITY_LEVELS = (
+        ('LOW', 'Low'),
+        ('MEDIUM', 'Medium'),
+        ('HIGH', 'High'),
+        ('CRITICAL', 'Critical'),
+    )
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    recipient = models.ForeignKey('Admins', on_delete=models.CASCADE, related_name='staff_notifications')
+    notification_type = models.CharField(max_length=50, choices=NOTIFICATION_TYPES)
+    priority = models.CharField(max_length=10, choices=PRIORITY_LEVELS, default='MEDIUM')
+    title = models.CharField(max_length=255)
+    message = models.TextField()
+    is_read = models.BooleanField(default=False)
+    send_email = models.BooleanField(default=False)
+    email_sent = models.BooleanField(default=False)
+    related_table = models.CharField(max_length=100, blank=True, null=True)
+    related_id = models.UUIDField(blank=True, null=True)
+    created_at = models.DateTimeField(default=timezone.now)
+
+    class Meta:
+        managed = True
+        db_table = 'staff_notifications'
+        ordering = ['-created_at']
 
 
 class RepaymentSchedule(models.Model):

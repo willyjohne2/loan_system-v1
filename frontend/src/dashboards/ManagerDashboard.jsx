@@ -87,29 +87,32 @@ const ManagerDashboard = () => {
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
 
+  const managerQueueParams = useMemo(() => ({
+    tab: activeTab, 
+    search: search || undefined,
+    date_from: dateFrom || undefined,
+    date_to: dateTo || undefined
+  }), [activeTab, search, dateFrom, dateTo]);
+
   const { 
     data: loans, 
     isLoading: loansLoading, 
-    isFetching,
+    isFetching, 
     error: loansError, 
     hasMore, 
     showMore: fetchNext, 
     showLess,
     reset 
   } = usePaginatedQuery({
-    queryKey: ['manager-queue', { tab: activeTab, search, date_from: dateFrom, date_to: dateTo }],
-    queryFn: (params) => loanService.getManagerQueue({ 
-      ...params, 
-      tab: activeTab, 
-      search: search || undefined,
-      date_from: dateFrom || undefined,
-      date_to: dateTo || undefined
-    })
+    queryKey: ['manager-queue'],
+    queryFn: (params) => loanService.getManagerQueue(params),
+    pageSize: 10,
+    params: managerQueueParams
   });
 
   useEffect(() => {
     reset();
-  }, [activeTab, search, dateFrom, dateTo]);
+  }, [managerQueueParams, reset]);
 
   const { data: repaymentsData, isLoading: repaymentsLoading } = useRepayments();
   const { data: officersData, isLoading: officersLoading } = useFieldOfficers();

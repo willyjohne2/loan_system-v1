@@ -12,6 +12,10 @@ import VerifyEmailPage from './pages/VerifyEmailPage';
 import ForgotPasswordPage from './pages/ForgotPasswordPage';
 import ResetPasswordPage from './pages/ResetPasswordPage';
 
+// Common Pages
+import AllNotifications from './pages/common/AllNotifications';
+import NotificationsPageWrapper from './components/common/NotificationsPageWrapper';
+
 // Dashboards
 import AdminDashboard from './dashboards/AdminDashboard';
 import OwnerDashboardWrapper from './dashboards/owner/OwnerDashboardWrapper';
@@ -36,6 +40,15 @@ const App = () => {
             <Route path="/reset-password" element={<ResetPasswordPage />} />
           </Route>
 
+          {/* Common Protected Routes */}
+          <Route element={<ProtectedRoute />}>
+            <Route path="/notifications" element={
+              <NotificationsPageWrapper>
+                <AllNotifications />
+              </NotificationsPageWrapper>
+            } />
+          </Route>
+          
           {/* Owner Routes - Only accessible when is_owner === true */}
           <Route element={<ProtectedRoute allowedRoles={['OWNER']} />}>
             <Route path="/owner/*" element={<OwnerDashboardWrapper />} />

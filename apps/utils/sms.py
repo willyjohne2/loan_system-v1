@@ -63,17 +63,18 @@ class SMSHandler:
             return {"status": "error", "message": f"Connection failed: {str(e)}"}
 
 
-def send_invite_email_async(email, token, role, invited_by_name="System Admin", sender_user=None):
+def send_invite_email_sync(email, token, role, invited_by_name="System Admin", sender_user=None):
     try:
         sender_name = os.getenv("SENDER_NAME", "Azariah Credit Ltd")
         from_email = os.getenv("FROM_EMAIL")
         brevo_api_key = os.getenv("BREVO_API_KEY")
         # Ensure your FRONTEND_URL is set in environment, or defaults correctly
         invite_url = f"{os.getenv('FRONTEND_URL', 'http://localhost:5173')}/signup?token={token}&email={email}&role={role}"
-
+        
         if not brevo_api_key or not from_email:
-            print(f"[ERROR] Email setup missing for Invitation: BREVO_API_KEY={bool(brevo_api_key)}, FROM_EMAIL={bool(from_email)}")
-            return
+            err_msg = f"Email setup missing: BREVO_API_KEY={bool(brevo_api_key)}, FROM_EMAIL={bool(from_email)}"
+            print(f"[ERROR] {err_msg}")
+            return False, err_msg
 
         url = "https://api.brevo.com/v3/smtp/email"
         headers = {
@@ -118,9 +119,11 @@ def send_invite_email_async(email, token, role, invited_by_name="System Admin", 
         from ..models import EmailLog
         
         # Determine status
+        is_success = False
         if res.status_code in [200, 201, 202]:
             status = "SENT"
             error_details = None
+            is_success = True
         else:
             status = "FAILED"
             try:
@@ -138,8 +141,10 @@ def send_invite_email_async(email, token, role, invited_by_name="System Admin", 
             status=status,
             error_details=str(error_details) if error_details else None
         )
+        return is_success, error_details
     except Exception as e:
         print(f"Error sending invite email: {e}")
+        return False, str(e)
 
 
 def send_sms_async(recipients, message):

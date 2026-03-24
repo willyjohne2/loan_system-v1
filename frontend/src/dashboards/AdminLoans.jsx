@@ -80,6 +80,8 @@ const FilterBar = ({ searchTerm, setSearchTerm, filterProduct, setFilterProduct,
   </Card>
 );
 
+const LOANS_QUERY_KEY = ['loans'];
+
 const AdminLoans = () => {
   const { user } = useAuth();
   const { invalidateLoans } = useInvalidate();
@@ -106,6 +108,15 @@ const AdminLoans = () => {
   
   const branches = branchesData?.results || branchesData || [];
   
+  const queryParams = useMemo(() => ({
+    search: debouncedSearch,
+    status: filterStatus !== 'ALL' ? filterStatus : undefined,
+    date_from: dateRange.from || undefined,
+    date_to: dateRange.to || undefined,
+    branch: branchFilter === 'all' ? undefined : branchFilter,
+    activeTab: activeTab, // To invalidate correctly when tab changes if needed
+  }), [debouncedSearch, filterStatus, dateRange, branchFilter, activeTab]);
+
   const {
     data: loans,
     isLoading: loading,
@@ -117,22 +128,15 @@ const AdminLoans = () => {
     totalCount,
     reset,
   } = usePaginatedQuery({
-    queryKey: ['loans'],
+    queryKey: LOANS_QUERY_KEY,
     queryFn: (params) => loanService.getLoans(params),
     pageSize: 10,
-    params: {
-      search: debouncedSearch,
-      status: filterStatus !== 'ALL' ? filterStatus : undefined,
-      date_from: dateRange.from || undefined,
-      date_to: dateRange.to || undefined,
-      branch: branchFilter === 'all' ? undefined : branchFilter,
-      activeTab: activeTab, // To invalidate correctly when tab changes if needed
-    }
+    params: queryParams
   });
 
   useEffect(() => {
     reset();
-  }, [debouncedSearch, filterStatus, dateRange, branchFilter, activeTab, reset]);
+  }, [queryParams, reset]);
 
   const handleStatusUpdate = async (loanId, newStatus) => {
     setUpdatingId(loanId);

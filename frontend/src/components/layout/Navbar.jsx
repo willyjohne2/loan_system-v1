@@ -1,10 +1,10 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import { Bell, User, LogOut, Settings, ChevronDown, CheckCheck, Menu } from 'lucide-react';
+import React, { useState } from 'react';
+import { User, ChevronDown, Menu } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
-import { loanService } from '../../api/api';
 import { clsx } from 'clsx';
 import { twMerge } from 'tailwind-merge';
+import NotificationBell from '../common/NotificationBell';
 
 function cn(...inputs) {
   return twMerge(clsx(inputs));
@@ -14,44 +14,6 @@ const Navbar = ({ title, onMenuClick, isSidebarOpen }) => {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
   const [showMenu, setShowMenu] = useState(false);
-  const [showNotifications, setShowNotifications] = useState(false);
-  const [notifications, setNotifications] = useState([]);
-
-  const fetchNotifications = useCallback(async () => {
-    let cancelled = false;
-    try {
-      const endpoint = user?.is_owner 
-        ? '/owner-notifications/' 
-        : user?.is_super_admin
-          ? '/security-logs/'
-          : '/notifications/';
-      const response = await loanService.api.get(endpoint);
-      const data = response.data.results || response.data;
-      if (!cancelled) setNotifications(Array.isArray(data) ? data : []);
-    } catch (err) {
-      if (!cancelled) {
-        console.error('Error fetching notifications:', err.message);
-        setNotifications([]);
-      }
-    }
-    return () => { cancelled = true; };
-  }, [user?.id]);
-
-  useEffect(() => {
-    if (!user?.id) return;
-    fetchNotifications();
-    const interval = setInterval(fetchNotifications, 30000); // Poll every 30s
-    return () => clearInterval(interval);
-  }, [user?.id, fetchNotifications]);
-
-  const markAsRead = async (id) => {
-    try {
-      await loanService.api.patch(`/notifications/${id}/`, { is_read: true });
-      setNotifications(notifications.map(n => n.id === id ? { ...n, is_read: true } : n));
-    } catch (err) {
-      console.error('Error marking notification as read:', err);
-    }
-  };
 
   const userName = user?.admin?.full_name || user?.full_name || user?.name || 'User';
   const userEmail = user?.admin?.email || user?.email || '';
@@ -67,7 +29,8 @@ const Navbar = ({ title, onMenuClick, isSidebarOpen }) => {
       'ADMIN': '/admin/profile',
       'MANAGER': '/manager/profile',
       'FINANCIAL_OFFICER': '/finance/profile',
-      'FIELD_OFFICER': '/field/profile'
+      'FIELD_OFFICER': '/field/profile',
+      'OWNER': '/owner/profile'
     };
     return roleMap[user?.role] || '/login';
   };
@@ -99,67 +62,7 @@ const Navbar = ({ title, onMenuClick, isSidebarOpen }) => {
 
       <div className="flex items-center space-x-1 sm:space-x-3 md:space-x-4">
         
-
-        <div className="relative">
-          <button 
-            onClick={() => setShowNotifications(!showNotifications)}
-            className="relative p-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
-          >
-            <Bell className="w-5 h-5" />
-            {notifications.some(n => !n.is_read) && (
-              <span className="absolute top-2 right-2 w-2 h-2 bg-red-500 rounded-full border-2 border-white dark:border-slate-900"></span>
-            )}
-          </button>
-
-          {showNotifications && (
-            <div className="absolute right-0 mt-2 w-72 md:w-80 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-xl z-30 transition-all">
-              <div className="p-4 border-b border-slate-100 dark:border-slate-700 flex justify-between items-center">
-                <h4 className="font-bold text-sm">
-                    {user?.is_owner ? 'Owner Activity' : user?.is_super_admin ? 'Security Alerts' : 'Notifications'}
-                </h4>
-                <span className="text-[10px] bg-primary-100 text-primary-600 px-2 py-1 rounded-full font-bold">
-                  {notifications.filter(n => !n.is_read).length} NEW
-                </span>
-              </div>
-              <div className="max-h-[400px] overflow-y-auto pr-1">
-                {notifications.length > 0 ? (
-                  notifications.map((notif) => (
-                    <div 
-                      key={notif.id} 
-                      className={`p-4 border-b border-slate-50 dark:border-slate-800/50 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors flex gap-3 ${!notif.is_read ? 'bg-primary-50/30' : ''}`}
-                    >
-                      <div className="h-2 w-2 rounded-full bg-primary-500 mt-2 shrink-0 opacity-0 group-hover:opacity-100"></div>
-                      <div className="flex-1">
-                        <p className={`text-sm ${!notif.is_read ? 'font-bold' : 'text-slate-600 dark:text-slate-400'}`}>
-                          {notif.message}
-                          {notif.log_type && <span className="ml-2 text-[8px] opacity-70 px-1 border border-current rounded uppercase">{notif.log_type}</span>}
-                        </p>
-                        <p className="text-[10px] text-slate-400 mt-1">
-                          {new Date(notif.created_at).toLocaleString()}
-                        </p>
-                      </div>
-                      {!notif.is_read && (
-                        <button 
-                          onClick={() => markAsRead(notif.id)}
-                          className="p-1 hover:bg-white rounded text-slate-300 hover:text-primary-600"
-                        >
-                          <CheckCheck className="w-4 h-4" />
-                        </button>
-                      )}
-                    </div>
-                  ))
-                ) : (
-                  <div className="p-8 text-center text-slate-400">
-                    <p className="text-sm">No notifications yet</p>
-                  </div>
-                )}
-              </div>
-              <div className="p-3 text-center border-t border-slate-100 dark:border-slate-700">
-                <button className="text-xs text-primary-600 font-bold hover:underline">View All Activity</button>
-              </div>
-            </div>
-          )}
-        </div>
+        <NotificationBell />
 
         <div className="relative">
           <button

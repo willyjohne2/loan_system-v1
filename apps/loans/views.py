@@ -3,6 +3,7 @@ from rest_framework.response import Response
 from django.utils import timezone
 from django.db import models
 import uuid
+import logging
 from ..models import (
     Loans, 
     LoanProducts, 
@@ -15,6 +16,9 @@ from ..models import (
     SystemCapital,
     Admins
 )
+
+logger = logging.getLogger(__name__)
+
 from ..serializers import (
     LoanSerializer, 
     LoanProductSerializer,
@@ -252,6 +256,9 @@ class LoanDetailView(generics.RetrieveUpdateAPIView):
             instance.refresh_from_db()
             create_loan_activity(instance, user, "STATUS_CHANGE", f"Status updated to {instance.status}")
             create_notification(instance.user, f"Your loan {instance.id.hex[:8]} is now {instance.status}.")
+            if instance.status == "REJECTED":
+                from apps.services import notify_loan_rejected
+                notify_loan_rejected(instance)
             AuditLogs.objects.create(
                 admin=user, 
                 action=f"LOAN_{instance.status}", 
@@ -327,10 +334,29 @@ class MpesaDisbursementView(views.APIView):
                 if total_today + float(loan.principal_amount) > daily_limit:
                     return Response({"error": f"Daily disbursement limit exceeded. Current total: KES {total_today:,}"}, status=403)
                 if loan.status != "APPROVED": return Response({"error": f"Only APPROVED loans can be disbursed. Current status: {loan.status}"}, status=400)
+                
                 from ..services import DisbursementService
-                DisbursementService.disburse_loan(loan, user)
-                AuditLogs.objects.create(admin=user, action="LOAN_DISBURSED", log_type="MANAGEMENT", table_name="loans", record_id=loan.id, old_data={"status": "APPROVED"}, new_data={"status": "DISBURSED", "amount": float(loan.principal_amount), "reason": reason}, ip_address=ip)
-                return Response({"message": "Disbursement processed successfully", "status": "success"})
+                from ..exceptions import InsufficientCapitalError
+
+                try:
+                    DisbursementService.disburse_loan(loan, user)
+                    AuditLogs.objects.create(
+                        admin=user, 
+                        action="LOAN_DISBURSED", 
+                        log_type="MANAGEMENT", 
+                        table_name="loans", 
+                        record_id=loan.id, 
+                        old_data={"status": "APPROVED"}, 
+                        new_data={"status": "DISBURSED", "amount": float(loan.principal_amount), "reason": reason}, 
+                        ip_address=ip
+                    )
+                    return Response({'message': 'Disbursement initiated successfully. Awaiting M-Pesa confirmation.'})
+                except InsufficientCapitalError as e:
+                    return Response({'error': str(e)}, status=400)
+                except Exception as e:
+                    logger.error(f"Disbursement error for loan {loan.id}: {e}")
+                    return Response({'error': f'Disbursement failed: {str(e)}'}, status=500)
+
             except Loans.DoesNotExist: return Response({"error": "Loan not found"}, status=404)
             except Exception as e: return Response({"error": str(e)}, status=500)
         elif mode == "bulk":

@@ -22,6 +22,7 @@ from .models import (
     CustomerDraft,
     SecureSettings,
     PaybillTransaction,
+    StaffNotification,
 )
 from .utils.encryption import encrypt_value
 
@@ -708,3 +709,9 @@ class CustomerDraftSerializer(serializers.ModelSerializer):
         if data.get('incomplete_reason') == 'Other' and not data.get('notes'):
             raise serializers.ValidationError({"notes": "Notes are required when reason is 'Other'."})
         return data
+
+class StaffNotificationSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = StaffNotification
+        fields = '__all__'
+

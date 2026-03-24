@@ -2,7 +2,9 @@ from rest_framework import views, permissions, generics, status
 from rest_framework.response import Response
 from django.db import models
 from django.utils import timezone
+from django.db import transaction  # Added
 import uuid
+import logging  # Added
 from ..models import (
     Repayments, 
     Loans, 
@@ -10,13 +12,19 @@ from ..models import (
     LedgerEntry, 
     RepaymentSchedule, 
     Transactions,
-    AuditLogs
+    AuditLogs,
+    PaybillTransaction, # Added
+    Users, # Added
+    UserProfiles # Added
 )
 from ..serializers import RepaymentSerializer
 from ..utils.security import log_action, get_client_ip, get_filtered_queryset
 from ..permissions import IsAdminUser
 from ..utils.mpesa import MpesaHandler
 import json
+
+logger = logging.getLogger(__name__)  # Added
+
 
 class RepaymentListCreateView(generics.ListCreateAPIView):
     serializer_class = RepaymentSerializer
@@ -90,48 +98,242 @@ class MpesaCallbackView(views.APIView):
     permission_classes = [permissions.AllowAny]
 
     def post(self, request):
-        # AllowAny, but internally we can check for some token maybe? 
-        # Original had: if not (request.user.role == "ADMIN" or request.user.is_super_admin): raise PermissionDenied
-        # But callbacks are usually from external providers... Let's keep the logic but allow any access to the endpoint.
         data = request.data
-        print(f"M-Pesa Callback Received: {json.dumps(data)}")
-        if "Result" in data:
-            result = data.get("Result")
-            result_code = result.get("ResultCode")
-            originator_id = result.get("OriginatorConversationID")
-            trans_id = result.get("TransactionID")
-            receipt_number = trans_id
-            if "ResultParameters" in result:
-                params = result.get("ResultParameters", {}).get("ResultParameter", [])
-                for p in params:
-                    if p.get("Key") == "ReceiptNumber": receipt_number = p.get("Value")
-            print(f"B2C Result: Code={result_code}, ID={originator_id}, Trans={trans_id}, Receipt={receipt_number}")
-            if result_code != 0: print(f"⚠️ B2C FALIED for OriginatorID: {originator_id}")
-            return Response({"ResultCode": 0, "ResultDesc": "Accepted"})
-        trans_id = data.get("TransID")
-        bill_ref = str(data.get("BillRefNumber", "")).strip().lower()
-        amount = data.get("TransAmount")
-        msisdn = str(data.get("MSISDN", ""))
-        if trans_id:
+        logger.info(f"[M-Pesa Callback] Received: {json.dumps(data)}")
+
+        # ── B2C CALLBACK (Disbursement result from Safaricom) ──
+        if 'Result' in data:
+            return self._handle_b2c_callback(data)
+
+        # ── C2B CALLBACK (Customer paying to Paybill) ──
+        if 'TransID' in data or 'Body' in data:
+            return self._handle_c2b_callback(data)
+
+        logger.warning(f"[M-Pesa Callback] Unrecognised payload structure: {list(data.keys())}")
+        return Response({'ResultCode': 0, 'ResultDesc': 'Accepted'})
+
+    def _handle_b2c_callback(self, data):
+        from ..models import Loans, LoanActivity, RepaymentSchedule, AuditLogs
+        result = data.get('Result', {})
+        result_code = result.get('ResultCode')
+        originator_id = result.get('OriginatorConversationID', '')
+        conversation_id = result.get('ConversationID', '')
+        trans_id = result.get('TransactionID', '')
+
+        receipt_number = trans_id
+        amount_disbursed = None
+        receiver_phone = None
+
+        params = result.get('ResultParameters', {}).get('ResultParameter', [])
+        for p in params:
+            key = p.get('Key', '')
+            val = p.get('Value')
+            if key == 'ReceiptNo': receipt_number = val
+            if key == 'TransactionAmount': amount_disbursed = val
+            if key == 'ReceiverPartyPublicName': receiver_phone = val
+
+        logger.info(f"[B2C] ResultCode={result_code}, OriginatorID={originator_id}, Receipt={receipt_number}")
+
+        # Find the loan by originator ID
+        loan = Loans.objects.filter(
+            mpesa_originator_id__in=[originator_id, conversation_id]
+        ).first()
+
+        if not loan:
+            logger.error(f"[B2C] No loan found for OriginatorID: {originator_id}")
+            return Response({'ResultCode': 0, 'ResultDesc': 'Accepted'})
+
+        if result_code == 0:
+            # SUCCESS — activate loan, generate schedule
+            with transaction.atomic():
+                loan.status = 'ACTIVE'
+                loan.mpesa_disbursement_status = 'SUCCESS'
+                loan.mpesa_receipt_number = receipt_number
+                loan.save()
+
+                # Generate repayment schedule if not already generated
+                if not RepaymentSchedule.objects.filter(loan=loan).exists():
+                    total_repayable = float(loan.total_repayable_amount)
+                    disbursed_date = loan.disbursed_at.date() if loan.disbursed_at else timezone.now().date()
+                    num_installments = loan.duration_weeks or (loan.duration_months * 4 if loan.duration_months else 4)
+                    installment_amount = round(total_repayable / num_installments, 2)
+
+                    for i in range(1, num_installments + 1):
+                        if loan.duration_weeks:
+                            due_date = disbursed_date + timezone.timedelta(weeks=i)
+                        else:
+                            due_date = disbursed_date + timezone.timedelta(days=i * 30)
+                        amt = installment_amount
+                        if i == num_installments:
+                            amt = round(total_repayable - (installment_amount * (num_installments - 1)), 2)
+                        RepaymentSchedule.objects.create(
+                            loan=loan, installment_number=i,
+                            due_date=due_date, amount_due=amt, is_paid=False
+                        )
+
+                LoanActivity.objects.create(
+                    loan=loan,
+                    action='DISBURSEMENT_CONFIRMED',
+                    note=f'M-Pesa B2C confirmed. Receipt: {receipt_number}. Loan is now ACTIVE.'
+                )
+
+                AuditLogs.objects.create(
+                    action=f'Loan {loan.id.hex[:8]} disbursement confirmed by M-Pesa. Receipt: {receipt_number}',
+                    log_type='STATUS',
+                    table_name='loans',
+                    record_id=loan.id,
+                    old_data={'status': 'DISBURSED'},
+                    new_data={'status': 'ACTIVE', 'receipt': receipt_number}
+                )
+
+                # Send SMS to customer
+                try:
+                    from ..utils.sms import send_sms
+                    msg = (
+                        f"Dear {loan.user.full_name}, your loan of KES {int(loan.principal_amount):,} "
+                        f"has been disbursed to your M-Pesa. Receipt: {receipt_number}. "
+                        f"Total repayable: KES {int(loan.total_repayable_amount):,}. "
+                        f"Repay via Paybill using your National ID as account number. - Azariah Credit"
+                    )
+                    send_sms(loan.user.phone, msg)
+                except Exception as sms_err:
+                    logger.warning(f"[B2C] SMS send failed after disbursement: {sms_err}")
+
+            logger.info(f"[B2C] Loan {loan.id.hex[:8]} successfully activated. Receipt: {receipt_number}")
+
+        else:
+            # FAILED — revert loan to APPROVED so Finance Officer can retry
+            error_desc = result.get('ResultDesc', 'Unknown M-Pesa error')
+            with transaction.atomic():
+                loan.status = 'APPROVED'
+                loan.mpesa_disbursement_status = 'FAILED'
+                loan.mpesa_originator_id = None
+                loan.save()
+
+                # Reverse the capital deduction
+                from ..models import SystemCapital, LedgerEntry
+                capital = SystemCapital.objects.select_for_update().first()
+                if capital:
+                    capital.balance += loan.principal_amount
+                    capital.save()
+                    LedgerEntry.objects.create(
+                        capital_account=capital,
+                        amount=loan.principal_amount,
+                        entry_type='CAPITAL_INJECTION',
+                        loan=loan,
+                        note=f'Capital reversed — B2C disbursement failed. Reason: {error_desc}'
+                    )
+
+                LoanActivity.objects.create(
+                    loan=loan,
+                    action='DISBURSEMENT_FAILED',
+                    note=f'M-Pesa B2C FAILED. Reason: {error_desc}. Loan reverted to APPROVED for retry.'
+                )
+
+            logger.error(f"[B2C] Disbursement FAILED for loan {loan.id.hex[:8]}: {error_desc}")
+
+        return Response({'ResultCode': 0, 'ResultDesc': 'Accepted'})
+
+    def _handle_c2b_callback(self, data):
+        """Handle real-time C2B payment notification from Safaricom."""
+        from ..models import PaybillTransaction, Users, UserProfiles
+
+        # Support both direct C2B and wrapped Body format
+        body = data.get('Body', data)
+        stkCallback = body.get('stkCallback', {})
+        if stkCallback:
+            # STK Push callback — not used for repayments in this system
+            logger.info(f"[C2B] STK Push callback received — ignored (repayments via CSV)")
+            return Response({'ResultCode': 0, 'ResultDesc': 'Accepted'})
+
+        trans_id = data.get('TransID', '')
+        bill_ref = str(data.get('BillRefNumber', '')).strip()
+        amount_str = str(data.get('TransAmount', '0')).replace(',', '')
+        msisdn = str(data.get('MSISDN', ''))
+        first_name = data.get('FirstName', '')
+        last_name = data.get('LastName', '')
+        sender_name = f"{first_name} {last_name}".strip()
+        trans_time = data.get('TransTime', '')
+
+        if not trans_id:
+            return Response({'ResultCode': 0, 'ResultDesc': 'Accepted'})
+
+        # Avoid duplicates
+        if PaybillTransaction.objects.filter(receipt_number=trans_id).exists():
+            logger.info(f"[C2B] Duplicate callback ignored: {trans_id}")
+            return Response({'ResultCode': 0, 'ResultDesc': 'Accepted'})
+
+        try:
+            amount = float(amount_str)
+        except ValueError:
+            amount = 0
+
+        # Normalise phone
+        search_phone = msisdn
+        if msisdn.startswith('254') and len(msisdn) > 3:
+            search_phone = '0' + msisdn[3:]
+        elif not msisdn.startswith('0') and len(msisdn) == 9:
+            search_phone = '0' + msisdn
+
+        try:
+            from datetime import datetime
             try:
-                search_phone = msisdn
-                if msisdn.startswith("254") and len(msisdn) > 3: search_phone = "0" + msisdn[3:]
-                elif not msisdn.startswith("0") and len(msisdn) == 9: search_phone = "0" + msisdn
-                loan = Loans.objects.filter(models.Q(user__profile__national_id=bill_ref) | models.Q(user__profile__national_id__icontains=bill_ref) | models.Q(id__icontains=bill_ref) | models.Q(user__id__icontains=bill_ref) | models.Q(user__phone__icontains=search_phone) | models.Q(user__phone__icontains=msisdn)).filter(status__in=["ACTIVE", "OVERDUE", "DISBURSED"]).order_by("created_at").first()
+                transaction_date = timezone.make_aware(datetime.strptime(trans_time, '%Y%m%d%H%M%S'))
+            except Exception:
+                transaction_date = timezone.now()
+
+            # Create PaybillTransaction so it appears in Finance Officer unmatched queue
+            txn = PaybillTransaction.objects.create(
+                receipt_number=trans_id,
+                sender_phone=search_phone,
+                sender_name=sender_name,
+                account_ref=bill_ref,
+                amount=amount,
+                transaction_date=transaction_date,
+                status='UNMATCHED'
+            )
+
+            # Attempt auto-matching: National ID first, then phone
+            matched = False
+            try:
+                profile = UserProfiles.objects.get(national_id=bill_ref)
+                loan = Loans.objects.filter(
+                    user=profile.user, status__in=['ACTIVE', 'OVERDUE']
+                ).order_by('created_at').first()
                 if loan:
-                    Repayments.objects.create(loan=loan, amount_paid=amount, payment_method="MPESA_PAYBILL", reference_code=trans_id)
-                    loan.update_status_and_rates()
-                    from ..loans.views import create_notification
-                    create_notification(loan.user, f"Your payment of KES {amount} (Ref: {trans_id}) has been successfully processed.")
-                    return Response({"ResultCode": 0, "ResultDesc": "Success"})
-                return Response({"ResultCode": 0, "ResultDesc": "Success"})
-            except Exception as e: print(f"Fail to auto-allocate C2B: {str(e)}")
-        return Response({"ResultCode": 0, "ResultDesc": "Success"})
+                    _record_repayment(txn, loan, profile.user, 'NATIONAL_ID', None)
+                    matched = True
+                    logger.info(f"[C2B] Matched by National ID: {bill_ref} → Loan {loan.id.hex[:8]}")
+            except Exception:
+                pass
+
+            if not matched:
+                try:
+                    customer = Users.objects.get(phone=search_phone)
+                    loan = Loans.objects.filter(
+                        user=customer, status__in=['ACTIVE', 'OVERDUE']
+                    ).order_by('created_at').first()
+                    if loan:
+                        _record_repayment(txn, loan, customer, 'PHONE', None)
+                        matched = True
+                        logger.info(f"[C2B] Matched by phone: {search_phone} → Loan {loan.id.hex[:8]}")
+                except Exception:
+                    pass
+
+            if not matched:
+                logger.info(f"[C2B] Unmatched transaction {trans_id} — added to queue for Finance Officer review")
+
+        except Exception as e:
+            logger.error(f"[C2B] Error processing callback: {e}")
+
+        return Response({'ResultCode': 0, 'ResultDesc': 'Accepted'})
 
 def _record_repayment(txn, loan, customer, match_method, processed_by):
     from django.db import transaction as db_transaction
     from django.utils import timezone
-    from ..models import Repayments, SystemCapital, LedgerEntry, RepaymentSchedule
+    from ..models import Repayments, SystemCapital, LedgerEntry, RepaymentSchedule, Transactions
+    from ..loans.views import create_loan_activity, create_notification
+
     with db_transaction.atomic():
         txn.status = 'MATCHED'
         txn.matched_loan = loan
@@ -140,6 +342,56 @@ def _record_repayment(txn, loan, customer, match_method, processed_by):
         txn.assigned_by = processed_by
         txn.assigned_at = timezone.now()
         txn.save()
+
+        # Create the actual Repayment record
+        repayment = Repayments.objects.create(
+            loan=loan,
+            amount_paid=txn.amount,
+            payment_date=timezone.now(),
+            payment_method='MPESA_PAYBILL',
+            reference_code=txn.receipt_number,
+            notes=f"Auto-matched via {match_method}"
+        )
+        
+        # Credit System Capital
+        capital = SystemCapital.objects.select_for_update().filter(name="Simulation Capital").first()
+        if capital:
+            capital.balance += txn.amount
+            capital.save()
+            LedgerEntry.objects.create(
+                capital_account=capital, 
+                amount=txn.amount, 
+                entry_type="REPAYMENT", 
+                loan=loan, 
+                reference_id=txn.receipt_number, 
+                note=f"Repayment of KES {txn.amount} for Loan {loan.id.hex[:8]}"
+            )
+
+        # Distribute to Installments
+        amount_remaining = float(txn.amount)
+        for installment in RepaymentSchedule.objects.filter(loan=loan, is_paid=False).order_by('due_date'):
+            if amount_remaining <= 0: break
+            if amount_remaining >= float(installment.amount_due):
+                installment.is_paid = True
+                installment.status = 'PAID'
+                installment.save()
+                amount_remaining -= float(installment.amount_due)
+            else:
+                 # Logic for partial payment on installment could be complex, assuming simplified logic
+                 break
+        
+        create_loan_activity(loan, processed_by, "REPAYMENT", f"Repayment of KES {txn.amount} recorded via {match_method}.")
+        Transactions.objects.create(id=uuid.uuid4(), user=loan.user, type="REPAYMENT", amount=txn.amount)
+
+        if loan.remaining_balance <= 0:
+            loan.status = "CLOSED"
+            loan.save()
+            create_loan_activity(loan, processed_by, "STATUS_CHANGE", "Loan closed - fully repaid.")
+            create_notification(loan.user, f"Congratulations! Your loan of KES {loan.principal_amount} has been fully repaid.")
+        else:
+            loan.update_status_and_rates()
+            create_notification(loan.user, f"We received your payment of KES {txn.amount}. Thank you!")
+
 
         repayment = Repayments.objects.create(
             loan=loan, amount_paid=txn.amount, payment_method='PAYBILL',
