@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { ShieldCheck, RefreshCw, Eye, EyeOff, Save, CheckCircle2, XCircle, Plus, Trash2, Settings2, Edit2 } from 'lucide-react';
+import { ShieldCheck, RefreshCw, Eye, EyeOff, Save, CheckCircle2, XCircle, Plus, Trash2, Settings2, Edit2, Wifi } from 'lucide-react';
 import { Card, Button, Badge } from '../components/ui/Shared';
 import { useAuth } from '../context/AuthContext';
 import { useLoanProducts, useSecureSettings, useInvalidate } from '../hooks/useQueries';
@@ -223,6 +223,24 @@ const AdminSettings = ({ defaultTab = 'mpesa' }) => {
   const { data: secureSettingsData, isLoading: loading } = useSecureSettings();
   const { invalidateSecureSettings } = useInvalidate();
 
+  const [testingConnection, setTestingConnection] = useState(false);
+  const [connectionResult, setConnectionResult] = useState(null);
+
+  const runMpesaTest = async () => {
+    setTestingConnection(true);
+    setConnectionResult(null);
+    try {
+      const resp = await loanService.testMpesaConnection();
+      setConnectionResult({ success: true, ...resp });
+      toast.success('Configuration Validated');
+    } catch (err) {
+      setConnectionResult({ success: false, ...err.response?.data });
+      toast.error('Connection Failed');
+    } finally {
+      setTestingConnection(false);
+    }
+  };
+
   const secureSettings = useMemo(() => 
     Array.isArray(secureSettingsData) ? secureSettingsData : (secureSettingsData?.results || []),
     [secureSettingsData]
@@ -326,6 +344,45 @@ const AdminSettings = ({ defaultTab = 'mpesa' }) => {
                         Till Number
                       </Button>
                     </div>
+                  </div>
+
+                  <div className="p-5 bg-slate-50 dark:bg-slate-900/40 rounded-xl border border-slate-200 dark:border-slate-800">
+                    <h4 className="text-sm font-black text-slate-500 uppercase mb-4 flex items-center gap-2">
+                       <Wifi className="w-4 h-4" /> Connection Diagnosis
+                    </h4>
+                    <p className="text-sm text-slate-500 mb-4">
+                      Test your M-Pesa credentials before going live. This will attempt to authenticate with Safaricom to ensure your keys are correct.
+                    </p>
+                    
+                    {!connectionResult && (
+                      <Button onClick={runMpesaTest} disabled={testingConnection} className="w-full">
+                        {testingConnection ? <><RefreshCw className="w-4 h-4 animate-spin mr-2" /> Testing...</> : 'Test Connectivity Now'}
+                      </Button>
+                    )}
+
+                    {connectionResult && (
+                      <div className={clsx("p-4 rounded-lg border text-sm space-y-2", connectionResult.success ? "bg-emerald-50 border-emerald-200 text-emerald-800" : "bg-rose-50 border-rose-200 text-rose-800")}>
+                        <div className="flex items-center gap-2 font-bold">
+                          {connectionResult.success ? <CheckCircle2 className="w-5 h-5 text-emerald-600" /> : <XCircle className="w-5 h-5 text-rose-600" />}
+                          {connectionResult.success ? "Connection Successful" : "Connection Failed"}
+                        </div>
+                        <p>{connectionResult.message}</p>
+                        {connectionResult.token_preview && (
+                           <div className="text-xs font-mono bg-black/5 p-2 rounded mt-2">
+                             Token: {connectionResult.token_preview}
+                           </div>
+                        )}
+                         {connectionResult.configuration && (
+                           <div className="mt-2 text-xs">
+                             <p className="font-bold uppercase opacity-70 mb-1">Loaded Config:</p>
+                             <pre className="bg-black/5 p-2 rounded overflow-x-auto whitespace-pre-wrap">
+                               {JSON.stringify(connectionResult.configuration, null, 2)}
+                             </pre>
+                           </div>
+                        )}
+                        <Button size="sm" variant="secondary" onClick={() => setConnectionResult(null)} className="w-full mt-3">Reset Test</Button>
+                      </div>
+                    )}
                   </div>
                 </div>
               )}

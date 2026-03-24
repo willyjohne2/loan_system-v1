@@ -263,6 +263,10 @@ export const loanService = {
     const res = await api.post('/loans/direct-sms/', data);
     return res.data;
   },
+  testMpesaConnection: async () => {
+    const res = await api.post('/settings/test-mpesa/');
+    return res.data;
+  },
   exportData: async (params = {}) => {
     const res = await api.get('/export/', { 
       params,
