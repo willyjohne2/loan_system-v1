@@ -108,14 +108,46 @@ const AdminLoans = () => {
   
   const branches = branchesData?.results || branchesData || [];
   
-  const queryParams = useMemo(() => ({
-    search: debouncedSearch,
-    status: filterStatus !== 'ALL' ? filterStatus : undefined,
-    date_from: dateRange.from || undefined,
-    date_to: dateRange.to || undefined,
-    branch: branchFilter === 'all' ? undefined : branchFilter,
-    activeTab: activeTab, // To invalidate correctly when tab changes if needed
-  }), [debouncedSearch, filterStatus, dateRange, branchFilter, activeTab]);
+  const queryParams = useMemo(() => {
+    let statusFilter = undefined;
+    
+    // Map Active Tab to specific statuses if user hasn't explicitly filtered
+    if (filterStatus === 'ALL') {
+      switch (activeTab) {
+        case 'ALL_DISBURSED': 
+          statusFilter = 'DISBURSED,ACTIVE,OVERDUE,CLOSED,REPAID'; 
+          break;
+        case 'ACTIVE': 
+          statusFilter = 'ACTIVE'; 
+          break;
+        case 'OVERDUE': 
+          statusFilter = 'OVERDUE'; 
+          break;
+        case 'APPROVED': 
+          statusFilter = 'APPROVED'; 
+          break;
+        case 'PENDING': 
+          statusFilter = 'UNVERIFIED,VERIFIED,PENDING'; 
+          break;
+        case 'REJECTED': 
+          statusFilter = 'REJECTED'; 
+          break;
+        default:
+          statusFilter = undefined;
+      }
+    } else {
+      statusFilter = filterStatus;
+    }
+
+    return {
+      search: debouncedSearch,
+      status: statusFilter,
+      date_from: dateRange.from || undefined,
+      date_to: dateRange.to || undefined,
+      branch: branchFilter === 'all' ? undefined : branchFilter,
+      activeTab: activeTab, // To invalidate correctly
+    };
+  }, [debouncedSearch, filterStatus, dateRange, branchFilter, activeTab]);
 
   const {
     data: loans,
