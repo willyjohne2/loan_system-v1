@@ -10,6 +10,13 @@ export const useLoans = (params = {}) => useQuery({
   refetchInterval: 30000, // 30 seconds
 });
 
+export const useLoanStats = () => useQuery({
+  queryKey: ['loan-stats'],
+  queryFn: () => loanService.api.get('/loans/stats/').then(r => r.data),
+  staleTime: 1000 * 30,
+  refetchInterval: 60000,
+});
+
 // Specialized High-Priority Hooks
 export const useManagerQueue = (params = {}) => useQuery({
   queryKey: ['manager-queue', params],
@@ -157,6 +164,7 @@ export const useInvalidate = () => {
     invalidateLoans: () => {
       queryClient.invalidateQueries({ queryKey: ['loans'] });
       queryClient.invalidateQueries({ queryKey: ['manager-queue'] });
+      queryClient.invalidateQueries({ queryKey: ['loan-stats'] });
     },
     invalidateCustomers: () => queryClient.invalidateQueries({ queryKey: ['customers'] }),
     invalidateRepayments: () => queryClient.invalidateQueries({ queryKey: ['repayments'] }),

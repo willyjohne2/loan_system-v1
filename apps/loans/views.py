@@ -294,6 +294,26 @@ class LoanProductDetailView(generics.RetrieveUpdateDestroyAPIView):
         if old_rate != new_rate:
             AuditLogs.objects.create(admin=user if user.is_authenticated else None, action="UPDATE_LOAN_PRODUCT_RATE", log_type="MANAGEMENT", table_name="loan_products", record_id=product.id, old_data={"interest_rate": float(old_rate) if old_rate else None}, new_data={"interest_rate": float(new_rate), "name": product.name}, ip_address=ip)
 
+class LoanDocumentCreateView(generics.CreateAPIView):
+    # ... existing code ...
+
+class LoanStatsView(views.APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        user = request.user
+        base_qs = get_filtered_queryset(user, Loans.objects.all(), 'user__profile__branch_fk', request=request)
+        
+        counts = {
+            'all_disbursed': base_qs.filter(status__in=['DISBURSED', 'ACTIVE', 'OVERDUE', 'CLOSED', 'REPAID']).count(),
+            'active': base_qs.filter(status='ACTIVE').count(),
+            'overdue': base_qs.filter(status='OVERDUE').count(),
+            'approved': base_qs.filter(status='APPROVED').count(),
+            'pending': base_qs.filter(status__in=['UNVERIFIED', 'VERIFIED', 'PENDING']).count(),
+            'rejected': base_qs.filter(status='REJECTED').count()
+        }
+        return Response(counts)
+
 class MpesaDisbursementView(views.APIView):
     permission_classes = [permissions.IsAuthenticated]
 

@@ -18,11 +18,23 @@ export const usePaginatedQuery = ({
     keepPreviousData: true,
   });
 
+  // Reset page when params change (e.g. switching tabs)
+  useEffect(() => {
+    setPage(1);
+    // We intentionally DO NOT clear allResults here. 
+    // We let 'keepPreviousData' show the old list until the new data arrives
+    // and the other useEffect updates allResults.
+  }, [JSON.stringify(params)]);
+
   useEffect(() => {
     if (data) {
       const results = Array.isArray(data?.results) ? data.results : (Array.isArray(data) ? data : []);
       
       if (page === 1) {
+        // If fetching new data for a filter change, don't update with stale data
+        // Wait until fetch completes
+        if (isFetching) return;
+        
         // Fresh load or filter change — replace all
         setAllResults(results);
       } else {
@@ -35,7 +47,7 @@ export const usePaginatedQuery = ({
         });
       }
     }
-  }, [data, page, params]);
+  }, [data, page, params, isFetching]);
 
   const totalCount = data?.count || (Array.isArray(data) ? data.length : 0);
   const hasMore = allResults.length < totalCount;

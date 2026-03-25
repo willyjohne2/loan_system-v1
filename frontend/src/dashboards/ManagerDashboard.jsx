@@ -110,9 +110,10 @@ const ManagerDashboard = () => {
     params: managerQueueParams
   });
 
-  useEffect(() => {
-    reset();
-  }, [managerQueueParams, reset]);
+  // Removed manual reset callback to allow 'keepPreviousData' to work properly
+  // useEffect(() => {
+  //   reset();
+  // }, [managerQueueParams, reset]);
 
   const { data: repaymentsData, isLoading: repaymentsLoading } = useRepayments();
   const { data: officersData, isLoading: officersLoading } = useFieldOfficers();

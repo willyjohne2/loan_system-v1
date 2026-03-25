@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useMemo, useCallback } from 'react';
 import { loanService } from '../api/api';
-import { useInvalidate, useBranches, useCustomers } from '../hooks/useQueries';
+import { useInvalidate, useBranches, useCustomers, useLoanStats } from '../hooks/useQueries';
 import { usePaginatedQuery } from '../hooks/usePaginatedQuery';
 import PaginationFooter from '../components/ui/PaginationFooter';
 import { Card, Table, Button } from '../components/ui/Shared';
@@ -101,6 +101,7 @@ const AdminLoans = () => {
   const [branchFilter, setBranchFilter] = useState('all');
   const { data: branchesData } = useBranches();
   const { data: customersData } = useCustomers();
+  const { data: stats } = useLoanStats();
   const customers = useMemo(() => {
     const list = customersData?.results || customersData || [];
     return list.reduce((acc, curr) => ({ ...acc, [curr.id]: curr }), {});
@@ -166,9 +167,10 @@ const AdminLoans = () => {
     params: queryParams
   });
 
-  useEffect(() => {
-    reset();
-  }, [queryParams, reset]);
+  // Removed manual reset callback to allow 'keepPreviousData' to work properly
+  // useEffect(() => {
+  //   reset();
+  // }, [queryParams, reset]);
 
   const handleStatusUpdate = async (loanId, newStatus) => {
     setUpdatingId(loanId);
@@ -365,16 +367,16 @@ const AdminLoans = () => {
             <tab.icon className="w-3.5 h-3.5" />
             {tab.label.toUpperCase()}
             <span className="ml-1 bg-slate-200 dark:bg-slate-600 px-1.5 py-0.5 rounded-full text-[10px]">
-              {loans.filter(l => {
-                const s = l.status;
-                if (tab.id === 'ALL_DISBURSED') return ['DISBURSED', 'ACTIVE', 'OVERDUE', 'CLOSED', 'REPAID'].includes(s);
-                if (tab.id === 'ACTIVE') return s === 'ACTIVE';
-                if (tab.id === 'OVERDUE') return s === 'OVERDUE';
-                if (tab.id === 'APPROVED') return s === 'APPROVED';
-                if (tab.id === 'PENDING') return ['UNVERIFIED', 'VERIFIED', 'PENDING'].includes(s);
-                if (tab.id === 'REJECTED') return s === 'REJECTED';
-                return false;
-              }).length}
+              {(() => {
+                if (!stats) return '-';
+                if (tab.id === 'ALL_DISBURSED') return stats.all_disbursed;
+                if (tab.id === 'ACTIVE') return stats.active;
+                if (tab.id === 'OVERDUE') return stats.overdue;
+                if (tab.id === 'APPROVED') return stats.approved;
+                if (tab.id === 'PENDING') return stats.pending;
+                if (tab.id === 'REJECTED') return stats.rejected;
+                return 0;
+              })()}
             </span>
           </button>
         ))}
