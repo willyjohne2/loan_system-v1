@@ -35,7 +35,7 @@ export const usePaginatedQuery = ({
         });
       }
     }
-  }, [data, page]);
+  }, [data, page, params]);
 
   const totalCount = data?.count || (Array.isArray(data) ? data.length : 0);
   const hasMore = allResults.length < totalCount;
