@@ -299,49 +299,57 @@ class MpesaCallbackView(views.APIView):
             # 2. National ID
             # 3. Phone Number
             matched = False
+            
+            # Clean input ref
+            bill_ref_clean = str(bill_ref).strip() if bill_ref else ""
 
             # 1. Try matching by Loan ID (Full UUID or Short 8-char hex)
             if not matched:
                 try:
-                    # Try full UUID match
-                    loan = Loans.objects.filter(id=bill_ref, status__in=['ACTIVE', 'OVERDUE']).first()
-                    if not loan and len(bill_ref) >= 8:
-                        # Try short ID match (startswith)
-                        # We use istartswith to be case-insensitive for hex
-                        loan = Loans.objects.filter(id__istartswith=bill_ref, status__in=['ACTIVE', 'OVERDUE']).first()
+                    # Try full UUID match or Short ID match (startswith)
+                    # We use istartswith to be case-insensitive for hex
+                    loan = Loans.objects.filter(id__istartswith=bill_ref_clean, status__in=['ACTIVE', 'OVERDUE']).first()
                     
                     if loan:
+                        # Ensures length is reasonable for a short ID to avoid false positives (e.g. valid Short ID "12" matching "1234...")
+                        # Though UUIDs are random enough.
                         _record_repayment(txn, loan, loan.user, 'LOAN_ID', None)
                         matched = True
-                        logger.info(f"[C2B] Matched by Loan ID: {bill_ref} → Loan {loan.id}")
+                        logger.info(f"[C2B] Matched by Loan ID: {bill_ref_clean} → Loan {loan.id}")
                 except Exception:
                     pass
 
-            # 2. Try matching by National ID
+            # 2. Try matching by National ID (Case-insensitive, stripped)
             if not matched:
                 try:
-                    profile = UserProfiles.objects.get(national_id=bill_ref)
-                    loan = Loans.objects.filter(
-                        user=profile.user, status__in=['ACTIVE', 'OVERDUE']
-                    ).order_by('created_at').first()
-                    if loan:
-                        _record_repayment(txn, loan, profile.user, 'NATIONAL_ID', None)
-                        matched = True
-                        logger.info(f"[C2B] Matched by National ID: {bill_ref} → Loan {loan.id}")
-                except Exception:
-                    pass
+                    # Remove spaces for National ID just in case
+                    clean_nid = bill_ref_clean.replace(" ", "")
+                    # Use filter().first() instead of get() to avoid crashes on duplicates/missing
+                    profile = UserProfiles.objects.filter(national_id__iexact=clean_nid).first()
+                    
+                    if profile:
+                        loan = Loans.objects.filter(
+                            user=profile.user, status__in=['ACTIVE', 'OVERDUE']
+                        ).order_by('created_at').first()
+                        if loan:
+                            _record_repayment(txn, loan, profile.user, 'NATIONAL_ID', None)
+                            matched = True
+                            logger.info(f"[C2B] Matched by National ID: {clean_nid} → Loan {loan.id}")
+                except Exception as e:
+                     logger.error(f"[C2B] Error matching by National ID: {e}")
 
             # 3. Try matching by Phone
             if not matched:
                 try:
-                    customer = Users.objects.get(phone=search_phone)
-                    loan = Loans.objects.filter(
-                        user=customer, status__in=['ACTIVE', 'OVERDUE']
-                    ).order_by('created_at').first()
-                    if loan:
-                        _record_repayment(txn, loan, customer, 'PHONE', None)
-                        matched = True
-                        logger.info(f"[C2B] Matched by phone: {search_phone} → Loan {loan.id.hex[:8]}")
+                    customer = Users.objects.filter(phone=search_phone).first()
+                    if customer:
+                        loan = Loans.objects.filter(
+                            user=customer, status__in=['ACTIVE', 'OVERDUE']
+                        ).order_by('created_at').first()
+                        if loan:
+                            _record_repayment(txn, loan, customer, 'PHONE', None)
+                            matched = True
+                            logger.info(f"[C2B] Matched by phone: {search_phone} → Loan {loan.id.hex[:8]}")
                 except Exception:
                     pass
 
