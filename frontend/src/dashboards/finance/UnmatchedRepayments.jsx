@@ -151,8 +151,8 @@ const UnmatchedRepayments = () => {
                 key={txn.id} 
                 className={`transition-colors h-16 ${txn.needs_contact ? 'bg-amber-50/50 hover:bg-amber-100/50' : 'hover:bg-slate-50'}`}
               >
-                <td className="px-6 py-3 font-mono text-xs font-bold">{txn.receipt_number}</td>
-                <td className="px-6 py-3 text-sm">{txn.sender_phone}</td>
+                <td className="px-6 py-3 font-mono text-xs font-bold text-slate-900 dark:text-slate-100">{txn.receipt_number}</td>
+                <td className="px-6 py-3 text-sm font-semibold text-slate-800 dark:text-slate-200">{txn.sender_phone}</td>
                 <td className="px-6 py-3 text-sm">
                    <div className="flex flex-col">
                         <span className="font-bold text-slate-900">{txn.account_ref}</span>
