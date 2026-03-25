@@ -515,3 +515,23 @@ class UnmatchedTransactionsView(views.APIView):
             return Response({"new_count": PaybillTransaction.objects.filter(status='UNMATCHED', created_at__gt=since).count()})
         txns = PaybillTransaction.objects.filter(status='UNMATCHED').order_by('transaction_date')
         return Response(PaybillTransactionSerializer(txns, many=True).data)
+
+class MpesaValidationView(views.APIView):
+    """
+    Safaricom calls this URL first before processing a C2B payment.
+    We must respond with ResultCode 0 to accept the payment.
+    If we don't respond or return a non-zero code, Safaricom cancels the transaction.
+    """
+    permission_classes = [permissions.AllowAny]
+
+    def post(self, request):
+        logger.info(f"[M-Pesa Validation] Request received: {json.dumps(request.data)}")
+        # Always accept — we do the matching in the confirmation callback
+        return Response({
+            "ResultCode": "0",
+            "ResultDesc": "Accepted"
+        })
+
+    def get(self, request):
+        # Some Safaricom sandbox versions send a GET to verify the URL exists
+        return Response({"ResultCode": "0", "ResultDesc": "Accepted"})
