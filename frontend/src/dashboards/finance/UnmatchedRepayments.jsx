@@ -43,17 +43,11 @@ const UnmatchedRepayments = () => {
       return;
     }
     try {
-      // Search loans by user name/phone/id
-      const res = await loanService.getLoans();
+      // Search loans by user name/phone/national_id/loan_id directly via API
+      const res = await loanService.getLoans({ search: val, status: 'ACTIVE,OVERDUE' });
       const loans = Array.isArray(res) ? res : res.results || [];
-      const filtered = loans.filter(l => 
-        ['ACTIVE', 'OVERDUE'].includes(l.status) && (
-          l.user_full_name?.toLowerCase().includes(val.toLowerCase()) ||
-          l.user_phone?.includes(val) ||
-          l.id?.includes(val)
-        )
-      );
-      setLoanResults(filtered.slice(0, 5));
+      
+      setLoanResults(loans.slice(0, 5));
     } catch (e) {
       console.error(e);
     }

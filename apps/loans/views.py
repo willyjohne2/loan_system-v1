@@ -42,6 +42,17 @@ class LoanListCreateView(generics.ListCreateAPIView):
         qs = get_filtered_queryset(self.request.user, Loans.objects.select_related("user", "user__profile", "loan_product"), 'user__profile__branch_fk', request=self.request)
         
         # Additional Filters
+        search = self.request.query_params.get('search')
+        if search:
+            search = search.strip()
+            from django.db.models import Q
+            qs = qs.filter(
+                Q(user__full_name__icontains=search) | 
+                Q(user__phone__icontains=search) | 
+                Q(user__profile__national_id__icontains=search) | 
+                Q(id__icontains=search)
+            )
+
         status = self.request.query_params.get('status')
         if status:
             statuses = [s.strip() for s in status.split(',') if s.strip()]
