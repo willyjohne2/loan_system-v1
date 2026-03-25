@@ -294,9 +294,6 @@ class LoanProductDetailView(generics.RetrieveUpdateDestroyAPIView):
         if old_rate != new_rate:
             AuditLogs.objects.create(admin=user if user.is_authenticated else None, action="UPDATE_LOAN_PRODUCT_RATE", log_type="MANAGEMENT", table_name="loan_products", record_id=product.id, old_data={"interest_rate": float(old_rate) if old_rate else None}, new_data={"interest_rate": float(new_rate), "name": product.name}, ip_address=ip)
 
-class LoanDocumentCreateView(generics.CreateAPIView):
-    # ... existing code ...
-
 class LoanStatsView(views.APIView):
     permission_classes = [permissions.IsAuthenticated]
 
