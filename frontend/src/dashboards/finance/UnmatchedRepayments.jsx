@@ -236,13 +236,14 @@ const UnmatchedRepayments = () => {
 
             <div className="space-y-4">
               <div className="relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
                 <input 
                   type="text"
                   placeholder="Search customer name or phone..."
-                  className="w-full pl-10 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm"
+                  className="w-full pl-10 pr-4 py-3 bg-white border border-slate-300 rounded-xl text-sm text-slate-900 placeholder:text-slate-400 focus:ring-2 focus:ring-primary-500 focus:border-transparent outline-none shadow-sm dark:bg-slate-800 dark:border-slate-700 dark:text-white"
                   value={loanSearch}
                   onChange={(e) => handleLoanSearch(e.target.value)}
+                  autoFocus
                 />
               </div>
 
