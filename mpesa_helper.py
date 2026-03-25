@@ -96,11 +96,59 @@ def simulate_c2b(amount, bill_ref, phone="254708374149"):
     except Exception as e:
         print(f"Error simulating payment: {e}")
 
+def mock_c2b(domain_url, amount, bill_ref, phone="254708374149"):
+    """
+    Directly mocks a C2B payment to the application, bypassing Safaricom Sandbox.
+    Useful when Sandbox verification URLs are down.
+    """
+    if not domain_url.endswith('/'):
+        domain_url += '/'
+    
+    confirmation_url = f"{domain_url}api/payments/callback/"
+    
+    print(f"\nSimulating Direct Mock Payment to: {confirmation_url}")
+    print(f"Amount: KES {amount}")
+    print(f"Account/Ref: {bill_ref}")
+    
+    # Generate a random transaction ID
+    import random
+    import string
+    trans_id = 'MK' + ''.join(random.choices(string.ascii_uppercase + string.digits, k=8))
+    
+    payload = {
+        "TransactionType": "Pay Bill",
+        "TransID": trans_id,
+        "TransTime": datetime.now().strftime("%Y%m%d%H%M%S"),
+        "TransAmount": str(amount),
+        "BusinessShortCode": SHORTCODE,
+        "BillRefNumber": bill_ref,
+        "InvoiceNumber": "",
+        "OrgAccountBalance": "",
+        "ThirdPartyTransID": "",
+        "MSISDN": phone,
+        "FirstName": "Mock",
+        "MiddleName": "User",
+        "LastName": "Test"
+    }
+    
+    try:
+        response = requests.post(confirmation_url, json=payload, headers={"Content-Type": "application/json"})
+        print(f"Response Status: {response.status_code}")
+        print("Application Response:", response.text)
+        if response.status_code == 200:
+            print(f"\n✅ Payment simulated successfully! Transaction ID: {trans_id}")
+            print("Check your dashboard to see if the loan balance updated.")
+        else:
+            print("\n❌ Payment simulation failed.")
+    except Exception as e:
+        print(f"Error sending mock payment: {e}")
+
 if __name__ == "__main__":
     print("--- M-Pesa Sandbox Helper ---")
-    print("1. Register URLs (Connect Render to Safaricom)")
-    print("2. Simulate Repayment (Test C2B)")
-    choice = input("Select option (1 or 2): ").strip()
+    print("1. Register URLs (Connect Render to Safaricom) [Use only if Safaricom is UP]")
+    print("2. Simulate Repayment (Through Safaricom) [Requires successful option 1]")
+    print("3. Mock Direct Payment (Bypass Safaricom) [Use if Safaricom is DOWN/Unreachable]")
+    choice = input("Select option (1, 2, or 3): ").strip()
 
     if choice == '1':
         domain = input("Enter your Render deployed URL (e.g., https://my-app.onrender.com): ").strip()
@@ -108,13 +156,31 @@ if __name__ == "__main__":
             register_urls(domain)
         else:
             print("Domain URL is required.")
+            
     elif choice == '2':
-        phone = input("Enter Payer Phone (default 254708374149): ").strip() or "254708374149"
-        ref = input("Enter Bill Ref / National ID (e.g., 35623049): ").strip()
-        amt = input("Enter Amount (e.g., 500): ").strip()
-        if ref and amt:
-            simulate_c2b(amt, ref, phone)
+        # Safaricom simulation
+        amt = input("Enter Amount (KES): ").strip()
+        ref = input("Enter BillRefNumber (e.g., Loan ID or National ID): ").strip()
+        ph = input("Enter Phone (2547...): ").strip() or "254708374149"
+        if amt and ref:
+            simulate_c2b(amt, ref, ph)
         else:
-            print("Reference and Amount are required.")
+            print("Amount and Ref Required.")
+
+    elif choice == '3':
+        # Direct Mock
+        domain = input("Enter your Render deployed URL (e.g., https://my-app.onrender.com): ").strip()
+        if not domain:
+            print("Domain URL is required.")
+            sys.exit(1)
+            
+        amt = input("Enter Amount (KES): ").strip()
+        ref = input("Enter BillRefNumber (e.g., National ID or Loan ID): ").strip()
+        ph = input("Enter Phone (2547...): ").strip() or "254708374149"
+        
+        if amt and ref:
+            mock_c2b(domain, amt, ref, ph)
+        else:
+            print("Amount and Ref Required.")
     else:
         print("Invalid choice.")
