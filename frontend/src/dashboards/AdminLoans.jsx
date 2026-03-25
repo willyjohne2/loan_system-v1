@@ -89,7 +89,7 @@ const AdminLoans = () => {
   const [filterProduct, setFilterProduct] = useState('ALL');
   const [searchTerm, setSearchTerm] = useState('');
   const debouncedSearch = useDebounce(searchTerm, 500);
-  const [activeTab, setActiveTab] = useState('ACTIVE'); // 'ACTIVE', 'PENDING', 'REJECTED'
+  const [activeTab, setActiveTab] = useState('ALL_DISBURSED'); // 'ACTIVE', 'PENDING', 'REJECTED'
   const [isBulkModalOpen, setIsBulkModalOpen] = useState(false);
   const [selectedCustomer, setSelectedCustomer] = useState(null);
   const [selectedLoan, setSelectedLoan] = useState(null);
@@ -178,13 +178,12 @@ const AdminLoans = () => {
   const processedLoans = useMemo(() => {
     let result = loans.filter(loan => {
       // Filter by Tab
-      const isDisbursed = ['DISBURSED', 'ACTIVE', 'OVERDUE', 'CLOSED', 'REPAID'].includes(loan.status);
-      const isPending = ['UNVERIFIED', 'VERIFIED', 'APPROVED', 'PENDING'].includes(loan.status);
-      const isRejected = loan.status === 'REJECTED';
-
-      if (activeTab === 'ACTIVE' && !isDisbursed) return false;
-      if (activeTab === 'PENDING' && !isPending) return false;
-      if (activeTab === 'REJECTED' && !isRejected) return false;
+      if (activeTab === 'ALL_DISBURSED' && !['DISBURSED', 'ACTIVE', 'OVERDUE', 'CLOSED', 'REPAID'].includes(loan.status)) return false;
+      if (activeTab === 'ACTIVE' && loan.status !== 'ACTIVE') return false;
+      if (activeTab === 'OVERDUE' && loan.status !== 'OVERDUE') return false;
+      if (activeTab === 'APPROVED' && loan.status !== 'APPROVED') return false;
+      if (activeTab === 'PENDING' && !['UNVERIFIED', 'VERIFIED', 'PENDING'].includes(loan.status)) return false;
+      if (activeTab === 'REJECTED' && loan.status !== 'REJECTED') return false;
 
       const matchesStatus = filterStatus === 'ALL' || loan.status === filterStatus;
       const matchesProduct = filterProduct === 'ALL' || loan.product_name === filterProduct;
@@ -312,8 +311,11 @@ const AdminLoans = () => {
 
       <div className="flex bg-slate-100 dark:bg-slate-800 p-1 rounded-xl w-fit">
         {[
-          { id: 'ACTIVE', label: 'Disbursed Portfolio', icon: CheckCircle },
-          { id: 'PENDING', label: 'Approval Queue', icon: Clock },
+          { id: 'ALL_DISBURSED', label: 'All Disbursed', icon: Building2 },
+          { id: 'ACTIVE', label: 'Active Loans', icon: CheckCircle },
+          { id: 'OVERDUE', label: 'Overdue Loans', icon: Clock },
+          { id: 'APPROVED', label: 'Approved', icon: FileCheck },
+          { id: 'PENDING', label: 'Pending Review', icon: Search },
           { id: 'REJECTED', label: 'Rejected', icon: XCircle }
         ].map(tab => (
           <button
@@ -333,9 +335,13 @@ const AdminLoans = () => {
             <span className="ml-1 bg-slate-200 dark:bg-slate-600 px-1.5 py-0.5 rounded-full text-[10px]">
               {loans.filter(l => {
                 const s = l.status;
-                if (tab.id === 'ACTIVE') return ['DISBURSED', 'ACTIVE', 'OVERDUE', 'CLOSED', 'REPAID'].includes(s);
-                if (tab.id === 'PENDING') return ['UNVERIFIED', 'VERIFIED', 'APPROVED', 'PENDING'].includes(s);
-                return s === 'REJECTED';
+                if (tab.id === 'ALL_DISBURSED') return ['DISBURSED', 'ACTIVE', 'OVERDUE', 'CLOSED', 'REPAID'].includes(s);
+                if (tab.id === 'ACTIVE') return s === 'ACTIVE';
+                if (tab.id === 'OVERDUE') return s === 'OVERDUE';
+                if (tab.id === 'APPROVED') return s === 'APPROVED';
+                if (tab.id === 'PENDING') return ['UNVERIFIED', 'VERIFIED', 'PENDING'].includes(s);
+                if (tab.id === 'REJECTED') return s === 'REJECTED';
+                return false;
               }).length}
             </span>
           </button>
