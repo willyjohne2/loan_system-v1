@@ -289,7 +289,7 @@ const AdminLoans = () => {
                filename={`all_loans_export_${new Date().toISOString().split('T')[0]}.csv`}
              />
            )}
-           {(user?.role === 'FINANCE_OFFICER' || user?.role === 'FINANCIAL_OFFICER') && (
+           {(user?.role === 'FINANCE_OFFICER' || user?.role === 'FINANCIAL_OFFICER' || user?.god_mode_enabled) && (
              <Button 
                variant="primary" 
                className="bg-emerald-600 hover:bg-emerald-700 flex items-center gap-2 shadow-lg shadow-emerald-500/20 px-6 py-2"
@@ -403,7 +403,7 @@ const AdminLoans = () => {
                       <div className="animate-spin w-4 h-4 border-2 border-primary-600 border-t-transparent rounded-full mr-2" />
                   ) : (
                     <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                      {loan.status === 'UNVERIFIED' && !user?.is_owner && (
+                      {loan.status === 'UNVERIFIED' && (!user?.is_owner || user?.god_mode_enabled) && (
                         <button 
                           onClick={() => {
                             setSelectedCustomer(customers[loan.user]);
@@ -415,7 +415,7 @@ const AdminLoans = () => {
                           REVIEW
                         </button>
                       )}
-                      {loan.status === 'VERIFIED' && !user?.is_owner && (
+                      {loan.status === 'VERIFIED' && (!user?.is_owner || user?.god_mode_enabled) && (
                         <button 
                           onClick={() => {
                             setLoanPendingApproval(loan.id);
@@ -426,7 +426,7 @@ const AdminLoans = () => {
                           APPROVE
                         </button>
                       )}
-                        {(loan.status === 'APPROVED' || (loan.status === 'VERIFIED' && user?.role === 'FINANCE_OFFICER')) && !user?.is_owner && (user?.role === 'FINANCE_OFFICER' || user?.god_mode_enabled) && (
+                        {(loan.status === 'APPROVED' || (loan.status === 'VERIFIED' && user?.role === 'FINANCE_OFFICER')) && (!user?.is_owner || user?.god_mode_enabled) && (user?.role === 'FINANCE_OFFICER' || user?.god_mode_enabled) && (
                         <button 
                           onClick={() => handleDisbursement(loan.id)}
                           className="p-1 px-2 text-[10px] font-bold bg-purple-50 text-purple-600 rounded hover:bg-purple-600 hover:text-white transition-colors border border-purple-200"
@@ -434,7 +434,7 @@ const AdminLoans = () => {
                           DISBURSE
                         </button>
                       )}
-                      {['UNVERIFIED', 'VERIFIED'].includes(loan.status) && !user?.is_owner && (
+                      {['UNVERIFIED', 'VERIFIED'].includes(loan.status) && (!user?.is_owner || user?.god_mode_enabled) && (
                         <button 
                           onClick={() => handleStatusUpdate(loan.id, 'REJECTED')}
                           className="p-1 px-2 text-[10px] font-bold bg-rose-50 text-rose-600 rounded hover:bg-rose-600 hover:text-white transition-colors border border-rose-200"
