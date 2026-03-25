@@ -96,6 +96,7 @@ class MpesaRepaymentView(views.APIView):
 
 class MpesaCallbackView(views.APIView):
     permission_classes = [permissions.AllowAny]
+    authentication_classes = []
 
     def post(self, request):
         data = request.data
@@ -523,15 +524,16 @@ class MpesaValidationView(views.APIView):
     If we don't respond or return a non-zero code, Safaricom cancels the transaction.
     """
     permission_classes = [permissions.AllowAny]
+    authentication_classes = []
 
     def post(self, request):
         logger.info(f"[M-Pesa Validation] Request received: {json.dumps(request.data)}")
         # Always accept — we do the matching in the confirmation callback
         return Response({
-            "ResultCode": "0",
+            "ResultCode": 0,
             "ResultDesc": "Accepted"
         })
 
     def get(self, request):
         # Some Safaricom sandbox versions send a GET to verify the URL exists
-        return Response({"ResultCode": "0", "ResultDesc": "Accepted"})
+        return Response({"ResultCode": 0, "ResultDesc": "Accepted"})
