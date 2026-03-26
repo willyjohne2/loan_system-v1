@@ -189,14 +189,14 @@ class MpesaCallbackView(views.APIView):
 
                 # Send SMS to customer
                 try:
-                    from ..utils.sms import send_sms
+                    from ..utils.sms import send_sms_async
                     msg = (
                         f"Dear {loan.user.full_name}, your loan of KES {int(loan.principal_amount):,} "
                         f"has been disbursed to your M-Pesa. Receipt: {receipt_number}. "
                         f"Total repayable: KES {int(loan.total_repayable_amount):,}. "
                         f"Repay via Paybill using your National ID as account number. - Azariah Credit"
                     )
-                    send_sms(loan.user.phone, msg)
+                    send_sms_async([loan.user.phone], msg)
                 except Exception as sms_err:
                     logger.warning(f"[B2C] SMS send failed after disbursement: {sms_err}")
 
@@ -304,20 +304,27 @@ class MpesaCallbackView(views.APIView):
             bill_ref_clean = str(bill_ref).strip() if bill_ref else ""
 
             # 1. Try matching by Loan ID (Full UUID or Short 8-char hex)
-            if not matched:
+            if not matched and len(bill_ref_clean) >= 8:
                 try:
-                    # Try full UUID match or Short ID match (startswith)
-                    # We use istartswith to be case-insensitive for hex
-                    loan = Loans.objects.filter(id__istartswith=bill_ref_clean, status__in=['ACTIVE', 'OVERDUE']).first()
-                    
+                    import re as re_module
+                    import uuid as uuid_module
+                    try:
+                        loan_uuid = uuid_module.UUID(bill_ref_clean)
+                        loan = Loans.objects.filter(id=loan_uuid, status__in=['ACTIVE', 'OVERDUE']).first()
+                    except ValueError:
+                        if re_module.fullmatch(r'[0-9a-fA-F]{8,}', bill_ref_clean):
+                            loan = Loans.objects.filter(
+                                id__istartswith=bill_ref_clean,
+                                status__in=['ACTIVE', 'OVERDUE']
+                            ).first()
+                        else:
+                            loan = None
                     if loan:
-                        # Ensures length is reasonable for a short ID to avoid false positives (e.g. valid Short ID "12" matching "1234...")
-                        # Though UUIDs are random enough.
                         _record_repayment(txn, loan, loan.user, 'LOAN_ID', None)
                         matched = True
                         logger.info(f"[C2B] Matched by Loan ID: {bill_ref_clean} → Loan {loan.id}")
-                except Exception:
-                    pass
+                except Exception as e:
+                    logger.error(f"[C2B] Error matching by Loan ID: {e}")
 
             # 2. Try matching by National ID (Case-insensitive, stripped)
             if not matched:
@@ -355,6 +362,11 @@ class MpesaCallbackView(views.APIView):
 
             if not matched:
                 logger.info(f"[C2B] Unmatched transaction {trans_id} — added to queue for Finance Officer review")
+                logger.warning(
+                    f"[C2B] UNMATCHED — TransID: {trans_id}, BillRef: '{bill_ref}', "
+                    f"Phone: {search_phone}, Amount: {amount}. "
+                    f"Ensure BillRefNumber matches a customer National ID registered in the system."
+                )
 
         except Exception as e:
             logger.error(f"[C2B] Error processing callback: {e}")
@@ -366,6 +378,7 @@ def _record_repayment(txn, loan, customer, match_method, processed_by):
     from django.utils import timezone
     from ..models import Repayments, SystemCapital, LedgerEntry, RepaymentSchedule, Transactions
     from ..loans.views import create_loan_activity, create_notification
+    import uuid
 
     with db_transaction.atomic():
         txn.status = 'MATCHED'
@@ -376,83 +389,59 @@ def _record_repayment(txn, loan, customer, match_method, processed_by):
         txn.assigned_at = timezone.now()
         txn.save()
 
-        # Create the actual Repayment record
         repayment = Repayments.objects.create(
             loan=loan,
             amount_paid=txn.amount,
-            payment_date=timezone.now(),
+            payment_date=txn.transaction_date or timezone.now(),
             payment_method='MPESA_PAYBILL',
             reference_code=txn.receipt_number,
-            notes=f"Auto-matched via {match_method}"
         )
-        
-        # Credit System Capital
+
         capital = SystemCapital.objects.select_for_update().filter(name="Simulation Capital").first()
         if capital:
             capital.balance += txn.amount
             capital.save()
             LedgerEntry.objects.create(
-                capital_account=capital, 
-                amount=txn.amount, 
-                entry_type="REPAYMENT", 
-                loan=loan, 
-                reference_id=txn.receipt_number, 
-                note=f"Repayment of KES {txn.amount} for Loan {loan.id.hex[:8]}"
+                capital_account=capital,
+                amount=txn.amount,
+                entry_type="REPAYMENT",
+                loan=loan,
+                reference_id=txn.receipt_number,
+                note=f"Paybill repayment of KES {txn.amount} matched by {match_method}"
             )
 
-        # Distribute to Installments
         amount_remaining = float(txn.amount)
         for installment in RepaymentSchedule.objects.filter(loan=loan, is_paid=False).order_by('due_date'):
-            if amount_remaining <= 0: break
+            if amount_remaining <= 0:
+                break
             if amount_remaining >= float(installment.amount_due):
                 installment.is_paid = True
-                installment.status = 'PAID'
                 installment.save()
                 amount_remaining -= float(installment.amount_due)
             else:
-                 # Logic for partial payment on installment could be complex, assuming simplified logic
-                 break
-        
-        create_loan_activity(loan, processed_by, "REPAYMENT", f"Repayment of KES {txn.amount} recorded via {match_method}.")
-        Transactions.objects.create(id=uuid.uuid4(), user=loan.user, type="REPAYMENT", amount=txn.amount)
+                break
 
-        if loan.remaining_balance <= 0:
-            loan.status = "CLOSED"
-            loan.save()
-            create_loan_activity(loan, processed_by, "STATUS_CHANGE", "Loan closed - fully repaid.")
-            create_notification(loan.user, f"Congratulations! Your loan of KES {loan.principal_amount} has been fully repaid.")
-        else:
-            loan.update_status_and_rates()
-            create_notification(loan.user, f"We received your payment of KES {txn.amount}. Thank you!")
-
-
-        repayment = Repayments.objects.create(
-            loan=loan, amount_paid=txn.amount, payment_method='PAYBILL',
-            reference_code=txn.receipt_number, payment_date=txn.transaction_date
+        Transactions.objects.create(
+            id=uuid.uuid4(),
+            user=loan.user,
+            type="REPAYMENT",
+            amount=txn.amount
         )
 
-        capital = SystemCapital.objects.select_for_update().filter(name="Simulation Capital").first()
-        if capital:
-            capital.balance += txn.amount
-            capital.save()
-            LedgerEntry.objects.create(
-                capital_account=capital, amount=txn.amount, entry_type="REPAYMENT",
-                loan=loan, reference_id=txn.receipt_number, note=f"Paybill repayment matched by {match_method}"
-            )
-
-        amount_remaining = float(txn.amount)
-        for installment in RepaymentSchedule.objects.filter(loan=loan, is_paid=False).order_by('due_date'):
-            if amount_remaining <= 0: break
-            if amount_remaining >= float(installment.amount_due):
-                installment.is_paid = True
-                installment.save()
-                amount_remaining -= float(installment.amount_due)
-            else: break
+        create_loan_activity(
+            loan, processed_by, "REPAYMENT",
+            f"Repayment of KES {txn.amount} recorded. Matched by {match_method}. Ref: {txn.receipt_number}"
+        )
 
         loan.refresh_from_db()
         if loan.remaining_balance <= 0:
-            loan.status = 'CLOSED'
+            loan.status = "CLOSED"
             loan.save()
+            create_loan_activity(loan, processed_by, "STATUS_CHANGE", "Loan closed — fully repaid.")
+            create_notification(loan.user, f"Congratulations! Your loan of KES {loan.principal_amount} has been fully repaid.")
+        else:
+            loan.update_status_and_rates()
+            create_notification(loan.user, f"Payment of KES {txn.amount} received. Thank you! Ref: {txn.receipt_number}.")
 
 class StatementUploadView(views.APIView):
     permission_classes = [permissions.IsAuthenticated]

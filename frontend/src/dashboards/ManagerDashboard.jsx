@@ -14,6 +14,7 @@ import AdminOfficers from './AdminOfficers';
 import BulkInviteModal from '../components/forms/BulkInviteModal';
 import { 
   Users, 
+  Building2, 
   TrendingUp, 
   Clock, 
   CheckCircle2, 
@@ -178,6 +179,10 @@ const ManagerDashboard = () => {
   const customers = useMemo(() => customersData?.results || customersData || [], [customersData]);
 
   const [selectedCustomer, setSelectedCustomer] = useState(null);
+  
+  // Tabs and optimism
+  const [customerTab, setCustomerTab] = useState('unverified');
+  const [localVerifiedIds, setLocalVerifiedIds] = useState(new Set());
   const [isReviewOpen, setIsReviewOpen] = useState(false);
   const [isDeactivateModalOpen, setIsDeactivateModalOpen] = useState(false);
   const [officerToDeactivate, setOfficerToDeactivate] = useState(null);
@@ -451,17 +456,9 @@ const ManagerDashboard = () => {
         </div>
         
         <div className="flex items-center gap-3 flex-wrap">
-          <div className="relative">
-             <select 
-               value={selectedBranch}
-               onChange={(e) => setSelectedBranch(e.target.value)}
-               className="h-10 pl-4 pr-10 text-sm font-bold bg-white dark:bg-slate-800 border border-emerald-200 dark:border-emerald-700 rounded-lg appearance-none focus:ring-2 focus:ring-emerald-500 outline-none cursor-pointer text-slate-700 dark:text-slate-200"
-             >
-               {availableBranches.map(branch => (
-                 <option key={branch} value={branch}>{branch}</option>
-               ))}
-             </select>
-             <ChevronDown className="w-4 h-4 absolute right-3 top-3 pointer-events-none text-slate-400" />
+          <div className="flex items-center gap-2 h-10 px-4 bg-emerald-100/50 dark:bg-emerald-900/30 border border-emerald-200 dark:border-emerald-700/50 rounded-lg">
+             <Building2 className="w-4 h-4 text-emerald-600 dark:text-emerald-500" />
+             <span className="text-sm font-bold text-emerald-800 dark:text-emerald-300">{selectedBranch} Branch</span>
           </div>
           <Button 
             variant="secondary"

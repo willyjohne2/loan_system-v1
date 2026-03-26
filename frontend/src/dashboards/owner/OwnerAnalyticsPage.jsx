@@ -97,7 +97,7 @@ const OwnerAnalyticsPage = () => {
               <ReAreaChart data={ownerData?.customer_growth}>
                 <ReCartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
                 <ReXAxis dataKey="month" axisLine={false} tickLine={false} tick={{fill: '#64748b', fontSize: 10}} />
-                <ReYAxis axisLine={false} tickLine={false} tick={{fill: '#64748b', fontSize: 10}} />
+                <ReYAxis axisLine={false} tickLine={false} tick={{fill: "#64748b", fontSize: 10}} tickFormatter={(val) => `KES ${val.toLocaleString()}`} width={80} />
                 <ReTooltip contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }} />
                 <ReArea type="monotone" dataKey="customers" stroke="#4f46e5" fill="#4f46e5" fillOpacity={0.1} strokeWidth={3} />
               </ReAreaChart>
@@ -128,8 +128,8 @@ const OwnerAnalyticsPage = () => {
             <ReResponsiveContainer width="99%" height="100%">
               <ReAreaChart data={ownerData?.cashflow_projection}>
                 <ReCartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
-                <ReXAxis dataKey="date" hide />
-                <ReYAxis axisLine={false} tickLine={false} tick={{fill: '#64748b', fontSize: 10}} />
+                <ReXAxis dataKey="date" axisLine={false} tickLine={false} tick={{fill: "#64748b", fontSize: 10}} />
+                <ReYAxis axisLine={false} tickLine={false} tick={{fill: "#64748b", fontSize: 10}} tickFormatter={(val) => `KES ${val.toLocaleString()}`} width={80} />
                 <ReTooltip labelFormatter={(val) => new Date(val).toLocaleDateString()} formatter={(val) => [`KES ${val.toLocaleString()}`, 'Expected']} />
                 <ReArea type="monotone" dataKey="expected" stroke="#3b82f6" fill="#3b82f6" fillOpacity={0.1} strokeWidth={3} strokeDasharray="5 5" />
               </ReAreaChart>
@@ -145,7 +145,7 @@ const OwnerAnalyticsPage = () => {
               <ReBarChart data={agingData}>
                 <ReCartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
                 <ReXAxis dataKey="label" axisLine={false} tickLine={false} tick={{fill: '#64748b', fontSize: 10}} />
-                <ReYAxis axisLine={false} tickLine={false} tick={{fill: '#64748b', fontSize: 10}} />
+                <ReYAxis axisLine={false} tickLine={false} tick={{fill: "#64748b", fontSize: 10}} tickFormatter={(val) => `KES ${val.toLocaleString()}`} width={80} />
                 <ReTooltip formatter={(val) => [`KES ${val.toLocaleString()}`, 'Amount']} />
                 <ReBar dataKey="amount" radius={[4, 4, 0, 0]} barSize={40}>
                   {agingData.map((entry, index) => (
@@ -165,7 +165,7 @@ const OwnerAnalyticsPage = () => {
               <ReBarChart data={weeklyComparisonData}>
                 <ReCartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
                 <ReXAxis dataKey="week" axisLine={false} tickLine={false} tick={{fill: '#64748b', fontSize: 10}} />
-                <ReYAxis axisLine={false} tickLine={false} tick={{fill: '#64748b', fontSize: 10}} />
+                <ReYAxis axisLine={false} tickLine={false} tick={{fill: "#64748b", fontSize: 10}} tickFormatter={(val) => `KES ${val.toLocaleString()}`} width={80} />
                 <ReTooltip formatter={(val) => [`KES ${val.toLocaleString()}`]} />
                 <ReLegend verticalAlign="top" align="right" height={36} />
                 <ReBar dataKey="disbursed" name="Disbursements" fill="#10b981" radius={[4, 4, 0, 0]} barSize={25} />

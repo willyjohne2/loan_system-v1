@@ -39,8 +39,8 @@ const FinanceAnalytics = () => {
             <ResponsiveContainer width="100%" height="100%">
               <AreaChart data={data.history}>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                <XAxis dataKey="date" hide />
-                <YAxis hide />
+                <XAxis dataKey="date" axisLine={false} tickLine={false} tick={{fill: "#64748b", fontSize: 12}} />
+                <YAxis axisLine={false} tickLine={false} tick={{fill: "#64748b", fontSize: 12}} tickFormatter={(val) => `KES ${val.toLocaleString()}`} width={80} />
                 <Tooltip 
                   contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }}
                   formatter={(val) => [`KES ${val.toLocaleString()}`, 'Disbursed']}
@@ -58,8 +58,8 @@ const FinanceAnalytics = () => {
             <ResponsiveContainer width="100%" height="100%">
               <AreaChart data={data.history}>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                <XAxis dataKey="date" hide />
-                <YAxis hide />
+                <XAxis dataKey="date" axisLine={false} tickLine={false} tick={{fill: "#64748b", fontSize: 12}} />
+                <YAxis axisLine={false} tickLine={false} tick={{fill: "#64748b", fontSize: 12}} tickFormatter={(val) => `KES ${val.toLocaleString()}`} width={80} />
                 <Tooltip 
                   contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }}
                   formatter={(val) => [`KES ${val.toLocaleString()}`, 'Repayment']}
@@ -77,8 +77,8 @@ const FinanceAnalytics = () => {
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={data.weekly_disbursed}>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                <XAxis dataKey="week" />
-                <YAxis />
+                <XAxis dataKey="week" axisLine={false} tickLine={false} tick={{fill: "#64748b", fontSize: 12}} />
+                <YAxis axisLine={false} tickLine={false} tick={{fill: "#64748b", fontSize: 12}} width={80} />
                 <Tooltip 
                   contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }}
                   formatter={(val) => [`KES ${val.toLocaleString()}`, 'Volume']}
@@ -96,8 +96,8 @@ const FinanceAnalytics = () => {
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={data.weekly_repaid}>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                <XAxis dataKey="week" />
-                <YAxis />
+                <XAxis dataKey="week" axisLine={false} tickLine={false} tick={{fill: "#64748b", fontSize: 12}} />
+                <YAxis axisLine={false} tickLine={false} tick={{fill: "#64748b", fontSize: 12}} width={80} />
                 <Tooltip 
                   contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }}
                   formatter={(val) => [`KES ${val.toLocaleString()}`, 'Volume']}

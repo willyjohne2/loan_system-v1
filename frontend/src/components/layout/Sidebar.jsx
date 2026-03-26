@@ -131,6 +131,7 @@ const Sidebar = ({ isOpen, onClose }) => {
 
   const financeLinks = [
     { to: '/finance/overview', icon: LayoutDashboard, label: 'Overview' },
+    { to: '/finance/loans', icon: Briefcase, label: 'Global Portfolio' },
     { to: '/finance/disbursement', icon: Send, label: 'Disbursement Queue' },
     { to: '/finance/analytics', icon: BarChart3, label: 'Analytics' },
     { to: '/finance/ledger', icon: FileText, label: 'Ledger' },

@@ -185,7 +185,11 @@ class AdminRevokeView(views.APIView):
 class BranchListCreateView(generics.ListCreateAPIView):
     queryset = Branch.objects.all().order_by("name")
     serializer_class = BranchSerializer
-    permission_classes = [permissions.IsAuthenticated, IsAdminUser]
+
+    def get_permissions(self):
+        if self.request.method == 'GET':
+            return [permissions.IsAuthenticated()]
+        return [permissions.IsAuthenticated(), IsAdminUser()]
 
     def perform_create(self, serializer):
         branch = serializer.save()
@@ -194,7 +198,11 @@ class BranchListCreateView(generics.ListCreateAPIView):
 class BranchDetailView(generics.RetrieveUpdateDestroyAPIView):
     queryset = Branch.objects.all()
     serializer_class = BranchSerializer
-    permission_classes = [permissions.IsAuthenticated, IsAdminUser]
+
+    def get_permissions(self):
+        if self.request.method == 'GET':
+            return [permissions.IsAuthenticated()]
+        return [permissions.IsAuthenticated(), IsAdminUser()]
 
     def perform_update(self, serializer):
         instance = self.get_object()

@@ -43,7 +43,7 @@ const AdminAuditLogs = () => {
   const { data: analyticsData, isLoading: analyticsLoading } = useFinancialAnalytics();
 
   const dailyAudit = useMemo(() => analyticsData?.daily_disbursements || [], [analyticsData]);
-  const loading = (auditLoading && logs.length === 0) || (analyticsLoading && dailyAudit.length === 0);
+  const loading = (auditLoading && (logs || []).length === 0) || (analyticsLoading && (dailyAudit || []).length === 0);
 
   if (loading) return (
 

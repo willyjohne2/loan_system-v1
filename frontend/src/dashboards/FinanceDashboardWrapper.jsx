@@ -2,6 +2,7 @@ import React from 'react';
 import { Routes, Route } from 'react-router-dom';
 import Layout from '../components/layout/Layout';
 import FinanceOverview from './finance/FinanceOverview';
+import FinanceLoans from './finance/FinanceLoans';
 import FinanceDisbursement from './finance/FinanceDisbursement';
 import FinanceAnalytics from './finance/FinanceAnalytics';
 import FinanceLedger from './finance/FinanceLedger';
@@ -18,6 +19,7 @@ const FinanceDashboardWrapper = () => {
       <Routes>
         <Route index element={<FinanceOverview />} />
         <Route path="overview" element={<FinanceOverview />} />
+        <Route path="loans" element={<FinanceLoans />} />
         <Route path="disbursement" element={<FinanceDisbursement />} />
         <Route path="unmatched" element={<UnmatchedRepayments />} />
         <Route path="upload" element={<StatementUpload />} />

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { RefreshCcw, TrendingUp, Wallet, Users, AlertCircle, CheckCircle2, Clock, DollarSign, AlertTriangle } from 'lucide-react';
-import { Card, StatCard, Button } from '../../components/ui/Shared';
+import { Card, StatCard, Button, Table } from '../../components/ui/Shared';
 import { SkeletonStatCards, SkeletonCard } from '../../components/ui/Skeleton';
 import { loanService } from '../../api/api';
 import { useFinancialAnalytics, useCapital, useLoans, useRepayments, useInvalidate } from '../../hooks/useQueries';
@@ -46,6 +46,20 @@ const FinanceOverview = () => {
 
   return (
     <div className="space-y-6 px-4 sm:px-0">
+      {!queueLoading && stats.pendingDisbursementCount > 0 && (
+        <div className="bg-yellow-50 border border-yellow-200 rounded-xl p-4 flex items-center justify-between shadow-sm">
+          <div className="flex items-center gap-3">
+            <AlertTriangle className="w-5 h-5 text-yellow-600" />
+            <p className="text-sm font-semibold text-yellow-800">
+              There are <span className="font-bold text-yellow-900">{stats.pendingDisbursementCount}</span> loans approved and waiting for disbursement.
+            </p>
+          </div>
+          <Button variant="outline" size="sm" onClick={() => navigate('/finance/disbursement')} className="border-yellow-300 text-yellow-700 hover:bg-yellow-100">
+            View Queue
+          </Button>
+        </div>
+      )}
+
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
           <h2 className="text-xl sm:text-2xl font-bold text-slate-900">Financial Overview</h2>
@@ -132,6 +146,42 @@ const FinanceOverview = () => {
           </>
         )}
       </div>
+
+      {/* Recent Repayments Table */}
+      <div className="mt-8">
+        <div className="flex justify-between items-end mb-4">
+          <h3 className="text-lg font-bold text-slate-900">Recent Repayments</h3>
+          <Button variant="ghost" size="sm" onClick={() => navigate('/finance/ledger')}>View All</Button>
+        </div>
+        <Card className="p-0 overflow-hidden">
+          {queueLoading ? (
+            <div className="p-6"><SkeletonStatCards count={1} /></div>
+          ) : repayments.length === 0 ? (
+            <div className="p-8 text-center text-slate-500 font-medium">No recent repayments found.</div>
+          ) : (
+            <div className="overflow-x-auto">
+              <Table
+                headers={['Customer', 'Amount', 'Date', 'Method', 'Reference']}
+                data={repayments.slice(0, 5)}
+                renderRow={(row) => (
+                  <tr key={row.id} className="text-sm border-b border-slate-100 last:border-0 hover:bg-slate-50 transition-colors">
+                    <td className="p-4 font-semibold text-slate-900">{row.customer_name}</td>
+                    <td className="p-4 font-mono text-emerald-600 font-bold">{formatKES(row.amount_paid)}</td>
+                    <td className="p-4 text-slate-500 font-medium">{new Date(row.payment_date).toLocaleDateString()}</td>
+                    <td className="p-4">
+                      <span className="px-2 py-1 bg-slate-100 text-slate-600 text-[10px] font-black uppercase tracking-wider rounded-md">
+                        {row.payment_method || 'MPESA_PAYBILL'}
+                      </span>
+                    </td>
+                    <td className="p-4 font-mono text-xs text-slate-500">{row.reference_code || 'N/A'}</td>
+                  </tr>
+                )}
+              />
+            </div>
+          )}
+        </Card>
+      </div>
+
     </div>
   );
 };

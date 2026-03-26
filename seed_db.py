@@ -2,6 +2,7 @@ import os
 import django
 import uuid
 import bcrypt
+from django.utils import timezone
 from datetime import datetime, date
 
 # Set up Django environment
@@ -44,7 +45,7 @@ def seed_data():
                 "password_hash": pw_hash,
                 "is_verified": True,
                 "is_blocked": False,
-                "created_at": datetime.now(),
+                "created_at": timezone.now(),
             },
         )
 
@@ -71,7 +72,7 @@ def seed_data():
                 "max_amount": data["max"],
                 "interest_rate": data["rate"],
                 "duration_weeks": data["weeks"],
-                "created_at": datetime.now(),
+                "created_at": timezone.now(),
             },
         )
         products.append(p)
@@ -92,7 +93,7 @@ def seed_data():
                 "full_name": data["name"],
                 "email": data["email"],
                 "is_verified": True,
-                "created_at": datetime.now(),
+                "created_at": timezone.now(),
             },
         )
         users.append(u)
@@ -115,7 +116,7 @@ def seed_data():
                     "interest_rate": data["prod"].interest_rate,
                     "duration_months": data["prod"].duration_months,
                     "status": data["status"],
-                    "created_at": datetime.now(),
+                    "created_at": timezone.now(),
                 },
             )
 

@@ -115,20 +115,20 @@ const OwnerRepayments = () => {
 
         <div className="overflow-x-auto">
           <Table
-            headers={['Customer', 'Amount Paid', 'M-Pesa Ref', 'Payment Date', 'Branch', 'Loan ID']}
+            headers={['Customer', 'Amount Paid', 'M-Pesa Ref', 'Payment Date', 'Method', 'Notes']}
             data={repayments.slice(0, displayCount)}
             renderRow={(row) => (
               <tr key={row.id} className="text-sm hover:bg-slate-50 dark:hover:bg-slate-800/50 border-b border-slate-100 dark:border-slate-800 last:border-0 transition-colors">
                 <td className="px-4 py-4 font-bold text-slate-900 dark:text-white">{row.customer_name}</td>
                 <td className="px-4 py-4 font-mono text-emerald-600 font-bold">{formatKES(row.amount_paid)}</td>
-                <td className="px-4 py-4 font-mono text-xs text-slate-500">{row.reference_code || 'N/A'}</td>
-                <td className="px-4 py-4 text-slate-500">{new Date(row.payment_date).toLocaleDateString()}</td>
+                <td className="px-4 py-4 font-mono text-xs text-slate-700 dark:text-slate-300 bg-slate-100 dark:bg-slate-900 rounded inline-block mt-2 font-bold px-2 py-1">{row.reference_code || 'N/A'}</td>
+                <td className="px-4 py-4 text-slate-500 font-medium">{new Date(row.payment_date).toLocaleDateString()}</td>
                 <td className="px-4 py-4">
-                  <span className="px-2 py-0.5 rounded-full text-[10px] font-black uppercase bg-slate-100 dark:bg-slate-800 text-slate-600">
-                    {row.branch_name || 'N/A'}
+                  <span className="px-2 py-1 rounded-md text-[10px] font-black uppercase tracking-wider bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-400">
+                    MPESA_PAYBILL
                   </span>
                 </td>
-                <td className="px-4 py-4 font-mono text-xs text-slate-400">#{row.loan_id?.toString().slice(0,8)}</td>
+                <td className="px-4 py-4 text-xs italic text-slate-400">N/A</td>
               </tr>
             )}
           />
