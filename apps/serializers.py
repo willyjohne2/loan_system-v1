@@ -541,6 +541,7 @@ class LoanSerializer(serializers.ModelSerializer):
     customer_name = serializers.ReadOnlyField(source="user.full_name")
     customer_phone = serializers.CharField(source="user.phone", required=False)
     product_name = serializers.ReadOnlyField(source="loan_product.name")
+    branch_id = serializers.ReadOnlyField(source="user.profile.branch_fk.id")
     branch_name = serializers.ReadOnlyField(source="user.profile.branch_fk.name")
     guarantor_phone = serializers.SerializerMethodField()
 
@@ -605,6 +606,8 @@ class RepaymentSerializer(serializers.ModelSerializer):
     loan_id = serializers.ReadOnlyField(source="loan.id")
     national_id = serializers.ReadOnlyField(source="loan.user.profile.national_id")
     mpesa_receipt = serializers.ReadOnlyField(source="reference_code")
+    branch_id = serializers.ReadOnlyField(source="loan.user.profile.branch_fk.id")
+    branch_id = serializers.ReadOnlyField(source="loan.user.profile.branch_fk.id")
     branch_name = serializers.ReadOnlyField(source="loan.user.profile.branch_fk.name")
 
     class Meta:
@@ -620,6 +623,7 @@ class RepaymentSerializer(serializers.ModelSerializer):
             "payment_date",
             "reference_code",
             "mpesa_receipt",
+            "branch_id",
             "branch_name",
         ]
         

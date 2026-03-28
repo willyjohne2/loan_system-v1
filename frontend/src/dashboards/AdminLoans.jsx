@@ -236,7 +236,7 @@ const AdminLoans = () => {
       }
 
       // Branch filter (Local filter for non-paginated results or extra safety)
-      if (branchFilter !== 'all' && loan.branch !== branchFilter) return false;
+      if (branchFilter !== 'all' && loan.branch_id !== branchFilter && loan.branch_name !== branchFilter) return false;
 
       return matchesStatus && matchesProduct && matchesSearch;
     });

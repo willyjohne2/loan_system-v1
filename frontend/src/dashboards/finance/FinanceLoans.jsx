@@ -30,7 +30,7 @@ const FinanceLoans = () => {
 
     // Branch filter
     if (selectedBranch !== 'all') {
-      raw = raw.filter(l => l.branch === selectedBranch || l.branch_name === selectedBranch);
+      raw = raw.filter(l => l.branch_id === selectedBranch || l.branch_name === selectedBranch);
     }
 
     // Status filter
