@@ -30,7 +30,8 @@ const OwnerRepayments = () => {
 
     // Branch filter
     if (selectedBranch !== 'all') {
-      raw = raw.filter(r => r.branch_id === selectedBranch || r.branch_name === selectedBranch);
+      const selectedBranchName = branches.find(b => b.id === selectedBranch)?.name || selectedBranch;
+      raw = raw.filter(r => r.branch_id === selectedBranch || r.branch_name === selectedBranchName || r.branch_name === selectedBranch);
     }
 
     // Date range

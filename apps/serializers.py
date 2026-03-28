@@ -541,9 +541,29 @@ class LoanSerializer(serializers.ModelSerializer):
     customer_name = serializers.ReadOnlyField(source="user.full_name")
     customer_phone = serializers.CharField(source="user.phone", required=False)
     product_name = serializers.ReadOnlyField(source="loan_product.name")
-    branch_id = serializers.ReadOnlyField(source="user.profile.branch_fk.id")
-    branch_name = serializers.ReadOnlyField(source="user.profile.branch_fk.name")
+    branch_id = serializers.SerializerMethodField()
+    branch_name = serializers.SerializerMethodField()
     guarantor_phone = serializers.SerializerMethodField()
+
+    def get_branch_id(self, obj):
+        try:
+            return obj.user.profile.branch_fk.id
+        except AttributeError:
+            try:
+                return obj.user.profile.branch
+            except AttributeError:
+                return None
+
+    def get_branch_name(self, obj):
+        try:
+            branch = obj.user.profile.branch_fk
+            if branch: return branch.name
+        except AttributeError:
+            pass
+        try:
+            return obj.user.profile.branch
+        except AttributeError:
+            return None
 
     remaining_balance = serializers.DecimalField(
         max_digits=12, decimal_places=2, read_only=True
@@ -606,9 +626,29 @@ class RepaymentSerializer(serializers.ModelSerializer):
     loan_id = serializers.ReadOnlyField(source="loan.id")
     national_id = serializers.ReadOnlyField(source="loan.user.profile.national_id")
     mpesa_receipt = serializers.ReadOnlyField(source="reference_code")
-    branch_id = serializers.ReadOnlyField(source="loan.user.profile.branch_fk.id")
+    branch_id = serializers.SerializerMethodField()
+    branch_name = serializers.SerializerMethodField()
 
-    branch_name = serializers.ReadOnlyField(source="loan.user.profile.branch_fk.name")
+    def get_branch_id(self, obj):
+        try:
+            return obj.loan.user.profile.branch_fk.id
+        except AttributeError:
+            # Fallback to string branch name if somehow foreign key is completely missing
+            try:
+                return obj.loan.user.profile.branch
+            except AttributeError:
+                return None
+
+    def get_branch_name(self, obj):
+        try:
+            branch = obj.loan.user.profile.branch_fk
+            if branch: return branch.name
+        except AttributeError:
+            pass
+        try:
+            return obj.loan.user.profile.branch
+        except AttributeError:
+            return None
 
     class Meta:
         model = Repayments
