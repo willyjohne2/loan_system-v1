@@ -62,8 +62,8 @@ const FinanceOverview = () => {
 
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
-          <h2 className="text-xl sm:text-2xl font-bold text-slate-900">Financial Overview</h2>
-          <p className="text-xs sm:text-sm text-slate-500 mt-1">Portfolio health and system status</p>
+          <h2 className="text-xl sm:text-2xl font-bold text-slate-900 dark:text-white ">Financial Overview</h2>
+          <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 mt-1">Portfolio health and system status</p>
         </div>
         <Button variant="secondary" onClick={() => invalidateAll()} className="hidden sm:flex">
           <RefreshCcw className={clsx("w-4 h-4 mr-2", (analyticsLoading || capitalLoading) && "animate-spin")} /> Refresh
@@ -102,7 +102,7 @@ const FinanceOverview = () => {
       )}
 
       {/* Portfolio Breakdown */}
-      <h3 className="text-lg font-bold text-slate-900 mt-8 mb-4">Operational Pipeline</h3>
+      <h3 className="text-lg font-bold text-slate-900 dark:text-white mt-8 mb-4">Operational Pipeline</h3>
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
         {queueLoading ? (
           [1,2,3].map(i => <SkeletonCard key={i} className="h-32" />)
@@ -110,36 +110,36 @@ const FinanceOverview = () => {
           <>
             <Card className="p-6">
               <div className="flex items-center gap-4">
-                <div className="w-12 h-12 rounded-xl bg-indigo-50 flex items-center justify-center border border-indigo-100">
+                <div className="w-12 h-12 rounded-xl bg-indigo-50 dark:bg-indigo-900/20 flex items-center justify-center border border-indigo-100 dark:border-indigo-800">
                   <Clock className="w-6 h-6 text-indigo-600" />
                 </div>
                 <div>
-                  <p className="text-2xl font-black text-slate-900">{stats.pendingDisbursementCount}</p>
-                  <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">Pending Disbursement</p>
+                  <p className="text-2xl font-black text-slate-900 dark:text-white ">{stats.pendingDisbursementCount}</p>
+                  <p className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Pending Disbursement</p>
                 </div>
               </div>
             </Card>
 
             <Card className="p-6">
               <div className="flex items-center gap-4">
-                <div className="w-12 h-12 rounded-xl bg-emerald-50 flex items-center justify-center border border-emerald-100">
+                <div className="w-12 h-12 rounded-xl bg-emerald-50 dark:bg-emerald-900/20 flex items-center justify-center border border-emerald-100 dark:border-emerald-800">
                   <CheckCircle2 className="w-6 h-6 text-emerald-600" />
                 </div>
                 <div>
-                  <p className="text-2xl font-black text-slate-900">{stats.activeCount}</p>
-                  <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">Active Portfolio</p>
+                  <p className="text-2xl font-black text-slate-900 dark:text-white ">{stats.activeCount}</p>
+                  <p className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Active Portfolio</p>
                 </div>
               </div>
             </Card>
 
             <Card className="p-6">
               <div className="flex items-center gap-4">
-                <div className="w-12 h-12 rounded-xl bg-rose-50 flex items-center justify-center border border-rose-100">
+                <div className="w-12 h-12 rounded-xl bg-rose-50 dark:bg-rose-900/20 flex items-center justify-center border border-rose-100 dark:border-rose-800">
                   <AlertCircle className="w-6 h-6 text-rose-600" />
                 </div>
                 <div>
-                  <p className="text-2xl font-black text-slate-900">{stats.overdueCount}</p>
-                  <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">Overdue (PAR)</p>
+                  <p className="text-2xl font-black text-slate-900 dark:text-white ">{stats.overdueCount}</p>
+                  <p className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Overdue (PAR)</p>
                 </div>
               </div>
             </Card>
@@ -150,30 +150,30 @@ const FinanceOverview = () => {
       {/* Recent Repayments Table */}
       <div className="mt-8">
         <div className="flex justify-between items-end mb-4">
-          <h3 className="text-lg font-bold text-slate-900">Recent Repayments</h3>
+          <h3 className="text-lg font-bold text-slate-900 dark:text-white ">Recent Repayments</h3>
           <Button variant="ghost" size="sm" onClick={() => navigate('/finance/ledger')}>View All</Button>
         </div>
         <Card className="p-0 overflow-hidden">
           {queueLoading ? (
             <div className="p-6"><SkeletonStatCards count={1} /></div>
           ) : repayments.length === 0 ? (
-            <div className="p-8 text-center text-slate-500 font-medium">No recent repayments found.</div>
+            <div className="p-8 text-center text-slate-500 dark:text-slate-400 font-medium">No recent repayments found.</div>
           ) : (
             <div className="overflow-x-auto">
               <Table
                 headers={['Customer', 'Amount', 'Date', 'Method', 'Reference']}
                 data={repayments.slice(0, 5)}
                 renderRow={(row) => (
-                  <tr key={row.id} className="text-sm border-b border-slate-100 last:border-0 hover:bg-slate-50 transition-colors">
+                  <tr key={row.id} className="text-sm border-b border-slate-100 dark:border-slate-800 last:border-0 hover:bg-slate-50 dark:bg-slate-800 dark:hover:bg-slate-800/50 dark:hover:bg-slate-800/50 transition-colors">
                     <td className="p-4 font-semibold text-slate-900 dark:text-white whitespace-nowrap">{row.customer_name}</td>
                     <td className="p-4 font-mono text-emerald-600 dark:text-emerald-400 font-bold whitespace-nowrap">{formatKES(row.amount_paid)}</td>
-                    <td className="p-4 text-slate-500 font-medium">{new Date(row.payment_date).toLocaleDateString()}</td>
+                    <td className="p-4 text-slate-500 dark:text-slate-400 font-medium">{new Date(row.payment_date).toLocaleDateString()}</td>
                     <td className="p-4">
-                      <span className="px-2 py-1 bg-slate-100 text-slate-600 text-[10px] font-black uppercase tracking-wider rounded-md">
+                      <span className="px-2 py-1 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 text-[10px] font-black uppercase tracking-wider rounded-md">
                         {row.payment_method || 'MPESA_PAYBILL'}
                       </span>
                     </td>
-                    <td className="p-4 font-mono text-xs text-slate-500">{row.reference_code || 'N/A'}</td>
+                    <td className="p-4 font-mono text-xs text-slate-500 dark:text-slate-400 ">{row.reference_code || 'N/A'}</td>
                   </tr>
                 )}
               />

@@ -135,6 +135,7 @@ const Sidebar = ({ isOpen, onClose }) => {
     { to: '/finance/disbursement', icon: Send, label: 'Disbursement Queue' },
     { to: '/finance/analytics', icon: BarChart3, label: 'Analytics' },
     { to: '/finance/ledger', icon: FileText, label: 'Ledger' },
+    { to: '/finance/repayments', icon: FileText, label: 'Repayments' },
     { to: '/finance/unmatched', icon: AlertCircle, label: 'Unmatched Payments', badge: true },
     { to: '/finance/upload', icon: Upload, label: 'Upload Statement' },
     { to: '/finance/reports', icon: ClipboardList, label: 'Reports' },

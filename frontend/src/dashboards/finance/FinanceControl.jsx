@@ -24,8 +24,8 @@ const FinanceControl = () => {
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-2xl font-bold text-slate-900">Financial Control</h2>
-        <p className="text-sm text-slate-500 mt-1">Restricted financial operations</p>
+        <h2 className="text-2xl font-bold text-slate-900 dark:text-white ">Financial Control</h2>
+        <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">Restricted financial operations</p>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 gap-6">
@@ -38,8 +38,8 @@ const FinanceControl = () => {
               <Receipt className="w-8 h-8" />
             </div>
             <div>
-              <h3 className="text-xl font-black text-slate-900 font-primary">Manual Repayment</h3>
-              <p className="text-sm text-slate-500 mt-2 font-medium leading-relaxed">Force a manual repayment record for an existing active loan. Use only for cash settlements verified by branch manager.</p>
+              <h3 className="text-xl font-black text-slate-900 dark:text-white font-primary">Manual Repayment</h3>
+              <p className="text-sm text-slate-500 dark:text-slate-400 mt-2 font-medium leading-relaxed">Force a manual repayment record for an existing active loan. Use only for cash settlements verified by branch manager.</p>
             </div>
           </Card>
         </button>
@@ -53,8 +53,8 @@ const FinanceControl = () => {
               <Lock className="w-8 h-8" />
             </div>
             <div>
-              <h3 className="text-xl font-black text-slate-900 font-primary">Freeze Accounts</h3>
-              <p className="text-sm text-slate-500 mt-2 font-medium leading-relaxed">Temporarily halt all disbursements and repayment processing for a specific region or branch due to security audit.</p>
+              <h3 className="text-xl font-black text-slate-900 dark:text-white font-primary">Freeze Accounts</h3>
+              <p className="text-sm text-slate-500 dark:text-slate-400 mt-2 font-medium leading-relaxed">Temporarily halt all disbursements and repayment processing for a specific region or branch due to security audit.</p>
             </div>
           </Card>
         </button>
@@ -68,8 +68,8 @@ const FinanceControl = () => {
               <CheckCircle2 className="w-8 h-8" />
             </div>
             <div>
-              <h3 className="text-xl font-black text-slate-900 font-primary">Bulk Approval</h3>
-              <p className="text-sm text-slate-500 mt-2 font-medium leading-relaxed">Bypass individual loan assessment for corporate disbursement programs or civil servant mass-hiring initiatives.</p>
+              <h3 className="text-xl font-black text-slate-900 dark:text-white font-primary">Bulk Approval</h3>
+              <p className="text-sm text-slate-500 dark:text-slate-400 mt-2 font-medium leading-relaxed">Bypass individual loan assessment for corporate disbursement programs or civil servant mass-hiring initiatives.</p>
             </div>
           </Card>
         </button>
@@ -83,20 +83,20 @@ const FinanceControl = () => {
               <TrendingUp className="w-8 h-8" />
             </div>
             <div>
-              <h3 className="text-xl font-black text-slate-900 font-primary">Adjust Rates</h3>
-              <p className="text-sm text-slate-500 mt-2 font-medium leading-relaxed">Modify global interest rates or product processing fees. Changes take effect on New Loan applications only.</p>
+              <h3 className="text-xl font-black text-slate-900 dark:text-white font-primary">Adjust Rates</h3>
+              <p className="text-sm text-slate-500 dark:text-slate-400 mt-2 font-medium leading-relaxed">Modify global interest rates or product processing fees. Changes take effect on New Loan applications only.</p>
             </div>
           </Card>
         </button>
       </div>
 
       <div className="p-6 bg-slate-100 rounded-2xl border-2 border-dashed border-slate-300 flex flex-col items-center justify-center text-center gap-4">
-        <div className="p-3 bg-white rounded-full text-slate-400">
+        <div className="p-3 bg-white dark:bg-slate-900 rounded-full text-slate-400">
           <AlertTriangle className="w-6 h-6" />
         </div>
         <div>
-          <p className="text-sm font-bold text-slate-900">Security Audit Active</p>
-          <p className="text-xs text-slate-500 mt-1 max-w-sm">All operations in this control panel are logged with your Finance Officer ID and IP address for compliance reporting.</p>
+          <p className="text-sm font-bold text-slate-900 dark:text-white ">Security Audit Active</p>
+          <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 max-w-sm">All operations in this control panel are logged with your Finance Officer ID and IP address for compliance reporting.</p>
         </div>
       </div>
     </div>

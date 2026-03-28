@@ -27,14 +27,14 @@ const FinanceAnalytics = () => {
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-2xl font-bold text-slate-900">Analytics</h2>
-        <p className="text-sm text-slate-500 mt-1">Portfolio performance and trends</p>
+        <h2 className="text-2xl font-bold text-slate-900 dark:text-white ">Analytics</h2>
+        <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">Portfolio performance and trends</p>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Disbursement Rolling View */}
         <Card>
-          <h3 className="text-lg font-bold text-slate-900 mb-6 font-primary uppercase tracking-wider text-xs font-black">Disbursement Rolling View (15 Days)</h3>
+          <h3 className="text-lg font-bold text-slate-900 dark:text-white mb-6 font-primary uppercase tracking-wider text-xs font-black">Disbursement Rolling View (15 Days)</h3>
           <div className="h-[300px]">
             <ResponsiveContainer width="100%" height="100%">
               <AreaChart data={data.history}>
@@ -53,7 +53,7 @@ const FinanceAnalytics = () => {
 
         {/* Collection Rolling View */}
         <Card>
-          <h3 className="text-lg font-bold text-slate-900 mb-6 font-primary uppercase tracking-wider text-xs font-black">Collection Rolling View (15 Days)</h3>
+          <h3 className="text-lg font-bold text-slate-900 dark:text-white mb-6 font-primary uppercase tracking-wider text-xs font-black">Collection Rolling View (15 Days)</h3>
           <div className="h-[300px]">
             <ResponsiveContainer width="100%" height="100%">
               <AreaChart data={data.history}>
@@ -72,7 +72,7 @@ const FinanceAnalytics = () => {
 
         {/* Weekly Disbursement Volume */}
         <Card>
-          <h3 className="text-lg font-bold text-slate-900 mb-6 font-primary uppercase tracking-wider text-xs font-black">Weekly Disbursement Volume (10 Weeks)</h3>
+          <h3 className="text-lg font-bold text-slate-900 dark:text-white mb-6 font-primary uppercase tracking-wider text-xs font-black">Weekly Disbursement Volume (10 Weeks)</h3>
           <div className="h-[300px]">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={data.weekly_disbursed}>
@@ -91,7 +91,7 @@ const FinanceAnalytics = () => {
 
         {/* Weekly Collection Volume */}
         <Card>
-          <h3 className="text-lg font-bold text-slate-900 mb-6 font-primary uppercase tracking-wider text-xs font-black">Weekly Collection Volume (10 Weeks)</h3>
+          <h3 className="text-lg font-bold text-slate-900 dark:text-white mb-6 font-primary uppercase tracking-wider text-xs font-black">Weekly Collection Volume (10 Weeks)</h3>
           <div className="h-[300px]">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={data.weekly_repaid}>
@@ -110,7 +110,7 @@ const FinanceAnalytics = () => {
 
         {/* Product Priority */}
         <Card className="lg:col-span-2">
-          <h3 className="text-lg font-bold text-slate-900 mb-6 font-primary uppercase tracking-wider text-xs font-black">Product Priority (By Value)</h3>
+          <h3 className="text-lg font-bold text-slate-900 dark:text-white mb-6 font-primary uppercase tracking-wider text-xs font-black">Product Priority (By Value)</h3>
           <div className="h-[350px]">
             <ResponsiveContainer width="100%" height="100%">
               <PieChart>

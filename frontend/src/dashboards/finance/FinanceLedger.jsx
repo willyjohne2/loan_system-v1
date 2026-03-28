@@ -41,8 +41,8 @@ const FinanceLedger = () => {
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-2xl font-bold text-slate-900">Collection Ledger</h2>
-        <p className="text-sm text-slate-500 mt-1">Full repayment history and reconciliation</p>
+        <h2 className="text-2xl font-bold text-slate-900 dark:text-white ">Collection Ledger</h2>
+        <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">Full repayment history and reconciliation</p>
       </div>
 
       <Card className="flex flex-col md:flex-row gap-4 items-center">
@@ -62,7 +62,7 @@ const FinanceLedger = () => {
             <select
               value={filters.branch}
               onChange={(e) => setFilters(prev => ({ ...prev, branch: e.target.value }))}
-              className="w-full pl-10 pr-4 py-2 bg-white border border-slate-200 rounded-lg text-sm appearance-none focus:ring-2 focus:ring-primary-500/20"
+              className="w-full pl-10 pr-4 py-2 bg-white dark:bg-slate-900 border border-slate-200 rounded-lg text-sm appearance-none focus:ring-2 focus:ring-primary-500/20"
             >
               {branches.map(b => <option key={b} value={b}>{b}</option>)}
             </select>
@@ -77,12 +77,12 @@ const FinanceLedger = () => {
           data={filteredData}
           loading={loading}
           renderRow={(r) => (
-            <tr key={r.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/50 border-b border-slate-100 dark:border-slate-800 last:border-0 transition-colors">
+            <tr key={r.id} className="hover:bg-slate-50 dark:bg-slate-800 dark:hover:bg-slate-800/50 border-b border-slate-100 dark:border-slate-800 last:border-0 transition-colors">
               <td className="px-6 py-4 font-mono text-xs font-bold text-slate-600 dark:text-slate-300">{r.reference_code || r.transaction_reference}</td>
               <td className="px-6 py-4 font-medium text-slate-900 dark:text-white whitespace-nowrap">{r.customer_name}</td>
               <td className="px-6 py-4 text-slate-600 dark:text-slate-300">{r.national_id || r.customer_id_number || 'N/A'}</td>
               <td className="px-6 py-4 font-bold text-emerald-600 dark:text-emerald-400 whitespace-nowrap">{formatKES(r.amount_paid || r.amount)}</td>
-              <td className="px-6 py-4 text-slate-500 dark:text-slate-400">{new Date(r.payment_date || r.created_at).toLocaleString()}</td>
+              <td className="px-6 py-4 text-slate-500 dark:text-slate-400 ">{new Date(r.payment_date || r.created_at).toLocaleString()}</td>
               <td className="px-6 py-4">
                 <div className="flex items-center gap-2">
                   <div className="w-2 h-2 rounded-full bg-emerald-500" />

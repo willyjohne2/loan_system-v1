@@ -178,8 +178,8 @@ const FinanceDisbursement = () => {
       <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-4 shadow-sm space-y-4">
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
           <div>
-            <h2 className="text-xl font-bold text-slate-900 dark:text-slate-100">Disbursement Queue</h2>
-            <p className="text-xs text-slate-500">Approved loans pending M-Pesa transfer</p>
+            <h2 className="text-xl font-bold text-slate-900 dark:text-white dark:text-slate-100">Disbursement Queue</h2>
+            <p className="text-xs text-slate-500 dark:text-slate-400 ">Approved loans pending M-Pesa transfer</p>
           </div>
           {processedData.length > 0 && (
             <Button 
@@ -200,7 +200,7 @@ const FinanceDisbursement = () => {
               placeholder="Search name, ID, loan number..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 pl-9 py-2 text-sm focus:ring-2 focus:ring-primary-500/20 outline-none"
+              className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 dark:bg-slate-800 pl-9 py-2 text-sm focus:ring-2 focus:ring-primary-500/20 outline-none"
             />
           </div>
 
@@ -209,7 +209,7 @@ const FinanceDisbursement = () => {
             <select
               value={selectedBranch}
               onChange={(e) => setSelectedBranch(e.target.value)}
-              className="w-full pl-9 pr-4 py-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm appearance-none focus:ring-2 focus:ring-primary-500/20 outline-none"
+              className="w-full pl-9 pr-4 py-2 bg-white dark:bg-slate-900 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm appearance-none focus:ring-2 focus:ring-primary-500/20 outline-none"
             >
               {branches.map(b => <option key={`branch-opt-${b}`} value={b}>{b}</option>)}
             </select>
@@ -221,7 +221,7 @@ const FinanceDisbursement = () => {
               type="date" 
               value={dateFrom} 
               onChange={(e) => setDateFrom(e.target.value)} 
-              className="px-3 py-2 text-sm rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 focus:ring-2 focus:ring-primary-500/20 outline-none" 
+              className="px-3 py-2 text-sm rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 dark:bg-slate-800 text-slate-700 dark:text-slate-300 focus:ring-2 focus:ring-primary-500/20 outline-none" 
             />
           </div>
 
@@ -231,7 +231,7 @@ const FinanceDisbursement = () => {
               type="date" 
               value={dateTo} 
               onChange={(e) => setDateTo(e.target.value)} 
-              className="px-3 py-2 text-sm rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 focus:ring-2 focus:ring-primary-500/20 outline-none" 
+              className="px-3 py-2 text-sm rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 dark:bg-slate-800 text-slate-700 dark:text-slate-300 focus:ring-2 focus:ring-primary-500/20 outline-none" 
             />
           </div>
 
@@ -245,33 +245,33 @@ const FinanceDisbursement = () => {
         <div className="overflow-x-auto scrollbar-thin scrollbar-thumb-slate-200 w-full">
           <table className="w-full text-left border-collapse">
             <thead>
-              <tr className="bg-slate-50 dark:bg-slate-800/90 text-slate-500 dark:text-slate-400 text-xs font-bold uppercase tracking-wider">
+              <tr className="bg-slate-50 dark:bg-slate-800 /90 text-slate-500 dark:text-slate-400 text-xs font-bold uppercase tracking-wider">
                 <th className="px-6 py-3">Customer</th>
                 <th className="px-6 py-3">M-Pesa Number</th>
                 <th className="px-6 py-3">Principal</th>
                 <th className="px-6 py-3">Branch</th>
                 <th className="px-6 py-3">Date Approved</th>
-                <th className="px-4 py-3 bg-slate-50 dark:bg-slate-800/90 sticky right-0 border-l border-slate-100 dark:border-slate-800">Action</th>
+                <th className="px-4 py-3 bg-slate-50 dark:bg-slate-800 /90 sticky right-0 border-l border-slate-100 dark:border-slate-800">Action</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
               {loading ? (
                 <tr>
-                  <td colSpan="6" className="px-6 py-10 text-center text-slate-500">Loading disbursement queue...</td>
+                  <td colSpan="6" className="px-6 py-10 text-center text-slate-500 dark:text-slate-400 ">Loading disbursement queue...</td>
                 </tr>
               ) : processedData.length === 0 ? (
                 <tr>
-                  <td colSpan="6" className="px-6 py-10 text-center text-slate-500">No pending disbursements found</td>
+                  <td colSpan="6" className="px-6 py-10 text-center text-slate-500 dark:text-slate-400 ">No pending disbursements found</td>
                 </tr>
               ) : (
                 processedData.map((loan) => (
-                  <tr key={loan.id} className="group hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors relative">
+                  <tr key={loan.id} className="group hover:bg-slate-50 dark:bg-slate-800 dark:hover:bg-slate-800/40 transition-colors relative">
                     <td className="px-6 py-4 border-l-4 border-l-transparent group-hover:border-l-emerald-500 transition-all">
                       <div className="flex flex-col">
-                        <span className="font-semibold text-slate-900 dark:text-slate-100 text-sm">
+                        <span className="font-semibold text-slate-900 dark:text-white dark:text-slate-100 text-sm">
                           {loan.customer_name}
                         </span>
-                        <span className="font-mono text-[11px] bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded text-slate-500 inline-block mt-0.5 w-fit">
+                        <span className="font-mono text-[11px] bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded text-slate-500 dark:text-slate-400 inline-block mt-0.5 w-fit">
                           {loan.customer_id_number || loan.national_id || 'N/A'}
                         </span>
                       </div>
@@ -330,27 +330,27 @@ const FinanceDisbursement = () => {
               <Send className="w-7 h-7 text-emerald-600" />
             </div>
 
-            <h3 className="text-xl font-black text-slate-900 text-center mb-4">
+            <h3 className="text-xl font-black text-slate-900 dark:text-white text-center mb-4">
               {currentLoan.customer_name}
             </h3>
 
             <div className="bg-slate-50 dark:bg-slate-800 rounded-xl p-4 space-y-3 mb-4">
               <div className="flex justify-between items-center">
                 <span className="text-xs font-bold text-slate-400 uppercase">Principal Amount</span>
-                <span className="text-sm font-bold text-slate-900 dark:text-slate-100">{formatKES(currentLoan.principal_amount)}</span>
+                <span className="text-sm font-bold text-slate-900 dark:text-white dark:text-slate-100">{formatKES(currentLoan.principal_amount)}</span>
               </div>
               <div className="flex justify-between items-center">
                 <span className="text-xs font-bold text-slate-400 uppercase">Loan Product</span>
-                <span className="text-sm font-bold text-slate-900 dark:text-slate-100">{currentLoan.product_name}</span>
+                <span className="text-sm font-bold text-slate-900 dark:text-white dark:text-slate-100">{currentLoan.product_name}</span>
               </div>
               <div className="flex justify-between items-center">
                 <span className="text-xs font-bold text-slate-400 uppercase">Branch</span>
-                <span className="text-sm font-bold text-slate-900 dark:text-slate-100">{currentLoan.branch_name}</span>
+                <span className="text-sm font-bold text-slate-900 dark:text-white dark:text-slate-100">{currentLoan.branch_name}</span>
               </div>
               {currentLoan.total_repayable_amount && (
                 <div className="flex justify-between items-center">
                   <span className="text-xs font-bold text-slate-400 uppercase">Total Repayable</span>
-                  <span className="text-sm font-bold text-slate-900 dark:text-slate-100">{formatKES(currentLoan.total_repayable_amount)}</span>
+                  <span className="text-sm font-bold text-slate-900 dark:text-white dark:text-slate-100">{formatKES(currentLoan.total_repayable_amount)}</span>
                 </div>
               )}
             </div>

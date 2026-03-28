@@ -93,11 +93,14 @@ const UnmatchedRepayments = () => {
     );
   }
 
-  const filteredRepayments = repayments.filter(r => 
-    r.receipt_number.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    r.sender_phone.includes(searchTerm) ||
-    r.account_ref.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const filteredRepayments = repayments.filter(r => {
+    const term = searchTerm.toLowerCase();
+    return (
+      (r.sender_phone && r.sender_phone.includes(term)) ||
+      (r.account_ref && r.account_ref.toLowerCase().includes(term)) ||
+      (r.id_number && String(r.id_number).toLowerCase().includes(term))
+    );
+  });
 
   return (
     <div className="space-y-6">
@@ -107,19 +110,19 @@ const UnmatchedRepayments = () => {
             <AlertCircle className="w-6 h-6 text-amber-600" />
           </div>
           <div>
-            <h1 className="text-2xl font-black text-slate-900 dark:text-white">Unmatched Payments</h1>
-            <p className="text-sm text-slate-500">Payments received via Paybill that couldn't be automatically matched to a loan.</p>
+            <h1 className="text-2xl font-black text-slate-900 dark:text-white ">Unmatched Payments</h1>
+            <p className="text-sm text-slate-500 dark:text-slate-400 ">Payments received via Paybill that couldn't be automatically matched to a loan.</p>
           </div>
         </div>
       </div>
 
-      <Card className="p-4 flex flex-col md:flex-row gap-4 items-center bg-white/50 backdrop-blur-sm border-slate-200">
+      <Card className="p-4 flex flex-col md:flex-row gap-4 items-center bg-white dark:bg-slate-900 /50 dark:bg-slate-900 /50 backdrop-blur-sm border-slate-200 dark:border-slate-800">
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
           <input 
             type="text"
-            placeholder="Search by receipt, phone, or account ref..."
-            className="w-full pl-10 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/20"
+            placeholder="Search by phone number or ID number (account ref)..."
+            className="w-full pl-10 pr-4 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 dark:text-white dark:placeholder:text-slate-400 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/20"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
           />
@@ -132,10 +135,10 @@ const UnmatchedRepayments = () => {
         </div>
       </Card>
 
-      <div className="overflow-x-auto rounded-2xl border border-slate-200 bg-white">
+      <div className="overflow-x-auto rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 ">
         <table className="w-full text-left border-collapse">
           <thead>
-            <tr className="bg-slate-50 text-[11px] font-black uppercase text-slate-500 tracking-widest border-b border-slate-200">
+            <tr className="bg-slate-50 dark:bg-slate-800 /50 text-[11px] font-black uppercase text-slate-500 dark:text-slate-400 tracking-widest border-b border-slate-200 dark:border-slate-800">
               <th className="px-6 py-4">Receipt No</th>
               <th className="px-6 py-4">Sender Phone</th>
               <th className="px-6 py-4">Account Ref (Typed)</th>
@@ -149,18 +152,18 @@ const UnmatchedRepayments = () => {
             {filteredRepayments.map(txn => (
               <tr 
                 key={txn.id} 
-                className={`transition-colors h-16 ${txn.needs_contact ? 'bg-amber-50/50 hover:bg-amber-100/50' : 'hover:bg-slate-50'}`}
+                className={`transition-colors h-16 ${txn.needs_contact ? 'bg-amber-50/50 dark:bg-amber-900/20 hover:bg-amber-100/50 dark:hover:bg-amber-900/40' : 'hover:bg-slate-50 dark:bg-slate-800 dark:hover:bg-slate-800/50'}`}
               >
-                <td className="px-6 py-3 font-mono text-xs font-bold text-slate-900 dark:text-slate-100">{txn.receipt_number}</td>
-                <td className="px-6 py-3 text-sm font-semibold text-slate-800 dark:text-slate-200">{txn.sender_phone}</td>
+                <td className="px-6 py-3 font-mono text-xs font-bold text-slate-900 dark:text-white ">{txn.receipt_number}</td>
+                <td className="px-6 py-3 text-sm font-semibold text-slate-900 dark:text-white ">{txn.sender_phone}</td>
                 <td className="px-6 py-3 text-sm">
                    <div className="flex flex-col">
-                        <span className="font-bold text-slate-900">{txn.account_ref}</span>
-                        <span className="text-[10px] text-slate-500">{txn.sender_name || 'No name provided'}</span>
+                        <span className="font-bold text-slate-900 dark:text-white ">{txn.account_ref}</span>
+                        <span className="text-[10px] text-slate-500 dark:text-slate-400 ">{txn.sender_name || 'No name provided'}</span>
                    </div>
                 </td>
-                <td className="px-6 py-3 font-black text-emerald-600">KES {parseFloat(txn.amount).toLocaleString()}</td>
-                <td className="px-6 py-3 text-xs text-slate-500">
+                <td className="px-6 py-3 font-black text-emerald-600 dark:text-emerald-400">KES {parseFloat(txn.amount).toLocaleString()}</td>
+                <td className="px-6 py-3 text-xs text-slate-500 dark:text-slate-400 ">
                     <div className="flex flex-col">
                         <span>{new Date(txn.transaction_date).toLocaleDateString()}</span>
                         <span>{new Date(txn.transaction_date).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
@@ -168,7 +171,7 @@ const UnmatchedRepayments = () => {
                 </td>
                 <td className="px-6 py-3 text-center">
                     <div className="flex flex-col items-center">
-                        <span className={`text-xs font-bold ${txn.needs_contact ? 'text-amber-700' : 'text-slate-600'}`}>
+                        <span className={`text-xs font-bold ${txn.needs_contact ? 'text-amber-700 dark:text-amber-500' : 'text-slate-600 dark:text-slate-300'}`}>
                             {txn.days_waiting} Days
                         </span>
                         {txn.needs_contact && (
@@ -204,7 +207,7 @@ const UnmatchedRepayments = () => {
             ))}
             {filteredRepayments.length === 0 && (
                 <tr>
-                    <td colSpan="7" className="px-6 py-12 text-center text-slate-500 italic">No unmatched payments found.</td>
+                    <td colSpan="7" className="px-6 py-12 text-center text-slate-500 dark:text-slate-400 italic">No unmatched payments found.</td>
                 </tr>
             )}
           </tbody>
@@ -219,13 +222,13 @@ const UnmatchedRepayments = () => {
               onClick={() => setShowAssignModal(false)}
               className="absolute top-4 right-4 p-2 hover:bg-slate-100 rounded-full"
             >
-              <Clock className="w-5 h-5 text-slate-400 rotate-45" />
+              <Clock className="w-5 h-5 text-slate-400 dark:text-slate-300 rotate-45" />
             </button>
             
             <div className="mb-6">
-              <h3 className="text-xl font-bold">Assign Payment</h3>
-              <p className="text-sm text-slate-500">Receipt: <span className="font-mono font-bold text-slate-900">{selectedTxn.receipt_number}</span></p>
-              <p className="text-sm text-slate-500">Amount: <span className="font-black text-emerald-600">KES {parseFloat(selectedTxn.amount).toLocaleString()}</span></p>
+              <h3 className="text-xl font-bold text-slate-900 dark:text-white ">Assign Payment</h3>
+              <p className="text-sm text-slate-500 dark:text-slate-400 ">Receipt: <span className="font-mono font-bold text-slate-900 dark:text-white ">{selectedTxn.receipt_number}</span></p>
+              <p className="text-sm text-slate-500 dark:text-slate-400 ">Amount: <span className="font-black text-emerald-600">KES {parseFloat(selectedTxn.amount).toLocaleString()}</span></p>
             </div>
 
             <div className="space-y-4">
@@ -233,8 +236,8 @@ const UnmatchedRepayments = () => {
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
                 <input 
                   type="text"
-                  placeholder="Search customer name or phone..."
-                  className="w-full pl-10 pr-4 py-3 bg-white border border-slate-300 rounded-xl text-sm text-slate-900 placeholder:text-slate-400 focus:ring-2 focus:ring-primary-500 focus:border-transparent outline-none shadow-sm dark:bg-slate-800 dark:border-slate-700 dark:text-white"
+                  placeholder="Search by phone number or ID number..."
+                  className="w-full pl-10 pr-4 py-3 bg-white dark:bg-slate-900 border border-slate-300 rounded-xl text-sm text-slate-900 dark:text-white placeholder:text-slate-400 focus:ring-2 focus:ring-primary-500 focus:border-transparent outline-none shadow-sm dark:bg-slate-800 dark:border-slate-700 dark:text-white "
                   value={loanSearch}
                   onChange={(e) => handleLoanSearch(e.target.value)}
                   autoFocus
@@ -250,8 +253,8 @@ const UnmatchedRepayments = () => {
                   >
                     <div className="flex justify-between items-start">
                       <div>
-                        <p className="text-sm font-bold text-slate-900 group-hover:text-primary-700">{loan.user_full_name}</p>
-                        <p className="text-xs text-slate-500">{loan.user_phone} • {loan.id.slice(0,8)}</p>
+                        <p className="text-sm font-bold text-slate-900 dark:text-white group-hover:text-primary-700 dark:group-hover:text-primary-400">{loan.user_full_name}</p>
+                        <p className="text-xs text-slate-500 dark:text-slate-400 ">{loan.user_phone} • {loan.id.slice(0,8)}</p>
                       </div>
                       <Badge variant="primary">KES {parseFloat(loan.principal_amount).toLocaleString()}</Badge>
                     </div>

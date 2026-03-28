@@ -71,7 +71,7 @@ const FinanceLoans = () => {
     ACTIVE: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-400',
     REJECTED: 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-400',
     OVERDUE: 'bg-rose-100 text-rose-700 dark:bg-rose-900/40 dark:text-rose-400',
-    CLOSED: 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-400'
+    CLOSED: 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-400 '
   };
 
   if (isLoading) return (
@@ -86,7 +86,7 @@ const FinanceLoans = () => {
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
           <h1 className="text-2xl font-black text-slate-900 dark:text-white uppercase tracking-tight">Global Portfolio</h1>
-          <p className="text-sm font-bold text-slate-500">Read-only view of all active and historical loans</p>
+          <p className="text-sm font-bold text-slate-500 dark:text-slate-400 ">Read-only view of all active and historical loans</p>
         </div>
         <ExportButton exportType="loans" />
       </div>
@@ -135,7 +135,7 @@ const FinanceLoans = () => {
             </select>
             <DateRangeFilter
               onFilter={(from, to) => setDateRange({ from, to })}
-              className="bg-slate-50 dark:bg-slate-800"
+              className="bg-slate-50 dark:bg-slate-800 "
             />
           </div>
         </div>
@@ -145,9 +145,9 @@ const FinanceLoans = () => {
             headers={['Customer', 'Branch', 'Principal', 'Balance', 'Status', 'Date']}
             data={loans.slice(0, displayCount)}
             renderRow={(row) => (
-              <tr key={row.id} className="text-sm hover:bg-slate-50 dark:hover:bg-slate-800/50 border-b border-slate-100 dark:border-slate-800 last:border-0 transition-colors">
-                <td className="px-4 py-4 font-bold text-slate-900 dark:text-white">{row.customer_name || 'N/A'}</td>
-                <td className="px-4 py-4 text-slate-500">{row.branch_name || 'N/A'}</td>
+              <tr key={row.id} className="text-sm hover:bg-slate-50 dark:bg-slate-800 dark:hover:bg-slate-800/50 border-b border-slate-100 dark:border-slate-800 last:border-0 transition-colors">
+                <td className="px-4 py-4 font-bold text-slate-900 dark:text-white ">{row.customer_name || 'N/A'}</td>
+                <td className="px-4 py-4 text-slate-500 dark:text-slate-400 ">{row.branch_name || 'N/A'}</td>
                 <td className="px-4 py-4 font-mono text-emerald-600 font-bold">{formatKES(row.principal_amount)}</td>
                 <td className="px-4 py-4 font-mono text-rose-500 font-bold">{formatKES(row.remaining_balance)}</td>
                 <td className="px-4 py-4">
@@ -155,7 +155,7 @@ const FinanceLoans = () => {
                     {row.status}
                   </span>
                 </td>
-                <td className="px-4 py-4 text-slate-500 font-medium">
+                <td className="px-4 py-4 text-slate-500 dark:text-slate-400 font-medium">
                   {new Date(row.created_at || row.disbursed_at).toLocaleDateString()}
                 </td>
               </tr>

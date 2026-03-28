@@ -58,11 +58,11 @@ const StatementUpload = () => {
   return (
     <div className="p-6 max-w-4xl mx-auto">
       <div className="mb-8">
-        <h1 className="text-2xl font-bold text-gray-900">Upload M-Pesa Statement</h1>
-        <p className="text-gray-500 mt-1">Upload CSV statements to reconcile repayments automatically.</p>
+        <h1 className="text-2xl font-bold text-gray-900 dark:text-white ">Upload M-Pesa Statement</h1>
+        <p className="text-gray-500 dark:text-gray-400 mt-1">Upload CSV statements to reconcile repayments automatically.</p>
       </div>
 
-      <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+      <div className="bg-white dark:bg-slate-900 rounded-xl shadow-sm border border-gray-100 overflow-hidden">
         <form onSubmit={handleUpload} className="p-8">
           <div className="flex flex-col items-center justify-center border-2 border-dashed border-gray-200 rounded-lg p-12 bg-gray-50 hover:bg-gray-100 transition-colors cursor-pointer relative">
             <input
@@ -75,7 +75,7 @@ const StatementUpload = () => {
             <UploadCloud className="h-12 w-12 text-gray-400 mb-4" />
             <div className="text-center">
               <span className="text-blue-600 font-medium">Click to upload</span>
-              <span className="text-gray-500"> or drag and drop</span>
+              <span className="text-gray-500 dark:text-gray-400 "> or drag and drop</span>
               <p className="text-xs text-gray-400 mt-2">CSV files only from Safaricom Portal</p>
             </div>
           </div>
@@ -130,19 +130,19 @@ const StatementUpload = () => {
 
       {summary && (
         <div className="mt-8 grid grid-cols-1 md:grid-cols-4 gap-4">
-          <div className="bg-white p-4 rounded-xl border border-gray-100 shadow-sm">
-            <p className="text-xs text-gray-500 uppercase font-semibold">Processed</p>
-            <p className="text-2xl font-bold text-gray-900">{summary.matched + summary.unmatched}</p>
+          <div className="bg-white dark:bg-slate-900 p-4 rounded-xl border border-gray-100 shadow-sm">
+            <p className="text-xs text-gray-500 dark:text-gray-400 uppercase font-semibold">Processed</p>
+            <p className="text-2xl font-bold text-gray-900 dark:text-white ">{summary.matched + summary.unmatched}</p>
           </div>
-          <div className="bg-white p-4 rounded-xl border border-gray-100 shadow-sm">
+          <div className="bg-white dark:bg-slate-900 p-4 rounded-xl border border-gray-100 shadow-sm">
             <p className="text-xs text-green-500 uppercase font-semibold">Matched (Auto)</p>
             <p className="text-2xl font-bold text-green-600">{summary.matched}</p>
           </div>
-          <div className="bg-white p-4 rounded-xl border border-gray-100 shadow-sm">
+          <div className="bg-white dark:bg-slate-900 p-4 rounded-xl border border-gray-100 shadow-sm">
             <p className="text-xs text-amber-500 uppercase font-semibold">Unmatched</p>
             <p className="text-2xl font-bold text-amber-600">{summary.unmatched}</p>
           </div>
-          <div className="bg-white p-4 rounded-xl border border-gray-100 shadow-sm">
+          <div className="bg-white dark:bg-slate-900 p-4 rounded-xl border border-gray-100 shadow-sm">
             <p className="text-xs text-red-500 uppercase font-semibold">Duplicates/Errors</p>
             <p className="text-2xl font-bold text-red-600">{summary.duplicates || 0}</p>
           </div>
