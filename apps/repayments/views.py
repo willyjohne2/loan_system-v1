@@ -31,7 +31,7 @@ class RepaymentListCreateView(generics.ListCreateAPIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def get_queryset(self):
-        return get_filtered_queryset(self.request.user, Repayments.objects.all(), 'loan__user__profile__branch_fk').order_by("-payment_date")
+        return get_filtered_queryset(self.request.user, Repayments.objects.all(), 'loan__user__profile__branch_fk', request=self.request).order_by("-payment_date")
 
     def perform_create(self, serializer):
         from django.db import transaction

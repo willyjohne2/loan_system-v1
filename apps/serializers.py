@@ -607,7 +607,7 @@ class RepaymentSerializer(serializers.ModelSerializer):
     national_id = serializers.ReadOnlyField(source="loan.user.profile.national_id")
     mpesa_receipt = serializers.ReadOnlyField(source="reference_code")
     branch_id = serializers.ReadOnlyField(source="loan.user.profile.branch_fk.id")
-    branch_id = serializers.ReadOnlyField(source="loan.user.profile.branch_fk.id")
+
     branch_name = serializers.ReadOnlyField(source="loan.user.profile.branch_fk.name")
 
     class Meta:

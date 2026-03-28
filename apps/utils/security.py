@@ -127,13 +127,7 @@ def get_filtered_queryset(user, queryset, branch_field='branch_fk', request=None
                 # users uses 'profile__branch_fk'
                 # loans uses 'user__profile__branch_fk'
                 # admins uses 'branch_fk'
-                if branch_field == 'profile__branch_fk':
-                    filtered_qs = filtered_qs.filter(profile__branch_fk=branch_id)
-                elif branch_field == 'user__profile__branch_fk':
-                    filtered_qs = filtered_qs.filter(user__profile__branch_fk=branch_id)
-                else:
-                    filtered_qs = filtered_qs.filter(branch_fk=branch_id)
-        
+                filtered_qs = filtered_qs.filter(**{branch_field: branch_id})
         # 4. Handle sorting if 'ordering' is in query params
         if 'ordering' in request.query_params:
             ordering = request.query_params.get('ordering')
