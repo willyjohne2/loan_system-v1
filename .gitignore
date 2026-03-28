@@ -12,3 +12,11 @@ SYSTEM_OVERVIEW.md
 COPILOT_CONTEXT.md
 *.zip
 COPILOT_CONTEXT.md
+
+# Temporary Agent/Throwaway Scripts
+fix_*.py
+test_*.py
+
+# Temporary Agent Scripts
+fix_*.py
+test_*.py
