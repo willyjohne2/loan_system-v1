@@ -77,12 +77,12 @@ const FinanceLedger = () => {
           data={filteredData}
           loading={loading}
           renderRow={(r) => (
-            <tr key={r.id} className="hover:bg-slate-50">
-              <td className="px-6 py-4 font-mono text-xs font-bold text-slate-600">{r.reference_code || r.transaction_reference}</td>
-              <td className="px-6 py-4 font-medium text-slate-900">{r.customer_name}</td>
-              <td className="px-6 py-4 text-slate-600">{r.national_id || r.customer_id_number || 'N/A'}</td>
-              <td className="px-6 py-4 font-bold text-emerald-600">{formatKES(r.amount_paid || r.amount)}</td>
-              <td className="px-6 py-4 text-slate-500">{new Date(r.payment_date || r.created_at).toLocaleString()}</td>
+            <tr key={r.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/50 border-b border-slate-100 dark:border-slate-800 last:border-0 transition-colors">
+              <td className="px-6 py-4 font-mono text-xs font-bold text-slate-600 dark:text-slate-300">{r.reference_code || r.transaction_reference}</td>
+              <td className="px-6 py-4 font-medium text-slate-900 dark:text-white whitespace-nowrap">{r.customer_name}</td>
+              <td className="px-6 py-4 text-slate-600 dark:text-slate-300">{r.national_id || r.customer_id_number || 'N/A'}</td>
+              <td className="px-6 py-4 font-bold text-emerald-600 dark:text-emerald-400 whitespace-nowrap">{formatKES(r.amount_paid || r.amount)}</td>
+              <td className="px-6 py-4 text-slate-500 dark:text-slate-400">{new Date(r.payment_date || r.created_at).toLocaleString()}</td>
               <td className="px-6 py-4">
                 <div className="flex items-center gap-2">
                   <div className="w-2 h-2 rounded-full bg-emerald-500" />

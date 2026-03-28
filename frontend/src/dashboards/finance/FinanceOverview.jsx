@@ -165,8 +165,8 @@ const FinanceOverview = () => {
                 data={repayments.slice(0, 5)}
                 renderRow={(row) => (
                   <tr key={row.id} className="text-sm border-b border-slate-100 last:border-0 hover:bg-slate-50 transition-colors">
-                    <td className="p-4 font-semibold text-slate-900">{row.customer_name}</td>
-                    <td className="p-4 font-mono text-emerald-600 font-bold">{formatKES(row.amount_paid)}</td>
+                    <td className="p-4 font-semibold text-slate-900 dark:text-white whitespace-nowrap">{row.customer_name}</td>
+                    <td className="p-4 font-mono text-emerald-600 dark:text-emerald-400 font-bold whitespace-nowrap">{formatKES(row.amount_paid)}</td>
                     <td className="p-4 text-slate-500 font-medium">{new Date(row.payment_date).toLocaleDateString()}</td>
                     <td className="p-4">
                       <span className="px-2 py-1 bg-slate-100 text-slate-600 text-[10px] font-black uppercase tracking-wider rounded-md">

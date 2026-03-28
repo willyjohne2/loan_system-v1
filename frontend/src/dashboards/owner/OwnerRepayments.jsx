@@ -120,7 +120,7 @@ const OwnerRepayments = () => {
             renderRow={(row) => (
               <tr key={row.id} className="text-sm hover:bg-slate-50 dark:hover:bg-slate-800/50 border-b border-slate-100 dark:border-slate-800 last:border-0 transition-colors">
                 <td className="px-4 py-4 font-bold text-slate-900 dark:text-white">{row.customer_name}</td>
-                <td className="px-4 py-4 font-mono text-emerald-600 font-bold">{formatKES(row.amount_paid)}</td>
+                <td className="px-4 py-4 font-mono text-emerald-600 dark:text-emerald-400 font-bold whitespace-nowrap">{formatKES(row.amount_paid)}</td>
                 <td className="px-4 py-4 font-mono text-xs text-slate-700 dark:text-slate-300 bg-slate-100 dark:bg-slate-900 rounded inline-block mt-2 font-bold px-2 py-1">{row.reference_code || 'N/A'}</td>
                 <td className="px-4 py-4 text-slate-500 font-medium">{new Date(row.payment_date).toLocaleDateString()}</td>
                 <td className="px-4 py-4">
